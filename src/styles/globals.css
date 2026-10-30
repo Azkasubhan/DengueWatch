@@ -1,0 +1,47 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background);
+  color: var(--foreground);
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Plus Jakarta Sans Variable", system-ui, sans-serif;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--focus) 55%, white);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: var(--primary-subtle);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

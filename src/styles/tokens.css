@@ -1,0 +1,17 @@
+:root {
+  --background: #f7f9f8;
+  --surface: #ffffff;
+  --foreground: #162826;
+  --primary: #0f766e;
+  --primary-hover: #0b5f59;
+  --primary-subtle: #e6f5f0;
+  --muted-foreground: #596d67;
+  --border: #dde5e2;
+  --danger: #b42318;
+  --danger-subtle: #fff3f1;
+  --focus: #0f766e;
+  --radius-card: 1rem;
+  --radius-control: 0.625rem;
+  --page-max: 90rem;
+  --form-max: 40rem;
+}
