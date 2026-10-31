@@ -1,16 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { createStorageAdmin, reportBucket } from "@/features/reports/data";
+import { createStorageAdmin } from "@/features/reports/data";
 import {
-  ImageValidationError,
-  normalizeReportImage,
-} from "@/features/reports/image";
-import {
-  readLimitedBody,
   reportError,
   reportJson,
   residentContext,
   sameOrigin,
 } from "@/features/reports/http";
+import {
+  readPhotoUpload,
+  storeReservedUpload,
+} from "@/features/reports/upload";
 
 export async function POST(request: Request) {
   if (!sameOrigin(request))
@@ -29,45 +28,9 @@ export async function POST(request: Request) {
       "Keanggotaan wilayah belum terverifikasi.",
     );
   }
-  if (
-    !request.headers.get("content-type")?.startsWith("multipart/form-data;")
-  ) {
-    return reportError(
-      415,
-      "UNSUPPORTED_MEDIA_TYPE",
-      "Kirim satu foto melalui form upload.",
-    );
-  }
-  let file: FormDataEntryValue | null;
-  try {
-    const bytes = await readLimitedBody(request, 6 * 1024 * 1024);
-    const parsed = await new Request(request.url, {
-      method: "POST",
-      headers: { "content-type": request.headers.get("content-type")! },
-      body: bytes,
-    }).formData();
-    file = parsed.get("photo");
-    if (
-      Array.from(parsed.keys()).some((key) => key !== "photo") ||
-      parsed.getAll("photo").length !== 1
-    ) {
-      return reportError(422, "VALIDATION_ERROR", "Kirim tepat satu foto.");
-    }
-  } catch (error) {
-    if (error instanceof Error && error.message === "BODY_TOO_LARGE")
-      return reportError(413, "FILE_TOO_LARGE", "Foto maksimal 5 MiB.");
-    return reportError(400, "MALFORMED_BODY", "Form upload tidak valid.");
-  }
-  if (!(file instanceof File))
-    return reportError(422, "VALIDATION_ERROR", "Pilih foto terlebih dahulu.");
-  let normalized;
-  try {
-    normalized = await normalizeReportImage(file);
-  } catch (error) {
-    if (error instanceof ImageValidationError)
-      return reportError(error.status, "INVALID_IMAGE", error.message);
-    return reportError(422, "INVALID_IMAGE", "Foto tidak dapat diproses.");
-  }
+  const photo = await readPhotoUpload(request);
+  if (photo.error) return photo.error;
+  const normalized = photo.image;
   let admin;
   try {
     admin = createStorageAdmin();
@@ -101,43 +64,12 @@ export async function POST(request: Request) {
       "SERVICE_UNAVAILABLE",
       "Foto belum dapat diunggah.",
     );
-  const uploaded = await admin.storage
-    .from(reportBucket)
-    .upload(path, normalized.bytes, {
-      contentType: "image/webp",
-      upsert: false,
-      cacheControl: "0",
-    });
-  if (uploaded.error) {
-    await admin
-      .from("report_uploads")
-      .delete()
-      .eq("id", id)
-      .eq("created_by", userId);
-    return reportError(
-      503,
-      "UPLOAD_FAILED",
-      "Foto belum dapat diunggah. Coba lagi.",
-    );
-  }
-  const marked = await admin
-    .from("report_uploads")
-    .update({ uploaded_at: new Date().toISOString() })
-    .eq("id", id)
-    .eq("created_by", userId);
-  if (marked.error) {
-    await admin.storage.from(reportBucket).remove([path]);
-    await admin
-      .from("report_uploads")
-      .delete()
-      .eq("id", id)
-      .eq("created_by", userId);
-    return reportError(
-      503,
-      "UPLOAD_FAILED",
-      "Foto belum dapat disiapkan. Coba lagi.",
-    );
-  }
+  const stored = await storeReservedUpload(
+    admin,
+    { id, path, userId },
+    normalized.bytes,
+  );
+  if (stored) return stored;
   return reportJson(
     {
       id,

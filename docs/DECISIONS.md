@@ -171,3 +171,33 @@
   RLS `ai_analyses` tetap owner-only; kader hanya menerima field saran yang disanitasi.
   Manager membaca koordinat persis di area kelolanya sesuai PRD §10.5 dan §11.2, sehingga
   tidak ada patch akses koordinat.
+
+## T19 — ActionLoop atomik M6
+
+- **Status:** accepted dan diuji lokal, 31 Oktober 2026.
+- **Keputusan:** migration kesepuluh menambah `action_tasks`, `task_events`, `task_evidence`,
+  dan enam RPC (`create_action_task`, `start_action_task`, `submit_task_evidence`,
+  `review_task_evidence`, `cancel_action_task`, `reopen_action_task`). Tidak ada status
+  `draft`. Assignee MVP adalah kader terverifikasi di area laporan; manager hanya membaca.
+  `reopened` kembali ke `in_progress` melalui `start`. `cancelled` hanya dari status aktif
+  dan dengan alasan. Bukti memakai satu lease upload M3 privat per pengiriman; reviewer
+  harus berbeda dari pengirim (RPC dan CHECK). Laporan `verified → in_action` saat task
+  pertama dibuat, `in_action → resolved` hanya bila ada ≥1 task wajib aktif dan semuanya
+  `completed`, serta `resolved → in_action` saat task wajib dibuka ulang dengan alasan.
+- **Alasan:** setiap mutation mengunci baris laporan lalu task, sehingga persetujuan paralel
+  pada task berbeda tidak dapat melewatkan penutupan laporan. Event task dan laporan
+  dikunci ke transisi PRD melalui CHECK dan trigger append-only.
+
+## T20 — Lease upload bertujuan untuk bukti tugas
+
+- **Status:** accepted dan diuji lokal, 31 Oktober 2026.
+- **Keputusan:** migration kesebelas menambah `purpose` (`report`/`task_evidence`) dan
+  `task_id` pada `report_uploads`. Lease bukti hanya dibuat oleh
+  `reserve_task_evidence_upload` untuk assignee task `in_progress` di areanya. Trigger
+  menolak lease bukti sebagai foto laporan, serta lease laporan atau lease task lain sebagai
+  bukti. Route upload warga tetap khusus resident; kader memakai
+  `POST /api/v1/tasks/:id/evidence-uploads` dengan pipeline M3 yang sama (signature, batas
+  ukuran, re-encode WebP tanpa EXIF).
+- **Alasan:** pemeriksaan `created_by` saja tidak mencegah replay foto antar task milik
+  kader yang sama. API hanya mengembalikan penanda `assignedToMe`/`submittedByMe`, bukan ID
+  profil kader lain.

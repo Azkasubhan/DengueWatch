@@ -5,7 +5,8 @@ const isLiveAuthRun =
   process.env.RUN_LIVE_REPORTS === "true" ||
   process.env.RUN_M4_DETERMINISTIC === "true" ||
   process.env.RUN_LIVE_GEMINI === "true" ||
-  process.env.RUN_LIVE_M5 === "true";
+  process.env.RUN_LIVE_M5 === "true" ||
+  process.env.RUN_LIVE_M6 === "true";
 const port = 3001;
 const baseURL = `http://localhost:${port}`;
 

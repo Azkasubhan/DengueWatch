@@ -27,6 +27,9 @@ const statusNotes: Partial<Record<ReportStatus, string>> = {
   verified: "Laporan telah diverifikasi kader wilayah.",
   rejected: "Laporan tidak disetujui. Alasan kader tercatat pada riwayat.",
   duplicate: "Laporan ditandai sama dengan laporan lain yang lebih awal.",
+  in_action: "Kader sedang menindaklanjuti temuan ini.",
+  resolved:
+    "Tindak lanjut selesai dan buktinya telah diperiksa kader. Terima kasih atas laporan Anda.",
 };
 
 export default async function ReportDetailPage({

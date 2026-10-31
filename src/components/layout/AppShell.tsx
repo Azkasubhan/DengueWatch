@@ -38,7 +38,7 @@ export function AppShell({ area, children, displayName, role }: AppShellProps) {
               {roleLabels[role]}
             </span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             {role === "resident" ? (
               <Link
                 href="/app/laporan"
@@ -47,13 +47,28 @@ export function AppShell({ area, children, displayName, role }: AppShellProps) {
                 Laporan saya
               </Link>
             ) : role === "cadre" ? (
+              <>
+                <Link
+                  href="/kader/verifikasi"
+                  className="inline-flex min-h-11 items-center px-2 text-sm font-semibold text-[var(--primary)] focus-visible:outline-2"
+                >
+                  Antrean verifikasi
+                </Link>
+                <Link
+                  href="/kader/tugas"
+                  className="inline-flex min-h-11 items-center px-2 text-sm font-semibold text-[var(--primary)] focus-visible:outline-2"
+                >
+                  Tugas
+                </Link>
+              </>
+            ) : (
               <Link
-                href="/kader/verifikasi"
+                href="/pengelola/tugas"
                 className="inline-flex min-h-11 items-center px-2 text-sm font-semibold text-[var(--primary)] focus-visible:outline-2"
               >
-                Antrean verifikasi
+                Tugas wilayah
               </Link>
-            ) : null}
+            )}
             <span className="hidden text-sm text-[var(--muted-foreground)] sm:inline">
               {displayName}
             </span>

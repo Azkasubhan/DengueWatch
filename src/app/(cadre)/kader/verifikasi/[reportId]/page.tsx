@@ -23,6 +23,9 @@ import {
   reportStatusLabels,
   type ReportStatus,
 } from "@/features/reports/validation";
+import { CreateTaskForm } from "@/features/tasks/components/CreateTaskForm";
+import { listTasks } from "@/features/tasks/data";
+import { taskStatusLabels } from "@/features/tasks/validation";
 import { getAccessContext } from "@/lib/auth/context";
 
 export const dynamic = "force-dynamic";
@@ -41,11 +44,11 @@ const suggestionSchema = z.array(
 const decidedNotes: Partial<Record<ReportStatus, string>> = {
   needs_information:
     "Menunggu informasi tambahan dari warga. Laporan kembali ke antrean setelah warga menjawab.",
-  verified: "Laporan sudah diverifikasi.",
+  verified: "Laporan sudah diverifikasi. Buat tugas tindak lanjut di bawah.",
   rejected: "Laporan tidak disetujui.",
   duplicate: "Laporan ditandai sebagai duplikat.",
-  in_action: "Laporan sedang ditangani.",
-  resolved: "Laporan telah selesai.",
+  in_action: "Laporan sedang ditangani melalui tugas tindak lanjut.",
+  resolved: "Semua tugas wajib selesai dan buktinya telah diperiksa.",
 };
 
 export default async function VerificationDetailPage({
@@ -97,6 +100,12 @@ export default async function VerificationDetailPage({
     ? null
     : suggestionSchema.safeParse(suggestions.data ?? []);
   const saved = (await searchParams).keputusan === "tersimpan" && !pending;
+  const actionable = ["verified", "in_action", "resolved"].includes(
+    report.status,
+  );
+  const tasks = actionable
+    ? await listTasks(1, 50, { reportId: report.id }, access.context.userId)
+    : null;
 
   return shell(
     <>
@@ -142,6 +151,52 @@ export default async function VerificationDetailPage({
             </p>
           ) : null}
           <ReportTimeline events={detail.events.data} />
+          {actionable ? (
+            <section aria-labelledby="tasks-title" className="mt-8">
+              <h2 id="tasks-title" className="text-2xl font-bold">
+                Tugas tindak lanjut
+              </h2>
+              {tasks?.error ? (
+                <p role="alert" className="mt-3 text-[var(--danger)]">
+                  Daftar tugas belum dapat dimuat.
+                </p>
+              ) : !tasks?.data?.length ? (
+                <p className="mt-3 text-[var(--muted-foreground)]">
+                  Belum ada tugas untuk laporan ini.
+                </p>
+              ) : (
+                <ul className="mt-4 grid gap-3">
+                  {tasks.data.map((task) => (
+                    <li key={task.id}>
+                      <Link
+                        href={`/kader/tugas/${task.id}`}
+                        className="flex flex-wrap justify-between gap-2 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 hover:border-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+                      >
+                        <span className="font-semibold break-words">
+                          {task.title}
+                          {task.isMandatory ? "" : " (opsional)"}
+                        </span>
+                        <span className="text-sm font-semibold">
+                          {taskStatusLabels[task.status]}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {report.status === "verified" || report.status === "in_action" ? (
+                <CreateTaskForm
+                  reportId={report.id}
+                  assigneeId={access.context.userId}
+                />
+              ) : (
+                <p className="mt-4 rounded-[var(--radius-control)] bg-[var(--primary-subtle)] p-4">
+                  Laporan sudah tuntas. Buka kembali tugas yang selesai bila
+                  masalah muncul lagi.
+                </p>
+              )}
+            </section>
+          ) : null}
         </div>
         <div className="min-w-0">
           <section

@@ -111,3 +111,17 @@ RPC `review_report` dan `add_report_information` (lihat T18 dan `docs/M5_VERIFIC
 5. `ai_analyses` terpisah dari `reports`. Trigger pada `report_images` menautkan analisis
    ke report ketika upload yang sama difinalisasi. Status report/event tidak berubah.
    Cleanup lokal menghapus catatan lebih dari 30 hari; penjadwalan hosted belum dilakukan.
+
+## Alur ActionLoop M6
+
+1. Kader membuat task dari laporan `verified`/`in_action` melalui
+   `POST /api/v1/reports/:id/tasks` dengan `Idempotency-Key`. Task pertama memindahkan laporan
+   ke `in_action` dalam transaksi yang sama.
+2. Assignee memulai task, memesan lease bukti melalui
+   `POST /api/v1/tasks/:id/evidence-uploads` (pipeline foto M3, lease terikat task), lalu
+   mengirim bukti. Task menjadi `awaiting_review`.
+3. Kader lain di area yang sama menyetujui atau meminta revisi. Persetujuan task wajib
+   terakhir menutup laporan (`resolved`); membuka kembali task wajib mengembalikan laporan
+   ke `in_action` dengan alasan.
+4. Setiap RPC mengunci laporan lalu task, memeriksa versi, dan menulis `task_events` /
+   `report_events` append-only. Manager hanya membaca melalui RLS.

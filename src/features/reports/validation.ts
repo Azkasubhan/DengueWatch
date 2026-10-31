@@ -207,4 +207,7 @@ export const reportEventLabels: Record<string, string> = {
   report_information_added: "Informasi tambahan dikirim",
   report_rejected: "Tidak disetujui kader",
   report_marked_duplicate: "Ditandai sebagai duplikat",
+  report_action_started: "Penanganan dimulai",
+  report_resolved: "Penanganan selesai diverifikasi",
+  report_reopened: "Penanganan dibuka kembali",
 };
