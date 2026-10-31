@@ -129,7 +129,7 @@ test.describe("live Supabase authentication", () => {
     await login(page, "pengelola.simulasi@denguewatch.test", demoPassword);
     await expect(page).toHaveURL(/\/pengelola\/ringkasan$/);
     await expect(
-      page.getByRole("heading", { name: "Akses pemantauan wilayah" }),
+      page.getByRole("heading", { name: "Ringkasan laporan wilayah" }),
     ).toBeVisible();
     await page.goto("/kader/ringkasan");
     await expect(page).toHaveURL(/\/forbidden$/);

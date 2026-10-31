@@ -31,7 +31,7 @@ test.describe("live verified ActionLoop (M6)", () => {
   let sample: Buffer;
   const actors = {} as Record<ActorKey, Actor>;
   const ids = {} as Record<
-    "main" | "task1" | "task2" | "lease" | "taskX" | "taskY",
+    "main" | "task1" | "task2" | "lease" | "taskX" | "taskY" | "parallelTask",
     string
   >;
 
@@ -872,7 +872,91 @@ test.describe("live verified ActionLoop (M6)", () => {
         .in("task_id", [taskA, taskB])
         .eq("event_type", "task_evidence_approved");
       expect(approvals.data).toHaveLength(2);
+      ids.parallelTask = taskA;
     }
+  });
+
+  test("manager SQL summary reflects resolution and reopen without private data", async ({}, testInfo) => {
+    const manager = actors.manager.page;
+    const summary = async () => {
+      const response = await manager.request.get("/api/v1/analytics");
+      expect(response.status()).toBe(200);
+      return (await response.json()).data;
+    };
+    // Area A now holds: main + three parallel reports resolved, lease report in_action.
+    const before = await summary();
+    expect(before).toMatchObject({
+      reportsTotal: 5,
+      awaitingVerification: 0,
+      inAction: 1,
+      resolved: 4,
+      notActionable: 0,
+      completionEligible: 5,
+      completionRate: 80,
+      isDemo: true,
+      areaCount: 1,
+    });
+    const text = JSON.stringify(before);
+    expect(text).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-/);
+    for (const key of ["cadreA1", "cadreA2", "resident"] as const)
+      expect(text).not.toContain(actors[key].id);
+    for (const actor of ["cadreA1", "resident"] as const)
+      expect(
+        (await actors[actor].page.request.get("/api/v1/analytics")).status(),
+      ).toBe(403);
+    expect(
+      (await manager.request.get(`/api/v1/analytics?areaId=${areaB}`)).status(),
+    ).toBe(404);
+    expect(
+      (
+        await manager.request.get(
+          "/api/v1/analytics?from=2026-10-31&to=2026-10-01",
+        )
+      ).status(),
+    ).toBe(422);
+
+    await manager.setViewportSize({ width: 1440, height: 900 });
+    await manager.goto("/pengelola/ringkasan");
+    await expect(
+      manager.getByRole("heading", { name: "Ringkasan laporan wilayah" }),
+    ).toBeVisible();
+    await expect(manager.getByText("80%")).toBeVisible();
+    await expect(
+      manager.getByText("4 dari 5 laporan tervalidasi", { exact: false }),
+    ).toBeVisible();
+    await expect(
+      manager.getByText(/DATA SIMULASI — angka berasal/),
+    ).toBeVisible();
+    await expectAccessible(manager);
+    for (const width of [320, 390, 768, 1440]) {
+      await manager.setViewportSize({ width, height: 900 });
+      await expectNoOverflow(manager);
+      await manager.screenshot({
+        path: testInfo.outputPath(`summary-${width}.png`),
+        fullPage: true,
+      });
+    }
+
+    const reopened = await post(
+      actors.cadreA1.page,
+      `/api/v1/tasks/${ids.parallelTask}/reopen`,
+      {
+        reason: "Saluran kembali tersumbat setelah hujan.",
+        expectedVersion: 4,
+      },
+    );
+    expect(reopened.status()).toBe(200);
+    expect((await reopened.json()).data.reportStatus).toBe("in_action");
+    expect(await summary()).toMatchObject({
+      inAction: 2,
+      resolved: 3,
+      completionRate: 60,
+    });
+    await manager.reload();
+    await expect(manager.getByText("60%")).toBeVisible();
+    await expect(
+      manager.getByText("3 dari 5 laporan tervalidasi", { exact: false }),
+    ).toBeVisible();
   });
 
   test("200% zoom-equivalent layout keeps task pages usable", async ({

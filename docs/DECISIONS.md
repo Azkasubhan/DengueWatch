@@ -201,3 +201,19 @@
 - **Alasan:** pemeriksaan `created_by` saja tidak mencegah replay foto antar task milik
   kader yang sama. API hanya mengembalikan penanda `assignedToMe`/`submittedByMe`, bukan ID
   profil kader lain.
+
+## T21 — Definisi ringkasan pengelola M7-A
+
+- **Status:** accepted dan diuji lokal, 31 Oktober 2026.
+- **Keputusan:** `get_manager_report_summary` (security invoker, RLS tetap berlaku) menghitung
+  KPI dari `reports`, `report_events`, dan `action_tasks` di area manager terverifikasi. Kohort
+  adalah laporan yang dikirim pada rentang tanggal WIB (default 30 hari, maksimal 366 hari);
+  status adalah snapshot saat `as_of`. Ember status: menunggu pemeriksaan
+  (`pending_verification`, `needs_information`), dalam penanganan (`verified`, `in_action`,
+  termasuk yang dibuka kembali), selesai (`resolved`), tidak diproses lanjut (`rejected`,
+  `duplicate`). Tingkat penyelesaian = selesai / (dalam penanganan + selesai); `null` bila
+  pembagi nol. Task yang dibatalkan tidak dihitung langsung; pengaruhnya hanya melalui
+  status laporan. Median keputusan kader = dikirim → keputusan kader pertama; median
+  penyelesaian = verifikasi pertama → `resolved_at` saat ini.
+- **Alasan:** angka deterministik dari database, tanpa Gemini, tanpa identitas, foto, atau
+  koordinat dalam payload.
