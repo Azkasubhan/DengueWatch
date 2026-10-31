@@ -27,7 +27,7 @@ input {
 }
 
 :focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--focus) 55%, white);
+  outline: 3px solid var(--focus);
   outline-offset: 3px;
 }
 

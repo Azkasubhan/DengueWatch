@@ -181,7 +181,14 @@ values
   );
 
 select is(
-  (select count(*) from public.profiles where role = 'resident'),
+  (select count(*) from public.profiles
+   where role = 'resident' and id in (
+     '10000000-0000-0000-0000-000000000001',
+     '10000000-0000-0000-0000-000000000002',
+     '10000000-0000-0000-0000-000000000003',
+     '10000000-0000-0000-0000-000000000004',
+     '10000000-0000-0000-0000-000000000005'
+   )),
   5::bigint,
   'profile trigger provisions every new user as resident'
 );

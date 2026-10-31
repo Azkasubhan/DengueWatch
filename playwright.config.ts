@@ -1,6 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const isLiveAuthRun = process.env.RUN_LIVE_AUTH === "true";
+const isLiveAuthRun =
+  process.env.RUN_LIVE_AUTH === "true" ||
+  process.env.RUN_LIVE_REPORTS === "true";
+const port = 3001;
+const baseURL = `http://localhost:${port}`;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -9,19 +13,19 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: "html",
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL,
     trace: "on-first-retry",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: "pnpm dev",
+    command: `pnpm dev --hostname 127.0.0.1 --port ${port}`,
     env: isLiveAuthRun
       ? undefined
       : {
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_replace_me",
           NEXT_PUBLIC_SUPABASE_URL: "https://your-project.supabase.co",
         },
-    url: "http://localhost:3000",
+    url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },

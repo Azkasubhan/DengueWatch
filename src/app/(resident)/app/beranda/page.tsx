@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { Alert } from "@/components/feedback/Alert";
 import { AppShell } from "@/components/layout/AppShell";
 import { PendingArea } from "@/components/feedback/PendingArea";
@@ -56,10 +57,23 @@ export default async function ResidentHomePage({
             Selamat datang, {result.context.displayName}
           </h1>
           <p className="mt-4 text-[var(--muted-foreground)]">
-            Akses wilayah Anda sudah terverifikasi. Fitur laporan lingkungan
-            belum termasuk dalam milestone ini dan tidak ditampilkan sebagai
-            aksi palsu.
+            Akses wilayah Anda sudah terverifikasi. Laporkan temuan lingkungan
+            agar dapat diperiksa kader.
           </p>
+          <div className="mt-7 flex flex-wrap gap-4">
+            <Link
+              href="/app/laporan/buat"
+              className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] bg-[var(--primary)] px-5 font-semibold text-white"
+            >
+              Buat laporan
+            </Link>
+            <Link
+              href="/app/laporan"
+              className="inline-flex min-h-11 items-center text-[var(--primary)]"
+            >
+              Laporan saya
+            </Link>
+          </div>
         </section>
       )}
     </AppShell>

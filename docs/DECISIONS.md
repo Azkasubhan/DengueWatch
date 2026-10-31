@@ -87,3 +87,39 @@
   akan lebih luas daripada kebutuhan aktual.
 - **Bukti:** seed empat akun sintetis berhasil dan tiga assertion pgTAP memverifikasi grant
   positif serta ketiadaan `DELETE`.
+
+## T11 — Lease upload dan finalisasi atomik M3
+
+- **Status:** accepted, 30 Oktober 2026.
+- **Keputusan:** upload foto diproses server menjadi WebP privat dengan `report_uploads`
+  sebagai lease satu jam. RPC user-scoped memfinalisasi 1–3 lease, report, image metadata,
+  event, dan idempotency dalam satu transaksi.
+- **Alasan:** binary upload dan transaction PostgreSQL tidak dapat menjadi satu HTTP
+  transaction. Lease, ownership, expiry, penghapusan manual, dan cleanup menangani objek
+  yang tidak pernah difinalisasi.
+- **Batasan:** cleanup perlu dijalankan terjadwal saat deploy. URL foto bertanda tangan
+  berlaku 60 detik dan merupakan bearer URL selama interval itu.
+
+## T12 — Lokasi opsional tanpa peta M3
+
+- **Status:** accepted.
+- **Keputusan:** lokasi presisi hanya berasal dari geolocation setelah tindakan user;
+  petunjuk lokasi umum dapat diberikan tanpa koordinat. Tidak ada titik default `[0,0]`.
+- **Alasan:** memenuhi informasi lokasi minimum tanpa membangun Community Map M4.
+
+## T13 — Batas reservasi media
+
+- **Status:** accepted.
+- **Keputusan:** trigger database membatasi 30 lease upload per akun per jam, sedangkan RPC
+  membatasi 10 laporan per akun per jam. Keduanya berlaku lintas instance aplikasi.
+- **Alasan:** mencegah storage abuse dasar tanpa menambah in-memory limiter yang tidak
+  konsisten pada beberapa instance.
+
+## T14 — Ledger kuota yang bertahan setelah lease dihapus
+
+- **Status:** accepted dan diverifikasi, 31 Oktober 2026.
+- **Keputusan:** migration keenam mencatat setiap reservasi ke tabel append-only
+  `report_upload_attempts`; trigger kuota menghitung ledger ini, bukan baris lease aktif.
+- **Alasan:** hitungan pada `report_uploads` dapat dilewati dengan menghapus lease segera
+  setelah upload. Ledger tetap menghitung percobaan dalam jendela satu jam. pgTAP menguji
+  bahwa penghapusan lease tidak mereset hitungan dan reservasi ke-31 ditolak.

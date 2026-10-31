@@ -1,10 +1,11 @@
-# Arsitektur M1–M2
+# Arsitektur M1–M3
 
 ## Batas sistem
 
 Implementasi menggunakan modular monolith Next.js 16. Presentation, autentikasi, dan data
 access berada dalam satu aplikasi; PostgreSQL, Auth, dan policy data dikelola Supabase.
-Milestone ini belum memiliki endpoint laporan, media, Gemini, tugas, peta, atau analitik.
+M3 menambahkan laporan lingkungan dan media privat. Gemini, tugas, peta, dan analitik
+belum diimplementasikan.
 
 ```text
 Browser
@@ -32,6 +33,9 @@ Setiap protected page membaca ulang identity, profile, role, dan membership dari
 - `supabase/tests/`: 53 assertion pgTAP untuk grants, matrix role/area, dan abuse cases.
 - `scripts/verify-m2-live.mjs`: Auth/JWT/RLS/recovery verifier yang menolak target non-local.
 - `e2e/`: browser checks untuk accessibility, responsive layout, dan live SSR auth.
+- `src/features/reports/`: validasi, normalisasi foto, data access, dan form laporan.
+- `src/app/api/v1/`: upload sementara serta create/list/detail laporan.
+- `supabase/tests/reports.sql`: 47 assertion pgTAP untuk laporan, foto, event, quota, dan policy.
 
 ## Alur identitas
 
@@ -53,9 +57,27 @@ Setiap protected page membaca ulang identity, profile, role, dan membership dari
 - `/pengelola/ringkasan`: role `manager` + membership `manager` terverifikasi.
 - Role salah diarahkan ke `/forbidden`; user tanpa session diarahkan ke login.
 - Kegagalan konfigurasi/data menghasilkan state unavailable yang fail closed.
+- `/app/laporan`, `/app/laporan/buat`, `/app/laporan/[id]`: alur warga dengan data dari
+  PostgreSQL dan Storage privat.
+
+## Alur laporan M3
+
+1. Browser memilih 1–3 foto; Route Handler memvalidasi file, decode, lalu mengonversi ke
+   WebP tanpa metadata. Server menyimpan objek di bucket privat dan membuat lease upload
+   milik user selama satu jam. Secret key hanya dipakai di server untuk staging/cleanup.
+2. Form memvalidasi payload, menampilkan preview, lalu mengirim `Idempotency-Key`.
+3. Route Handler memverifikasi session, role, dan membership. RPC PostgreSQL memakai
+   `auth.uid()` dan RLS/role helper sebagai batas akhir; report, image links, event, dan
+   idempotency record dibuat dalam satu transaksi.
+4. List/detail memakai user-scoped Supabase client. Detail membuat signed URL 60 detik
+   setelah report dan image row lolos RLS. URL merupakan bearer link yang berlaku sampai
+   kedaluwarsa; jangan mencatat atau membagikannya.
+5. Unggahan yang ditinggalkan dapat dihapus pemilik atau cleanup lokal setelah lease
+   kedaluwarsa. Ledger percobaan tetap menghitung upload walaupun lease dihapus, sehingga
+   batas 30/jam tidak dapat dihindari lewat pola upload/hapus. Cleanup produksi harus
+   dijadwalkan sebelum deployment publik.
 
 ## Evolusi milestone berikutnya
 
-Reports dan ActionLoop harus menggunakan data-access boundary yang sama, menambahkan
-repository/service per use case, dan melakukan transisi atomik melalui PostgreSQL RPC bila
-beberapa write harus menjadi satu transaksi. Tidak boleh mengubah status lewat PATCH umum.
+M4 dapat menambahkan transisi terverifikasi melalui RPC khusus dan memperluas enum event.
+Status laporan tidak mempunyai endpoint PATCH umum pada M3.

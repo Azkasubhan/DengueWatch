@@ -1,4 +1,4 @@
-# Model Keamanan M1–M2
+# Model Keamanan M1–M3
 
 ## Trust boundaries
 
@@ -70,5 +70,30 @@ nyata, termasuk refresh token dan recovery PKCE melalui Mailpit. Browser live me
   referrer policy, dan permissions policy sudah aktif; CSP perlu diuji bersama deployment.
 - Password minimum aplikasi dan Supabase lokal adalah 8 karakter. Password policy hosted
   harus diperiksa kembali saat deployment project dibuat.
-- Belum ada media/upload pada M1–M2, sehingga secure media pipeline PRD belum relevan dan
-  belum diimplementasikan.
+- CSP berbasis nonce dan pemeriksaan konfigurasi hosted tetap diperlukan sebelum rilis
+  publik.
+
+## Laporan dan foto M3
+
+- `reports`, `report_images`, dan `report_events` hanya memberi `SELECT` pada user
+  authenticated. Tidak ada `INSERT/UPDATE/DELETE` langsung. `report_uploads` hanya bisa
+  ditulis server dengan secret key, dibatasi pada reservasi foto sementara.
+- RPC `create_environmental_report` ber-`SECURITY DEFINER`, `search_path=''`, dan hanya
+  dapat dieksekusi role `authenticated`. Identity dari `auth.uid()`, area membership
+  terverifikasi, ownership foto, masa lease, dan status awal diperiksa di database. Semua
+  write final dalam satu transaksi. Advisory lock dan tabel idempotency mencegah duplikasi
+  akibat retry bersamaan.
+- Resident hanya membaca laporan sendiri. Cadre/manager dapat membaca report di area
+  terverifikasi sesuai role; manager tidak mendapat hak verifikasi. `storage.objects`
+  mengizinkan pembacaan hanya jika objek sudah terhubung dengan report yang boleh dibaca.
+- Bucket `report-photos` privat. Upload menerima JPEG/PNG/WebP maksimal 5 MiB, memeriksa
+  signature dan decode, membatasi dimensi/pixel, lalu menyimpan WebP tanpa EXIF. Signed URL
+  dibuat sesudah pemeriksaan RLS dan berlaku 60 detik. Pemegang URL tersebut dapat
+  mengaksesnya selama masa berlaku; ini adalah batasan signed URL, bukan session-bound URL.
+- Write endpoint memeriksa Origin sama dan mengembalikan error generik, tanpa database
+  error mentah. Response privat diberi `no-store`. Batas 10 report dan 30 reservasi upload
+  per user per jam diterapkan di database. Percobaan upload dicatat pada ledger terpisah
+  sehingga menghapus lease tidak menghapus hitungan kuota.
+- Unggahan sementara yang gagal/ditinggalkan tidak menghasilkan report. Owner dapat
+  menghapusnya; cleanup terjaga menghapus objek kedaluwarsa. Jadwalkan cleanup produksi
+  dan verifikasi provider Storage hosted sebelum go-live.

@@ -7,9 +7,10 @@ pencegahan dengue yang terverifikasi. Implementasi saat ini hanya mencakup:
   komponen dasar, halaman publik, dan tooling pengujian.
 - **M2 Authentication & Area Access:** Supabase Auth SSR, profil, tiga peran, keanggotaan
   wilayah, protected route, RLS, dan seed demo yang dijaga.
+- **M3 Environmental Reports:** laporan manual warga, foto privat, daftar/detail, riwayat,
+  API, serta pengujian keamanan dan integrasi lokal.
 
-Fitur laporan lingkungan, Gemini, verifikasi laporan, ActionLoop, peta, PSN, dan analitik
-belum diimplementasikan. UI tidak menampilkan kemampuan tersebut seolah sudah tersedia.
+Gemini, verifikasi laporan, ActionLoop, peta, PSN, dan analitik belum diimplementasikan.
 
 ## Persyaratan
 
@@ -39,7 +40,7 @@ konfigurasi tidak valid.
 | `NEXT_PUBLIC_SUPABASE_URL`             | Client + server    | URL project Supabase                                   |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Client + server    | Publishable key; tetap bergantung pada RLS             |
 | `APP_BASE_URL`                         | Server             | Origin callback email auth                             |
-| `SUPABASE_SECRET_KEY`                  | Server/script only | Hanya untuk seed developer tepercaya                   |
+| `SUPABASE_SECRET_KEY`                  | Server/script only | Staging/cleanup foto dan seed tepercaya                |
 | `ALLOW_DEMO_SEED`                      | Script only        | Guard eksplisit agar seed tidak berjalan tidak sengaja |
 | `DEMO_ACCOUNT_PASSWORD`                | Script only        | Password akun demo, tidak disimpan di repository       |
 | `NEXT_PUBLIC_DEMO_MODE`                | Client + server    | Penanda lingkungan simulasi                            |
@@ -52,18 +53,22 @@ secret lokal/deployment, bukan Git.
 Migration berada di `supabase/migrations/` dan harus dijalankan berurutan. Migration kedua
 menambahkan invariant role-membership, policy area yang role-aware, dan defense-in-depth
 terhadap perubahan role. Migration ketiga memberi `service_role` hanya operasi tabel yang
-dibutuhkan seed (`SELECT`, `INSERT`, `UPDATE`) dan tetap menolak `DELETE`.
+dibutuhkan seed (`SELECT`, `INSERT`, `UPDATE`) dan tetap menolak `DELETE`. Migration keempat
+menambahkan Environmental Reports dan private Storage; migration kelima membatasi reservasi
+unggahan sementara. Migration keenam membuat ledger percobaan upload yang tetap dihitung
+setelah lease dihapus. Pastikan `[storage].enabled = true` di konfigurasi Supabase lokal.
 
 Dengan Supabase lokal:
 
 ```bash
 pnpm supabase:start
-pnpm supabase:reset
+pnpm exec supabase migration up --local
 pnpm test:db
 ```
 
-`pnpm supabase:reset` menghapus dan membangun ulang **database lokal**. Jangan menjalankannya
-pada project remote/produksi. Untuk project remote yang sudah ditautkan, tinjau migration
+`pnpm supabase:reset` menghapus dan membangun ulang **database lokal**. Untuk menerapkan
+migration baru tanpa menghapus data lokal, jalankan `pnpm exec supabase migration up --local`.
+Jangan menjalankan reset pada project remote/produksi. Untuk project remote yang sudah ditautkan, tinjau migration
 terlebih dahulu lalu gunakan prosedur deployment Supabase tim.
 
 Konfigurasi lokal berada di `supabase/config.toml`; seed otomatis dinonaktifkan agar akun
@@ -89,6 +94,32 @@ Email demo:
 Script memuat `.env.local` melalui Node, menolak placeholder, menolak berjalan ketika
 `NODE_ENV=production`, dan membutuhkan server-only secret key.
 
+## Laporan lingkungan M3
+
+Resident dengan membership area terverifikasi dapat membuka `/app/laporan/buat`, mengirim
+1–3 foto, dan melihat daftar serta detail laporan yang persisten. Foto disimpan sebagai
+WebP tanpa metadata dalam bucket privat `report-photos`. Setiap laporan baru berstatus
+`pending_verification` dan memiliki event `report_created`. Keputusan verifikasi kader
+merupakan ruang lingkup M4.
+
+Setelah seed M2, buat tiga laporan simulasi deterministik beserta foto sintetis dari
+`assets/demo-reports/`:
+
+```bash
+ALLOW_DEMO_SEED=true pnpm seed:reports
+```
+
+Unggahan yang belum dikaitkan dengan laporan kedaluwarsa setelah satu jam. Jalankan
+cleanup lokal secara berkala dengan guard eksplisit:
+
+```bash
+ALLOW_UPLOAD_CLEANUP=true pnpm cleanup:report-uploads
+```
+
+Endpoint dan bentuk respons dijelaskan di [kontrak API M3](docs/M3_API.md). Upload
+memerlukan secret key hanya pada server untuk menyiapkan foto; create/list/detail laporan
+memakai session pengguna dan RLS. Jangan menaruh secret key di browser.
+
 ## Pemeriksaan kualitas
 
 ```bash
@@ -98,12 +129,13 @@ pnpm test
 pnpm build
 pnpm test:e2e
 pnpm test:e2e:live
+pnpm test:e2e:reports
 pnpm test:db
 pnpm test:auth:live
 ```
 
-`pnpm test:db` menjalankan 53 assertion pgTAP untuk grant, RLS, role, membership,
-cross-area access, dan privilege-escalation abuse. Hasilnya hanya boleh disebut lulus bila
+`pnpm test:db` menjalankan 53 assertion M2 dan 47 assertion M3 untuk grant, RLS, role,
+membership, cross-area access, report atomicity, dan Storage policy. Hasilnya hanya boleh disebut lulus bila
 database lokal benar-benar berjalan dan command selesai dengan exit code 0.
 
 `pnpm test:auth:live` dan `pnpm test:e2e:live` sengaja menolak URL non-local. Keduanya
@@ -124,8 +156,10 @@ worker port yang tidak diizinkan oleh environment implementasi ini; alasan dicat
 ## Dokumentasi
 
 - [PRD final](docs/DengueWatch_PRD.md)
-- [Arsitektur M1–M2](docs/ARCHITECTURE.md)
+- [Arsitektur M1–M3](docs/ARCHITECTURE.md)
 - [Kontrak desain](docs/DESIGN.md)
 - [Model keamanan](docs/SECURITY.md)
 - [Keputusan teknis](docs/DECISIONS.md)
 - [Bukti verifikasi M2](docs/M2_VERIFICATION.md)
+- [Kontrak API M3](docs/M3_API.md)
+- [Bukti verifikasi M3](docs/M3_VERIFICATION.md)

@@ -39,6 +39,14 @@ export function AppShell({ area, children, displayName, role }: AppShellProps) {
             </span>
           </div>
           <div className="flex items-center gap-3">
+            {role === "resident" ? (
+              <Link
+                href="/app/laporan"
+                className="inline-flex min-h-11 items-center px-2 text-sm font-semibold text-[var(--primary)] focus-visible:outline-2"
+              >
+                Laporan saya
+              </Link>
+            ) : null}
             <span className="hidden text-sm text-[var(--muted-foreground)] sm:inline">
               {displayName}
             </span>

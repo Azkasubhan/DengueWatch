@@ -17,6 +17,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:live": "RUN_LIVE_AUTH=true node --env-file=.env.local node_modules/@playwright/test/cli.js test e2e/live-auth.spec.ts --workers=1",
+    "test:e2e:reports": "RUN_LIVE_REPORTS=true node --env-file=.env.local node_modules/@playwright/test/cli.js test e2e/reports.spec.ts --workers=1",
     "test:e2e:ui": "playwright test --ui",
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
@@ -24,6 +25,8 @@
     "supabase:reset": "supabase db reset",
     "test:db": "supabase test db",
     "seed:demo": "node --env-file=.env.local scripts/seed-demo.mjs",
+    "seed:reports": "node --env-file=.env.local scripts/seed-report-demo.mjs",
+    "cleanup:report-uploads": "node --env-file=.env.local scripts/cleanup-report-uploads.mjs",
     "test:auth:live": "node --env-file=.env.local scripts/verify-m2-live.mjs"
   },
   "dependencies": {
@@ -34,6 +37,7 @@
     "next": "16.4.3",
     "react": "19.3.1",
     "react-dom": "19.3.1",
+    "sharp": "0.35.5",
     "zod": "4.6.7"
   },
   "devDependencies": {

@@ -1,0 +1,54 @@
+# M3 Environmental Reports — UI/UX review
+
+**Tanggal:** 31 Oktober 2026. **Lingkungan:** Next.js development server dan Supabase lokal. Review ini membatasi perubahan pada frontend M3, CSS fokus bersama, tes browser, dan dokumentasi. PRD final serta D01–D10 tetap menjadi acuan.
+
+## A. Penggunaan UI UX Pro Max
+
+Skill `ui-ux-pro-max` ditemukan di `/Users/indramec/.agents/skills/ui-ux-pro-max/SKILL.md` dan dibaca. Pencarian data lokal skill untuk form validation, file upload/recovery, dan focus visibility menekankan ringkasan error yang dapat difokuskan dan tertaut ke field, umpan balik upload, serta fokus yang jelas. Rekomendasi stack untuk Server Actions tidak diikuti karena kontrak M3 yang sudah diverifikasi memakai Route Handlers. Tidak ada library, font, palet, atau sistem desain baru.
+
+## B–C. Temuan dan perbaikan
+
+| Tingkat | Layar/komponen         | Bukti dan dampak                                                                                                                                                             | Perbaikan minimal                                                                                                                                                                                                                           |
+| ------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| High    | Form validasi          | Error awal hanya muncul di tiap field. Pengguna keyboard/pembaca layar yang menekan **Tinjau laporan** tidak langsung mendapat ringkasan dan harus mencari field yang salah. | Ringkasan `role=alert` difokuskan setelah gagal, berisi tautan ke field; pesan inline dipertahankan. `aria-invalid`, `aria-describedby`, dan `aria-required` ditambahkan pada kontrol terkait.                                              |
+| High    | Fokus seluruh aplikasi | Outline lama mencampur 55% warna fokus dengan putih; perhitungan terhadap putih sekitar 2,34:1. Indikator sulit dilihat.                                                     | Outline global 3 px menggunakan token `--focus: #0F766E`; kontras terhitung 5,47:1 terhadap putih dan 5,18:1 terhadap latar aplikasi.                                                                                                       |
+| Medium  | Pemilihan foto         | Kontrol file native Chromium menampilkan label Inggris pada UI Indonesia; pilihan ulang file yang sama tidak selalu memicu `change`.                                         | Input file tetap aksesibel, dengan label terlihat **Pilih foto/Ganti pilihan foto**, jumlah foto terpilih diumumkan, dan nilai input direset sesudah pemilihan. Petunjuk menyebut bahwa pilihan baru mengganti pilihan lama.                |
+| Medium  | Retry upload           | Jika foto kedua gagal setelah foto pertama tersimpan, retry semula mengirim ulang foto pertama. Ini menambah waktu, kuota, dan lease tak terpakai.                           | ID upload sukses disimpan per foto; retry dimulai pada foto yang belum terunggah. Saat foto diganti/dihapus, lease yang sudah tersimpan diminta dihapus melalui endpoint yang ada. Jika DELETE gagal, cleanup kedaluwarsa tetap diperlukan. |
+| Medium  | Daftar laporan         | Kegagalan pemuatan tidak memberi aksi retry; halaman di luar rentang tampak seperti belum pernah memiliki laporan.                                                           | Aksi **Muat ulang laporan** dan tautan ke halaman sebelumnya ditambahkan.                                                                                                                                                                   |
+| Low     | Detail laporan         | Satu foto di layar kecil mengambil setengah lebar grid; catatan lokasi menempel pada teks titik koordinat.                                                                   | Foto tunggal memakai satu kolom mobile; catatan lokasi diberi label tersendiri.                                                                                                                                                             |
+
+Seluruh perubahan memakai token dan primitif yang ada. API, Auth, Storage, migration, RLS, validasi ukuran/format foto, serta keputusan D01–D10 tidak diubah dalam review ini.
+
+## D. Konsistensi desain
+
+Plus Jakarta Sans, warna terkunci, gaya HealthTech minimal, bahasa Indonesia, dan penanda data simulasi dipertahankan. Tidak ada gradien, animasi baru, kartu KPI, atau komponen desain pengganti. Ringkasan error memakai token danger yang sudah ada; kontrol upload memakai token surface/border/focus yang sama dengan form.
+
+## E. Pemeriksaan visual dan aksesibilitas
+
+- Tangkapan layar daftar, form, dan detail diperiksa pada **320, 390, 768, dan 1440 px**. Hasil otomatis untuk 12 kombinasi menunjukkan `scrollWidth == clientWidth`; tidak ada overflow horizontal. Foto tunggal dan pemilih file baru juga diperiksa secara visual. Screenshot Playwright tersimpan di `test-results/` (diabaikan Git dan dapat dibuat ulang).
+- Reflow 200% diperiksa dengan CSS `zoom: 200%` pada viewport 640 px serta layout 320 px. Setelah izin pengguna, **zoom browser asli 200% juga diuji di Safari** memakai sesi resident demo lokal. Menu Safari menunjukkan 200% pada daftar, form, dan detail; tangkapan layar bagian awal tiap halaman diperiksa dan tidak menunjukkan clipping horizontal yang terlihat. Pemeriksaan ini memakai jendela desktop lebar; reflow sempit tetap didukung oleh uji Playwright 320 px dan simulasi CSS zoom. Brave tidak dipakai karena sedang aktif digunakan. Sesi demo di-logout, zoom Safari dikembalikan ke 100%, tab uji ditutup, dan server lokal dihentikan.
+- Tes keyboard memastikan ringkasan error menerima fokus, tautan error dapat dicapai dengan Tab, dan fokus input foto tampak pada label. Kontrol utama yang diukur pada 320 px memiliki tinggi minimal 44 px. `prefers-reduced-motion: reduce` menghilangkan durasi transisi tombol yang diuji.
+- axe-core pada ketiga halaman di 320 dan 1440 px melaporkan **0 pelanggaran serious/critical**. Ini bukan audit manual pembaca layar atau bukti kepatuhan WCAG menyeluruh.
+- Status awal, error validasi, upload gagal/retry, berhasil kirim, daftar, detail, dan riwayat persisten diuji melalui browser dengan Supabase lokal. Screenshot memakai development server sehingga indikator Next.js dapat terlihat; indikator itu bukan UI produksi.
+
+## F. Regresi setelah perubahan
+
+| Command                                             | Hasil nyata                                                                                                                                                                                            |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pnpm format:check`                                 | PASS                                                                                                                                                                                                   |
+| `pnpm lint`                                         | PASS                                                                                                                                                                                                   |
+| `pnpm typecheck`                                    | PASS setelah dijalankan terpisah dari build; eksekusi paralel awal berbenturan pada `.next/types`                                                                                                      |
+| `pnpm test`                                         | PASS, 36/36                                                                                                                                                                                            |
+| `pnpm build`                                        | PASS, Next.js production Webpack                                                                                                                                                                       |
+| `pnpm test:e2e:reports`                             | PASS, 11/11 tes live (Auth, PostgreSQL, Storage lokal); eksekusi awal gagal pada selector teks tes yang menjadi ambigu setelah ringkasan error ditambahkan, lalu selector diperbaiki dan suite diulang |
+| `pnpm test:db`                                      | PASS, 100/100 pgTAP pada 2 file; eksekusi sandbox awal berhenti sebelum assertion karena Supabase CLI tidak dapat menulis telemetry lokal, lalu dijalankan dengan izin yang sesuai                     |
+| `pnpm test:auth:live`                               | PASS, 13/13; eksekusi sandbox awal tidak dapat mengakses loopback, lalu dijalankan dengan izin yang sesuai                                                                                             |
+| `pnpm test:e2e:live`                                | PASS, 3/3 browser Auth M2                                                                                                                                                                              |
+| Audit visual terarah setelah menunggu `networkidle` | PASS, 1/1; peringatan hydration akibat screenshot sebelum hidrasi tidak muncul lagi                                                                                                                    |
+| Safari desktop pada zoom browser asli 200%          | PASS untuk inspeksi bagian awal daftar, form, dan detail dengan session resident demo nyata; level zoom dikonfirmasi lewat menu Safari pada tiap halaman                                               |
+
+## G–H. Batasan dan status
+
+**M3 UI/UX refinement lokal: PASS untuk gate yang diminta.** Perubahan frontend, semua gate otomatis, dan pemeriksaan zoom browser asli yang dijalankan PASS; alur submit, upload, persistensi, halaman detail/riwayat, dan pembatasan akses tetap lulus regresi nyata. Hasil ini tidak membuktikan perilaku deployment hosted.
+
+Audit manual pembaca layar dan zoom asli pada jendela sempit masih bisa memperluas bukti aksesibilitas. Halaman daftar/detail belum memiliki indikator loading khusus saat navigasi lambat; penambahan route `loading.tsx` perlu dinilai bersama semantik status/404 Next.js. Penghapusan lease setelah mengganti foto bersifat best-effort; pembersihan lease kedaluwarsa tetap perlu dijadwalkan sebelum produksi.
