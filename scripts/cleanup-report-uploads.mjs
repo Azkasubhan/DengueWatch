@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createClient } from "@supabase/supabase-js";
+import { assertCleanupTarget, dryRun } from "./cleanup-target.mjs";
 
 assert(
   process.env.ALLOW_UPLOAD_CLEANUP === "true",
@@ -8,10 +9,7 @@ assert(
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.SUPABASE_SECRET_KEY;
 assert(url && key, "Storage environment is incomplete.");
-assert(
-  ["localhost", "127.0.0.1"].includes(new URL(url).hostname),
-  "This cleanup script is local-only.",
-);
+assertCleanupTarget(url);
 const admin = createClient(url, key, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
@@ -26,6 +24,10 @@ let query = admin
 if (onlyId) query = query.eq("id", onlyId);
 const expired = await query.order("expires_at").limit(100);
 assert.ifError(expired.error);
+if (dryRun) {
+  console.info(`Dry run: ${expired.data?.length ?? 0} expired uploads found.`);
+  process.exit(0);
+}
 let cleaned = 0;
 for (const upload of expired.data ?? []) {
   const removed = await admin.storage

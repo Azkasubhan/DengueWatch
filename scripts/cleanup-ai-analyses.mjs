@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createClient } from "@supabase/supabase-js";
+import { assertCleanupTarget, dryRun } from "./cleanup-target.mjs";
 
 assert(
   process.env.ALLOW_AI_CLEANUP === "true",
@@ -11,10 +12,7 @@ assert(
   url && key && !/replace|placeholder/i.test(key),
   "Local Supabase configuration is incomplete.",
 );
-assert(
-  ["localhost", "127.0.0.1"].includes(new URL(url).hostname),
-  "AI cleanup is local-only.",
-);
+assertCleanupTarget(url);
 
 const admin = createClient(url, key, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -27,6 +25,10 @@ const old = await admin
   .limit(100);
 assert.ifError(old.error);
 const ids = (old.data ?? []).map((row) => row.id);
+if (dryRun) {
+  console.log(`Dry run: ${ids.length} AI analysis records older than 30 days.`);
+  process.exit(0);
+}
 if (ids.length) {
   const deleted = await admin.from("ai_analyses").delete().in("id", ids);
   assert.ifError(deleted.error);

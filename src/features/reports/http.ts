@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { ZodError } from "zod";
 import { decidePortalAccess } from "@/features/areas/access";
 import { getAccessContext } from "@/lib/auth/context";
+import { requestOrigin } from "@/lib/http/requestOrigin";
 
 export function reportJson(data: unknown, status = 200) {
   return Response.json(data, {
@@ -48,9 +49,10 @@ export function validationResponse(error: ZodError) {
 
 export function sameOrigin(request: Request) {
   const origin = request.headers.get("origin");
-  if (!origin) return false;
+  const expected = requestOrigin(request);
+  if (!origin || !expected) return false;
   try {
-    return new URL(origin).origin === new URL(request.url).origin;
+    return new URL(origin).origin === expected;
   } catch {
     return false;
   }

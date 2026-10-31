@@ -217,3 +217,14 @@
   penyelesaian = verifikasi pertama → `resolved_at` saat ini.
 - **Alasan:** angka deterministik dari database, tanpa Gemini, tanpa identitas, foto, atau
   koordinat dalam payload.
+
+## T22 — Target deployment: VPS self-hosted + Supabase Cloud
+
+- **Keputusan:** satu instance Next.js (`next start`, bind `127.0.0.1:3000`) di VPS Linux
+  2 vCPU/4 GB di belakang Nginx (TLS, hanya port 80/443 publik); Supabase Cloud untuk
+  PostgreSQL/Auth/Storage; Gemini tetap eksternal. Bukan Vercel. Batas foto asli tetap 5 MiB
+  tanpa kompresi client; Nginx `client_max_body_size 8m`, aplikasi tetap membatasi body 6 MiB
+  dan file 5 MiB. Di production origin publik dipatok ke `APP_BASE_URL` (`requestOrigin`, fail-closed bila tidak valid) karena `request.url` pada `next start` memakai alamat bind; header proxy hanya dipakai di development. Cleanup lease
+  dan retensi AI berjalan lewat systemd timer dengan opt-in `ALLOW_HOSTED_CLEANUP=true` dan `CLEANUP_PROJECT_REF` yang harus cocok dengan URL.
+- **Alasan:** hemat biaya dan RAM, tanpa melonggarkan RLS/RPC, private Storage, atau audit.
+  Rincian: `docs/DEPLOYMENT_VPS.md`.
