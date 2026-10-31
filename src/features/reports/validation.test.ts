@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   createReportSchema,
+  jakartaDayStart,
   reportCategoryLabels,
   reportListQuerySchema,
   reportStatusLabels,
+  reviewReportSchema,
 } from "@/features/reports/validation";
 
 const valid = {
@@ -117,5 +119,31 @@ describe("report validation", () => {
     ]) {
       expect(reportListQuerySchema.safeParse(query).success).toBe(false);
     }
+  });
+
+  it("bounds queue date filters to WIB calendar days", () => {
+    expect(jakartaDayStart("2026-10-31")).toBe("2026-10-30T17:00:00.000Z");
+    expect(jakartaDayStart("2026-10-31", 1)).toBe("2026-10-31T17:00:00.000Z");
+  });
+
+  it("keeps the verify reason optional and trims review reasons", () => {
+    expect(
+      reviewReportSchema.safeParse({ decision: "verify", expectedVersion: 1 })
+        .success,
+    ).toBe(true);
+    expect(
+      reviewReportSchema.parse({
+        decision: "reject",
+        reason: "  Lokasi berada di luar fasilitas umum.  ",
+        expectedVersion: 2,
+      }),
+    ).toMatchObject({ reason: "Lokasi berada di luar fasilitas umum." });
+    expect(
+      reviewReportSchema.safeParse({
+        decision: "reject",
+        reason: "Alasan\u0007tersembunyi panjang",
+        expectedVersion: 2,
+      }).success,
+    ).toBe(false);
   });
 });

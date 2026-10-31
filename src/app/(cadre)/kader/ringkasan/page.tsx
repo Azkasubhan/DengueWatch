@@ -3,6 +3,7 @@ import { Alert } from "@/components/feedback/Alert";
 import { PendingArea } from "@/components/feedback/PendingArea";
 import { ServiceUnavailable } from "@/components/feedback/ServiceUnavailable";
 import { AppShell } from "@/components/layout/AppShell";
+import { LinkButton } from "@/components/ui/LinkButton";
 import { decidePortalAccess, getVerifiedAreas } from "@/features/areas/access";
 import { getAccessContext } from "@/lib/auth/context";
 
@@ -49,9 +50,12 @@ export default async function CadreSummaryPage({
           </h1>
           <p className="mt-4 text-[var(--muted-foreground)]">
             Akun ini berwenang sebagai kader hanya pada wilayah yang
-            ditampilkan. Antrean verifikasi dan penugasan belum dibangun pada
-            milestone ini.
+            ditampilkan. Laporan warga dari wilayah ini tersedia di antrean
+            verifikasi.
           </p>
+          <LinkButton href="/kader/verifikasi" className="mt-6">
+            Buka antrean verifikasi
+          </LinkButton>
         </section>
       )}
     </AppShell>

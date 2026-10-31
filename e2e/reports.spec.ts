@@ -425,7 +425,7 @@ test.describe("live environmental reports", () => {
     expect(detail.status()).toBe(200);
     const json = await detail.json();
     expect(json.data.images).toHaveLength(1);
-    expect(json.data.events[0].event_type).toBe("report_created");
+    expect(json.data.events[0].eventType).toBe("report_created");
     const signedImage = await page.request.get(json.data.images[0].url);
     expect(signedImage.status()).toBe(200);
     expect(signedImage.headers()["content-type"]).toContain("image/webp");

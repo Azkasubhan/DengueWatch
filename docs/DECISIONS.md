@@ -156,3 +156,18 @@
 - **Alasan:** ownership UUID saja tidak cukup setelah membership dicabut, dan upload M3
   dapat dipakai resident yang memiliki lebih dari satu area. pgTAP membuktikan akses
   catatan lama hilang setelah membership dicabut.
+
+## T18 — Review laporan melalui RPC atomik M5
+
+- **Status:** accepted dan diuji lokal, 31 Oktober 2026.
+- **Keputusan:** migration kesembilan menambah `review_report`, `add_report_information`,
+  dan `get_report_ai_suggestions` (definer, `search_path` kosong, hanya `authenticated`).
+  Role, area, ownership, status, dan `expectedVersion` dicek di database; laporan di luar
+  scope menghasilkan `P0404`, role salah `P0403`, versi lama `P0409`, transisi ilegal atau
+  input tidak valid `P0422`. Duplicate hanya boleh menunjuk laporan lebih awal di area
+  sama yang bukan `rejected`/`duplicate`. Tiap `event_type` dikunci ke satu transisi PRD
+  §8.1 melalui CHECK, dan trigger menolak UPDATE/DELETE langsung pada `report_events`.
+- **Alasan:** status, versi, dan audit ditulis dalam satu transaksi dengan row lock.
+  RLS `ai_analyses` tetap owner-only; kader hanya menerima field saran yang disanitasi.
+  Manager membaca koordinat persis di area kelolanya sesuai PRD §10.5 dan §11.2, sehingga
+  tidak ada patch akses koordinat.

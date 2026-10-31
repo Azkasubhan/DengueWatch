@@ -79,8 +79,20 @@ Setiap protected page membaca ulang identity, profile, role, dan membership dari
 
 ## Evolusi milestone berikutnya
 
-Milestone verifikasi kader dapat menambahkan transisi terverifikasi melalui RPC khusus dan memperluas enum event.
-Status laporan tidak mempunyai endpoint PATCH umum pada M3.
+Status laporan tidak mempunyai endpoint PATCH umum. Sejak M5, transisi review berjalan melalui
+RPC `review_report` dan `add_report_information` (lihat T18 dan `docs/M5_VERIFICATION.md`).
+
+## Alur verifikasi kader M5
+
+1. `/kader/verifikasi` membaca antrean melalui user-scoped client; RLS membatasi baris ke area
+   `assigned_cadre` terverifikasi. Filter status/kategori/wilayah/tanggal divalidasi Zod.
+2. `/kader/verifikasi/[reportId]` menampilkan foto bertanda tangan, lokasi privat, riwayat, dan
+   saran AI dari `get_report_ai_suggestions`. Form keputusan mengirim `expectedVersion`.
+3. `POST /api/v1/reports/:id/review` memanggil RPC yang mengunci baris, memeriksa role, area,
+   status, dan versi, lalu menulis status dan event audit dalam satu transaksi. Versi lama → 409.
+4. Warga pemilik menjawab `needs_information` melalui `POST /api/v1/reports/:id/add-information`.
+5. JSON API laporan memakai camelCase; mapping dari kolom snake_case berada di
+   `src/features/reports/data.ts`.
 
 ## Alur Gemini SmartSpot M4
 

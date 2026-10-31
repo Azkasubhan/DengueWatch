@@ -13,6 +13,7 @@ import {
   sameOrigin,
   validationResponse,
 } from "@/features/reports/http";
+import { decidePortalAccess, getVerifiedAreas } from "@/features/areas/access";
 import { getAccessContext } from "@/lib/auth/context";
 
 export async function POST(request: Request) {
@@ -102,7 +103,18 @@ export async function POST(request: Request) {
       "Laporan belum dapat disimpan. Coba lagi.",
     );
   }
-  return reportJson({ data: result.data?.[0] }, 201);
+  const created = result.data?.[0];
+  return reportJson(
+    {
+      data: created && {
+        id: created.id,
+        publicReference: created.public_reference,
+        status: created.status,
+        submittedAt: created.submitted_at,
+      },
+    },
+    201,
+  );
 }
 
 export async function GET(request: Request) {
@@ -120,8 +132,22 @@ export async function GET(request: Request) {
     Object.fromEntries(query.entries()),
   );
   if (!parsed.success) return validationResponse(parsed.error);
-  const { page, limit, category } = parsed.data;
-  const result = await listReports(page, limit, category);
+  const { page, limit, ...filters } = parsed.data;
+  if (filters.areaId) {
+    const access = decidePortalAccess(auth.context, auth.context.role);
+    if (
+      access.kind !== "allowed" ||
+      !getVerifiedAreas(auth.context, access.membershipType).some(
+        (area) => area.id === filters.areaId,
+      )
+    )
+      return reportError(
+        403,
+        "FORBIDDEN",
+        "Wilayah tidak tersedia untuk akun ini.",
+      );
+  }
+  const result = await listReports(page, limit, filters);
   if (result.error)
     return reportError(
       503,

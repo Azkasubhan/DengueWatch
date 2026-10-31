@@ -99,22 +99,14 @@ export default async function MyReportsPage({
                 >
                   <div className="flex flex-wrap justify-between gap-2">
                     <span className="font-bold text-[var(--primary)]">
-                      {report.public_reference}
+                      {report.publicReference}
                     </span>
                     <span className="text-sm font-semibold">
-                      {
-                        reportStatusLabels[
-                          report.status as keyof typeof reportStatusLabels
-                        ]
-                      }
+                      {reportStatusLabels[report.status]}
                     </span>
                   </div>
                   <p className="mt-2 font-semibold">
-                    {
-                      reportCategoryLabels[
-                        report.category as keyof typeof reportCategoryLabels
-                      ]
-                    }
+                    {reportCategoryLabels[report.category]}
                   </p>
                   <p className="mt-1 line-clamp-2 break-words text-[var(--muted-foreground)]">
                     {report.description}
@@ -123,8 +115,8 @@ export default async function MyReportsPage({
                     {new Intl.DateTimeFormat("id-ID", {
                       dateStyle: "medium",
                       timeZone: "Asia/Jakarta",
-                    }).format(new Date(report.submitted_at))}
-                    {report.is_demo ? " · Data simulasi" : ""}
+                    }).format(new Date(report.submittedAt))}
+                    {report.isDemo ? " · Data simulasi" : ""}
                   </p>
                 </Link>
               </li>

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { ZodError } from "zod";
+import { decidePortalAccess } from "@/features/areas/access";
 import { getAccessContext } from "@/lib/auth/context";
 
 export function reportJson(data: unknown, status = 200) {
@@ -78,6 +79,106 @@ export async function residentContext() {
       ),
     };
   return { context: access.context };
+}
+
+// Reviews require role cadre plus a verified assigned_cadre membership.
+export async function cadreContext() {
+  const access = await getAccessContext();
+  if (access.kind === "unauthenticated")
+    return {
+      error: reportError(401, "UNAUTHENTICATED", "Masuk untuk melanjutkan."),
+    };
+  if (access.kind !== "authenticated")
+    return {
+      error: reportError(
+        503,
+        "SERVICE_UNAVAILABLE",
+        "Layanan laporan belum tersedia.",
+      ),
+    };
+  if (decidePortalAccess(access.context, "cadre").kind !== "allowed")
+    return {
+      error: reportError(
+        403,
+        "FORBIDDEN",
+        "Akun ini tidak memiliki izin memeriksa laporan.",
+      ),
+    };
+  return { context: access.context };
+}
+
+// Maps M5 RPC SQLSTATEs without exposing database messages.
+export function reviewRpcError(error: { code?: string; message?: string }) {
+  switch (error.code) {
+    case "P0401":
+      return reportError(401, "UNAUTHENTICATED", "Masuk untuk melanjutkan.");
+    case "P0403":
+      return reportError(
+        403,
+        "FORBIDDEN",
+        "Akun ini tidak memiliki izin untuk tindakan ini.",
+      );
+    case "P0404":
+      return reportError(404, "NOT_FOUND", "Laporan tidak ditemukan.");
+    case "P0409":
+      return reportError(
+        409,
+        "STALE_VERSION",
+        "Laporan telah diperbarui. Muat ulang lalu coba lagi.",
+      );
+    case "P0422":
+      if (error.message === "invalid report transition")
+        return reportError(
+          422,
+          "INVALID_TRANSITION",
+          "Status laporan tidak dapat diubah dengan tindakan ini.",
+        );
+      if (error.message === "invalid duplicate target")
+        return reportError(
+          422,
+          "VALIDATION_ERROR",
+          "Laporan rujukan duplikat tidak valid.",
+          {
+            duplicateOfReportId:
+              "Pilih laporan yang lebih awal di wilayah yang sama.",
+          },
+        );
+      return reportError(
+        422,
+        "VALIDATION_ERROR",
+        "Periksa kembali data yang diisi.",
+      );
+    default:
+      return reportError(
+        503,
+        "SERVICE_UNAVAILABLE",
+        "Permintaan belum dapat diproses. Coba lagi.",
+      );
+  }
+}
+
+export async function readJsonBody(
+  request: Request,
+  limit: number,
+): Promise<{ body: unknown; error?: never } | { error: Response }> {
+  if (!request.headers.get("content-type")?.startsWith("application/json"))
+    return {
+      error: reportError(415, "UNSUPPORTED_MEDIA_TYPE", "Gunakan JSON."),
+    };
+  try {
+    return {
+      body: JSON.parse(
+        (await readLimitedBody(request, limit)).toString("utf8"),
+      ),
+    };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error && error.message === "BODY_TOO_LARGE"
+          ? reportError(413, "BODY_TOO_LARGE", "Data terlalu besar.")
+          : reportError(400, "MALFORMED_BODY", "JSON tidak valid."),
+    };
+  }
 }
 
 export async function readLimitedBody(request: Request, limit: number) {

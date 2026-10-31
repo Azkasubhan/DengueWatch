@@ -20,6 +20,7 @@
     "test:e2e:reports": "RUN_LIVE_REPORTS=true node --env-file=.env.local node_modules/@playwright/test/cli.js test e2e/reports.spec.ts --workers=1",
     "test:e2e:ai": "RUN_M4_DETERMINISTIC=true AI_TEST_ADAPTER=deterministic node --env-file=.env.local node_modules/@playwright/test/cli.js test e2e/ai.spec.ts --workers=1",
     "test:e2e:ai:live": "env -u AI_TEST_ADAPTER RUN_LIVE_GEMINI=true node --env-file=.env.local node_modules/@playwright/test/cli.js test e2e/ai-live.spec.ts --workers=1",
+    "test:e2e:m5": "RUN_LIVE_M5=true AI_TEST_ADAPTER=deterministic node --env-file=.env.local node_modules/@playwright/test/cli.js test e2e/verification.spec.ts --workers=1",
     "test:e2e:ui": "playwright test --ui",
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
