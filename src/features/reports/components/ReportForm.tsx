@@ -7,6 +7,10 @@ import {
   reportCategoryLabels,
 } from "@/features/reports/validation";
 import { Button } from "@/components/ui/Button";
+import {
+  aiReportSuggestionSchema,
+  type AiReportSuggestion,
+} from "@/features/ai/schema";
 
 type Area = { id: string; name: string; isDemo: boolean };
 type LocalPhoto = { file: File; url: string };
@@ -33,6 +37,26 @@ export function ReportForm({ areas }: { areas: Area[] }) {
   const errorSummaryRef = useRef<HTMLDivElement>(null);
   const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
   const [uploadedIds, setUploadedIds] = useState<string[]>([]);
+  const [aiStage, setAiStage] = useState<
+    | "idle"
+    | "preparing"
+    | "loading"
+    | "success"
+    | "unavailable"
+    | "invalid"
+    | "rate"
+    | "cancelled"
+  >("idle");
+  const [aiMessage, setAiMessage] = useState("");
+  const [suggestion, setSuggestion] = useState<AiReportSuggestion | null>(null);
+  const [confirmApply, setConfirmApply] = useState(false);
+  const [restoreValues, setRestoreValues] = useState<{
+    category: typeof category;
+    description: string;
+  } | null>(null);
+  const aiControllerRef = useRef<AbortController | null>(null);
+  const aiGenerationRef = useRef(0);
+  const manualRevisionRef = useRef(0);
 
   useEffect(
     () => () => {
@@ -46,6 +70,19 @@ export function ReportForm({ areas }: { areas: Area[] }) {
     errorSummaryRef.current.focus();
     focusErrorsRef.current = false;
   }, [fieldErrors, preview]);
+
+  useEffect(() => () => aiControllerRef.current?.abort(), []);
+
+  function invalidateAi() {
+    aiGenerationRef.current += 1;
+    aiControllerRef.current?.abort();
+    aiControllerRef.current = null;
+    setAiStage("idle");
+    setAiMessage("");
+    setSuggestion(null);
+    setConfirmApply(false);
+    setRestoreValues(null);
+  }
 
   function releaseUploads(ids: string[]) {
     void Promise.allSettled(
@@ -76,6 +113,7 @@ export function ReportForm({ areas }: { areas: Area[] }) {
       return;
     }
     releaseUploads(uploadedIds);
+    invalidateAi();
     setPhotos(next.map((file) => ({ file, url: URL.createObjectURL(file) })));
     setUploadedIds([]);
     setPreview(false);
@@ -84,11 +122,122 @@ export function ReportForm({ areas }: { areas: Area[] }) {
   }
 
   function removePhoto(index: number) {
+    invalidateAi();
     if (uploadedIds[index]) releaseUploads([uploadedIds[index]]);
     setPhotos((old) => old.filter((_, i) => i !== index));
     setUploadedIds((old) => old.filter((_, i) => i !== index));
     setPreview(false);
     setRequestKey(crypto.randomUUID());
+  }
+
+  async function preparePrimaryPhoto() {
+    if (!photos[0] || uploadedIds[0] || busy || aiStage === "preparing") return;
+    setAiStage("preparing");
+    setAiMessage("");
+    const generation = aiGenerationRef.current;
+    const body = new FormData();
+    body.append("photo", photos[0].file);
+    try {
+      const response = await fetch("/api/v1/report-uploads", {
+        method: "POST",
+        body,
+      });
+      const payload = await response.json();
+      if (!response.ok || typeof payload.id !== "string")
+        throw new Error(
+          payload.error?.message ?? "Foto belum dapat disiapkan.",
+        );
+      if (generation !== aiGenerationRef.current) {
+        releaseUploads([payload.id]);
+        return;
+      }
+      setUploadedIds((current) => [payload.id, ...current.slice(1)]);
+      setAiStage("idle");
+    } catch (cause) {
+      if (generation !== aiGenerationRef.current) return;
+      setAiStage("unavailable");
+      setAiMessage(
+        cause instanceof Error ? cause.message : "Foto belum dapat disiapkan.",
+      );
+    }
+  }
+
+  async function requestAi() {
+    if (!uploadedIds[0] || !areaId || busy || aiStage === "loading") return;
+    const controller = new AbortController();
+    aiControllerRef.current = controller;
+    const generation = aiGenerationRef.current;
+    const revision = manualRevisionRef.current;
+    setAiStage("loading");
+    setAiMessage("");
+    setSuggestion(null);
+    setConfirmApply(false);
+    try {
+      const response = await fetch("/api/v1/ai/analyze-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ areaId, uploadId: uploadedIds[0] }),
+        signal: controller.signal,
+      });
+      const payload = await response.json();
+      if (generation !== aiGenerationRef.current) return;
+      if (!response.ok) {
+        const code = payload.error?.code;
+        setAiStage(
+          code === "RATE_LIMIT"
+            ? "rate"
+            : code === "AI_INVALID_OUTPUT"
+              ? "invalid"
+              : "unavailable",
+        );
+        setAiMessage(
+          payload.error?.message ??
+            "Analisis AI tidak tersedia. Anda tetap dapat melanjutkan laporan secara manual.",
+        );
+        return;
+      }
+      const parsed = aiReportSuggestionSchema.safeParse(
+        payload.data?.suggestion,
+      );
+      if (!parsed.success || revision !== manualRevisionRef.current) {
+        setAiStage("invalid");
+        setAiMessage(
+          revision !== manualRevisionRef.current
+            ? "Isian berubah saat analisis berjalan. Minta saran baru bila diperlukan."
+            : "Saran AI tidak valid. Anda tetap dapat melanjutkan laporan secara manual.",
+        );
+        return;
+      }
+      setSuggestion(parsed.data);
+      setAiStage("success");
+    } catch {
+      if (generation !== aiGenerationRef.current) return;
+      setAiStage(controller.signal.aborted ? "cancelled" : "unavailable");
+      setAiMessage(
+        controller.signal.aborted
+          ? "Analisis dibatalkan. Isian Anda tetap tersedia."
+          : "Analisis AI tidak tersedia. Anda tetap dapat melanjutkan laporan secara manual.",
+      );
+    } finally {
+      if (aiControllerRef.current === controller)
+        aiControllerRef.current = null;
+    }
+  }
+
+  function applySuggestion() {
+    if (!suggestion) return;
+    if (!confirmApply && (category || description)) {
+      setConfirmApply(true);
+      return;
+    }
+    setRestoreValues({ category, description });
+    setCategory(suggestion.suggestedCategory);
+    setDescription(suggestion.draftDescription);
+    setRequestKey(crypto.randomUUID());
+    setConfirmApply(false);
+    setAiMessage(
+      "Saran disalin ke formulir. Periksa dan ubah sebelum mengirim.",
+    );
   }
 
   function validate() {
@@ -142,7 +291,8 @@ export function ReportForm({ areas }: { areas: Area[] }) {
   }
 
   async function submit() {
-    if (busy || !validate()) return;
+    if (busy || aiStage === "preparing" || aiStage === "loading" || !validate())
+      return;
     setBusy(true);
     setError("");
     const ids = [...uploadedIds];
@@ -343,6 +493,187 @@ export function ReportForm({ areas }: { areas: Area[] }) {
               ))}
             </div>
           </div>
+          {photos.length ? (
+            <section
+              aria-labelledby="ai-heading"
+              className="grid gap-4 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5"
+            >
+              <div className="grid gap-1">
+                <h2 id="ai-heading" className="text-lg font-semibold">
+                  Bantuan Gemini (opsional)
+                </h2>
+                <p className="text-sm text-[var(--muted-foreground)]">
+                  Foto yang dipilih akan diproses oleh layanan AI eksternal
+                  untuk membantu menyusun laporan. Hasil AI merupakan saran dan
+                  perlu diperiksa kembali.
+                </p>
+                <p className="text-sm text-[var(--muted-foreground)]">
+                  Hanya foto pertama yang dianalisis. Lokasi dan data akun tidak
+                  dikirim ke Gemini.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                {!uploadedIds[0] ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={busy || aiStage === "preparing"}
+                    onClick={preparePrimaryPhoto}
+                  >
+                    {aiStage === "preparing"
+                      ? "Menyiapkan foto…"
+                      : "Siapkan foto untuk AI"}
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={busy || aiStage === "loading"}
+                    onClick={requestAi}
+                  >
+                    {aiStage === "loading"
+                      ? "Menganalisis…"
+                      : "Bantu dengan Gemini"}
+                  </Button>
+                )}
+                {aiStage === "loading" ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      aiGenerationRef.current += 1;
+                      aiControllerRef.current?.abort();
+                      setAiStage("cancelled");
+                      setAiMessage(
+                        "Analisis dibatalkan. Isian Anda tetap tersedia.",
+                      );
+                    }}
+                  >
+                    Batalkan analisis
+                  </Button>
+                ) : null}
+              </div>
+              {aiStage === "preparing" || aiStage === "loading" ? (
+                <p role="status" aria-live="polite" className="text-sm">
+                  {aiStage === "preparing"
+                    ? "Foto sedang divalidasi dan disimpan privat…"
+                    : "Gemini sedang menyiapkan saran. Anda tetap dapat mengisi laporan."}
+                </p>
+              ) : null}
+              {aiMessage ? (
+                <p
+                  role={
+                    aiStage === "unavailable" ||
+                    aiStage === "invalid" ||
+                    aiStage === "rate"
+                      ? "alert"
+                      : "status"
+                  }
+                  className="text-sm text-[var(--muted-foreground)]"
+                >
+                  {aiMessage}
+                </p>
+              ) : null}
+              {suggestion && aiStage === "success" ? (
+                <div
+                  className="grid gap-3 border-t border-[var(--border)] pt-4"
+                  aria-labelledby="ai-result-heading"
+                >
+                  <h3 id="ai-result-heading" className="font-semibold">
+                    Saran AI — perlu verifikasi
+                  </h3>
+                  <div>
+                    <p className="text-sm font-semibold">
+                      Yang tampak pada foto
+                    </p>
+                    <ul className="list-disc pl-5 text-sm">
+                      {suggestion.visibleObjects.map((object, index) => (
+                        <li key={`${index}-${object}`}>{object}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <p className="text-sm">
+                    <span className="font-semibold">Kategori usulan:</span>{" "}
+                    {reportCategoryLabels[suggestion.suggestedCategory]}
+                  </p>
+                  <p className="whitespace-pre-wrap break-words text-sm">
+                    <span className="font-semibold">Deskripsi usulan:</span>{" "}
+                    {suggestion.draftDescription}
+                  </p>
+                  <p className="whitespace-pre-wrap break-words text-sm">
+                    <span className="font-semibold">Saran pencegahan:</span>{" "}
+                    {suggestion.suggestedPrecaution}
+                  </p>
+                  <p className="whitespace-pre-wrap break-words text-sm">
+                    <span className="font-semibold">Batasan:</span>{" "}
+                    {suggestion.limitations}
+                  </p>
+                  {confirmApply ? (
+                    <div
+                      role="alert"
+                      className="grid gap-2 rounded-[var(--radius-control)] border border-[var(--border)] p-3"
+                    >
+                      <p className="text-sm">
+                        Kategori atau deskripsi saat ini sudah terisi. Ganti
+                        dengan saran AI? Isian lama dapat dipulihkan segera
+                        setelahnya.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" onClick={applySuggestion}>
+                          Ya, ganti isian
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => setConfirmApply(false)}
+                        >
+                          Batal
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" onClick={applySuggestion}>
+                        Terapkan saran ke formulir
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => {
+                          setSuggestion(null);
+                          setAiStage("idle");
+                          setAiMessage(
+                            "Saran diabaikan. Isian manual tetap tersedia.",
+                          );
+                        }}
+                      >
+                        Abaikan saran
+                      </Button>
+                    </div>
+                  )}
+                  <p className="text-xs text-[var(--muted-foreground)]">
+                    Anda dapat mengubah kategori dan deskripsi setelah
+                    menerapkan saran. Laporan tidak dikirim otomatis.
+                  </p>
+                </div>
+              ) : null}
+              {restoreValues ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setCategory(restoreValues.category);
+                    setDescription(restoreValues.description);
+                    setRestoreValues(null);
+                    setRequestKey(crypto.randomUUID());
+                    setAiMessage("Isian sebelumnya dipulihkan.");
+                  }}
+                >
+                  Pulihkan isian sebelumnya
+                </Button>
+              ) : null}
+            </section>
+          ) : null}
           <div className="grid gap-2">
             <label htmlFor="areaId" className="text-sm font-semibold">
               Wilayah <span aria-hidden="true">*</span>
@@ -355,6 +686,7 @@ export function ReportForm({ areas }: { areas: Area[] }) {
               aria-describedby={fieldErrors.areaId ? "areaId-error" : undefined}
               onChange={(event) => {
                 setAreaId(event.target.value);
+                invalidateAi();
                 setRequestKey(crypto.randomUUID());
               }}
               className={control}
@@ -384,6 +716,8 @@ export function ReportForm({ areas }: { areas: Area[] }) {
               }
               onChange={(event) => {
                 setCategory(event.target.value as typeof category);
+                manualRevisionRef.current += 1;
+                setRestoreValues(null);
                 setRequestKey(crypto.randomUUID());
               }}
               className={control}
@@ -407,6 +741,8 @@ export function ReportForm({ areas }: { areas: Area[] }) {
               aria-required="true"
               onChange={(event) => {
                 setDescription(event.target.value);
+                manualRevisionRef.current += 1;
+                setRestoreValues(null);
                 setRequestKey(crypto.randomUUID());
               }}
               maxLength={1000}

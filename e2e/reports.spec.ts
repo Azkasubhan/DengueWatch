@@ -13,7 +13,7 @@ test.describe("live environmental reports", () => {
   );
   test.describe.configure({ mode: "serial" });
 
-  const email = "warga.simulasi@denguewatch.test";
+  const email = process.env.M3_TEST_EMAIL ?? "warga.simulasi@denguewatch.test";
   const password = process.env.DEMO_ACCOUNT_PASSWORD ?? "";
   const samplePath = resolve("assets/demo-reports/water-container.png");
   let createdReportId = "";

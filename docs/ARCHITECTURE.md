@@ -1,11 +1,11 @@
-# Arsitektur M1–M3
+# Arsitektur M1–M4
 
 ## Batas sistem
 
 Implementasi menggunakan modular monolith Next.js 16. Presentation, autentikasi, dan data
 access berada dalam satu aplikasi; PostgreSQL, Auth, dan policy data dikelola Supabase.
-M3 menambahkan laporan lingkungan dan media privat. Gemini, tugas, peta, dan analitik
-belum diimplementasikan.
+M3 menambahkan laporan lingkungan dan media privat. M4 menambahkan bantuan Gemini
+opsional pada formulir warga. Tugas, peta, dan analitik belum diimplementasikan.
 
 ```text
 Browser
@@ -79,5 +79,23 @@ Setiap protected page membaca ulang identity, profile, role, dan membership dari
 
 ## Evolusi milestone berikutnya
 
-M4 dapat menambahkan transisi terverifikasi melalui RPC khusus dan memperluas enum event.
+Milestone verifikasi kader dapat menambahkan transisi terverifikasi melalui RPC khusus dan memperluas enum event.
 Status laporan tidak mempunyai endpoint PATCH umum pada M3.
+
+## Alur Gemini SmartSpot M4
+
+1. Warga memilih foto, membaca pemberitahuan pemrosesan eksternal, lalu meminta penyiapan
+   foto. M3 memvalidasi dan menormalisasi WebP di private Storage; pemilihan foto sendiri
+   tidak memanggil Gemini.
+2. `POST /api/v1/ai/analyze-report` memvalidasi session resident dan area. RPC
+   `reserve_ai_analysis` memeriksa lagi membership, pemilik/masa lease foto, keberadaan
+   objek, batas 10/jam dan 30/hari, serta satu analisis aktif per pengguna.
+3. Service server mengunduh objek lewat path yang diambil dari row server, memeriksa
+   ukuran/signature/decode/dimensi/metadata, lalu memberi hanya satu gambar WebP kepada
+   adapter `@google/genai`. Tidak ada nama, email, lokasi, GPS, atau data medis pada input.
+4. JSON dari Gemini dianggap tidak tepercaya. Zod strict dan guard klaim eksplisit
+   memvalidasi sebelum saran disimpan dan dikirim ke browser. Warga menerapkan atau
+   mengabaikan saran; submit tetap menggunakan RPC M3.
+5. `ai_analyses` terpisah dari `reports`. Trigger pada `report_images` menautkan analisis
+   ke report ketika upload yang sama difinalisasi. Status report/event tidak berubah.
+   Cleanup lokal menghapus catatan lebih dari 30 hari; penjadwalan hosted belum dilakukan.

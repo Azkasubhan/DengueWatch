@@ -123,3 +123,36 @@
 - **Alasan:** hitungan pada `report_uploads` dapat dilewati dengan menghapus lease segera
   setelah upload. Ledger tetap menghitung percobaan dalam jendela satu jam. pgTAP menguji
   bahwa penghapusan lease tidak mereset hitungan dan reservasi ke-31 ditolak.
+
+## T15 — Analisis sebelum submit memakai lease foto M3
+
+- **Status:** accepted untuk M4 lokal, 31 Oktober 2026.
+- **Keputusan:** Gemini menerima satu WebP privat yang sudah dinormalisasi oleh M3.
+  `ai_analyses.upload_id` mengaitkan hasil pra-submit; trigger pada `report_images`
+  menambahkan `report_id` saat foto difinalisasi. M3 RPC tidak diubah.
+- **Alasan:** tidak membuat laporan kosong atau workflow upload kedua. Jika lease dihapus,
+  FK `ON DELETE SET NULL` mempertahankan metadata analisis sampai retensi berakhir.
+
+## T16 — Kuota AI terpisah dan adapter uji lokal
+
+- **Status:** accepted untuk M4 lokal, 31 Oktober 2026.
+- **Keputusan:** RPC user-scoped memesan satu analisis dengan advisory lock, batas
+  10/jam, 30/hari, dan satu permintaan aktif per akun. Catatan aktif memiliki lease satu
+  menit. Finalisasi server-only memakai secret key. SDK resmi `@google/genai` 2.32.0
+  memakai model dari `GEMINI_MODEL`, timeout per percobaan, maksimal dua percobaan untuk
+  429/5xx, dan validasi output di aplikasi.
+- **Alasan:** kuota lintas instance dan biaya AI tidak boleh dicampur dengan kuota laporan.
+  Adapter deterministik hanya tersedia di mode development/test dengan flag eksplisit dan
+  Supabase loopback; tidak menjadi provider pengganti produksi.
+- **Batasan:** tanpa key Gemini development, model/quota project dan hasil live belum
+  diverifikasi. Hosted scheduler retensi 30 hari masih perlu diatur.
+
+## T17 — Hardening scope catatan AI
+
+- **Status:** accepted dan diuji lokal, 31 Oktober 2026.
+- **Keputusan:** migration kedelapan memperketat RLS `ai_analyses`: pemilik harus masih
+  memiliki role resident dan membership terverifikasi pada area analisis. Trigger hanya
+  menautkan analisis ke report jika area analisis sama dengan area report.
+- **Alasan:** ownership UUID saja tidak cukup setelah membership dicabut, dan upload M3
+  dapat dipakai resident yang memiliki lebih dari satu area. pgTAP membuktikan akses
+  catatan lama hilang setelah membership dicabut.

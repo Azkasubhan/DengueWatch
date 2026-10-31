@@ -18,6 +18,8 @@
     "test:e2e": "playwright test",
     "test:e2e:live": "RUN_LIVE_AUTH=true node --env-file=.env.local node_modules/@playwright/test/cli.js test e2e/live-auth.spec.ts --workers=1",
     "test:e2e:reports": "RUN_LIVE_REPORTS=true node --env-file=.env.local node_modules/@playwright/test/cli.js test e2e/reports.spec.ts --workers=1",
+    "test:e2e:ai": "RUN_M4_DETERMINISTIC=true AI_TEST_ADAPTER=deterministic node --env-file=.env.local node_modules/@playwright/test/cli.js test e2e/ai.spec.ts --workers=1",
+    "test:e2e:ai:live": "env -u AI_TEST_ADAPTER RUN_LIVE_GEMINI=true node --env-file=.env.local node_modules/@playwright/test/cli.js test e2e/ai-live.spec.ts --workers=1",
     "test:e2e:ui": "playwright test --ui",
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
@@ -27,10 +29,12 @@
     "seed:demo": "node --env-file=.env.local scripts/seed-demo.mjs",
     "seed:reports": "node --env-file=.env.local scripts/seed-report-demo.mjs",
     "cleanup:report-uploads": "node --env-file=.env.local scripts/cleanup-report-uploads.mjs",
+    "cleanup:ai-analyses": "node --env-file=.env.local scripts/cleanup-ai-analyses.mjs",
     "test:auth:live": "node --env-file=.env.local scripts/verify-m2-live.mjs"
   },
   "dependencies": {
     "@fontsource-variable/plus-jakarta-sans": "5.3.0",
+    "@google/genai": "2.32.0",
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.118.0",
     "lucide-react": "1.65.0",

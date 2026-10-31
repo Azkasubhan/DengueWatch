@@ -97,3 +97,26 @@ nyata, termasuk refresh token dan recovery PKCE melalui Mailpit. Browser live me
 - Unggahan sementara yang gagal/ditinggalkan tidak menghasilkan report. Owner dapat
   menghapusnya; cleanup terjaga menghapus objek kedaluwarsa. Jadwalkan cleanup produksi
   dan verifikasi provider Storage hosted sebelum go-live.
+
+## Gemini SmartSpot M4
+
+- Endpoint hanya untuk resident dengan membership terverifikasi. Input menerima UUID
+  area/upload, bukan URL atau Storage path. RPC database memeriksa pemilik, expiry, status
+  upload, keberadaan objek, dan role/area. Path dibaca ulang dari ledger server; objek
+  WebP tetap dalam bucket privat. Server memvalidasi ulang bytes sebelum panggilan AI.
+- Hanya satu foto dikirim; tidak ada nama, email, nomor telepon, alamat, koordinat, atau
+  metadata auth dalam prompt. Kunci Gemini hanya dibaca server-side. SDK tidak diimpor
+  komponen client. Hasil JSON diparsing Zod strict, dibatasi panjang, dan klaim medis
+  eksplisit/angka probabilitas ditolak. Ini tidak membuktikan seluruh kemungkinan klaim
+  salah; pemeriksaan manusia tetap wajib.
+- `ai_analyses` hanya dapat dibaca owner yang tetap resident terverifikasi pada area
+  analisis melalui RLS. Browser tidak diberi grant write;
+  finalisasi oleh server memakai secret key setelah reservation RPC berbasis session.
+  Analisis tidak mengubah report status. Ledger membatasi 10/jam, 30/hari, dan satu
+  permintaan aktif per akun lintas instance. Lease aktif berakhir setelah satu menit bila
+  server berhenti. Percobaan tetap terhitung setelah gagal.
+- Adapter deterministik hanya aktif dengan flag eksplisit, `NODE_ENV` nonproduction,
+  dan URL Supabase loopback. Tes itu tidak membuktikan provider Gemini live.
+- Hasil/metadata analisis tidak memuat gambar mentah atau prompt. Script cleanup lokal
+  menghapus catatan lebih dari 30 hari; scheduler hosted dan audit retensi deployment
+  masih diperlukan.

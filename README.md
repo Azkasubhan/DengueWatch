@@ -9,8 +9,10 @@ pencegahan dengue yang terverifikasi. Implementasi saat ini hanya mencakup:
   wilayah, protected route, RLS, dan seed demo yang dijaga.
 - **M3 Environmental Reports:** laporan manual warga, foto privat, daftar/detail, riwayat,
   API, serta pengujian keamanan dan integrasi lokal.
+- **M4 Gemini SmartSpot:** bantuan AI opsional pada foto laporan, dengan tinjauan dan
+  keputusan akhir tetap pada warga. Satu alur Gemini nyata telah lulus di development lokal.
 
-Gemini, verifikasi laporan, ActionLoop, peta, PSN, dan analitik belum diimplementasikan.
+Verifikasi laporan, ActionLoop, peta, PSN, dan analitik belum diimplementasikan.
 
 ## Persyaratan
 
@@ -44,6 +46,9 @@ konfigurasi tidak valid.
 | `ALLOW_DEMO_SEED`                      | Script only        | Guard eksplisit agar seed tidak berjalan tidak sengaja |
 | `DEMO_ACCOUNT_PASSWORD`                | Script only        | Password akun demo, tidak disimpan di repository       |
 | `NEXT_PUBLIC_DEMO_MODE`                | Client + server    | Penanda lingkungan simulasi                            |
+| `GEMINI_API_KEY`                       | Server only        | Kunci Gemini untuk analisis foto                       |
+| `GEMINI_MODEL`                         | Server only        | Model yang mendukung image dan JSON terstruktur        |
+| `AI_REQUEST_TIMEOUT_MS`                | Server only        | Timeout per percobaan; default 15000 ms                |
 
 Jangan pernah memberi prefix `NEXT_PUBLIC_` pada secret key. Simpan secret melalui pengelola
 secret lokal/deployment, bukan Git.
@@ -57,6 +62,10 @@ dibutuhkan seed (`SELECT`, `INSERT`, `UPDATE`) dan tetap menolak `DELETE`. Migra
 menambahkan Environmental Reports dan private Storage; migration kelima membatasi reservasi
 unggahan sementara. Migration keenam membuat ledger percobaan upload yang tetap dihitung
 setelah lease dihapus. Pastikan `[storage].enabled = true` di konfigurasi Supabase lokal.
+Migration ketujuh menambahkan ledger analisis AI, kuota terpisah, RLS, dan tautan otomatis
+ke laporan yang akhirnya dikirim.
+Migration kedelapan memperketat pembacaan catatan AI setelah membership dicabut dan
+hanya menautkan analisis ke laporan pada area yang sama.
 
 Dengan Supabase lokal:
 
@@ -100,7 +109,7 @@ Resident dengan membership area terverifikasi dapat membuka `/app/laporan/buat`,
 1–3 foto, dan melihat daftar serta detail laporan yang persisten. Foto disimpan sebagai
 WebP tanpa metadata dalam bucket privat `report-photos`. Setiap laporan baru berstatus
 `pending_verification` dan memiliki event `report_created`. Keputusan verifikasi kader
-merupakan ruang lingkup M4.
+berada di milestone lain dan tidak dipengaruhi Gemini.
 
 Setelah seed M2, buat tiga laporan simulasi deterministik beserta foto sintetis dari
 `assets/demo-reports/`:
@@ -120,6 +129,42 @@ Endpoint dan bentuk respons dijelaskan di [kontrak API M3](docs/M3_API.md). Uplo
 memerlukan secret key hanya pada server untuk menyiapkan foto; create/list/detail laporan
 memakai session pengguna dan RLS. Jangan menaruh secret key di browser.
 
+## Bantuan Gemini M4
+
+Warga dapat menyiapkan satu foto yang sudah divalidasi, lalu menekan **Bantu dengan Gemini**.
+Pemberitahuan pemrosesan eksternal ditampilkan sebelum tindakan tersebut. Hasil AI dapat
+diterapkan, diubah, dipulihkan, atau diabaikan. Mengirim laporan tetap tindakan terpisah
+melalui alur M3. Tanpa kunci atau model Gemini yang valid, pesan unavailable ditampilkan
+dan laporan manual tetap berfungsi.
+
+Isi `GEMINI_API_KEY`, `GEMINI_MODEL`, dan bila perlu `AI_REQUEST_TIMEOUT_MS` di `.env.local`.
+Model harus tersedia untuk project Gemini development, menerima image, dan mendukung JSON
+terstruktur. Implementasi selalu membaca model dari environment. Hasil live development
+dan batas verifikasinya tercatat di [verifikasi M4](docs/M4_VERIFICATION.md).
+
+Tes browser deterministik memakai Supabase Auth, database, dan Storage lokal yang nyata,
+namun **tidak** memanggil Gemini:
+
+```bash
+pnpm test:e2e:ai
+```
+
+Satu uji provider nyata memakai akun resident sintetis terisolasi di Supabase lokal:
+
+```bash
+M4_TEST_EMAIL=<email-fixture-resident-lokal> pnpm test:e2e:ai:live
+```
+
+Command ini memakai quota Gemini nyata dan tidak boleh dijalankan dengan foto pribadi.
+
+Catatan analisis lokal yang berusia lebih dari 30 hari dapat dibersihkan dengan:
+
+```bash
+ALLOW_AI_CLEANUP=true pnpm cleanup:ai-analyses
+```
+
+Jadwalkan cleanup yang setara pada lingkungan hosted sebelum deployment publik.
+
 ## Pemeriksaan kualitas
 
 ```bash
@@ -130,11 +175,13 @@ pnpm build
 pnpm test:e2e
 pnpm test:e2e:live
 pnpm test:e2e:reports
+pnpm test:e2e:ai
+M4_TEST_EMAIL=<email-fixture-resident-lokal> pnpm test:e2e:ai:live
 pnpm test:db
 pnpm test:auth:live
 ```
 
-`pnpm test:db` menjalankan 53 assertion M2 dan 47 assertion M3 untuk grant, RLS, role,
+`pnpm test:db` menjalankan 53 assertion M2, 47 assertion M3, dan 28 assertion M4 untuk grant, RLS, role,
 membership, cross-area access, report atomicity, dan Storage policy. Hasilnya hanya boleh disebut lulus bila
 database lokal benar-benar berjalan dan command selesai dengan exit code 0.
 
@@ -156,10 +203,12 @@ worker port yang tidak diizinkan oleh environment implementasi ini; alasan dicat
 ## Dokumentasi
 
 - [PRD final](docs/DengueWatch_PRD.md)
-- [Arsitektur M1–M3](docs/ARCHITECTURE.md)
+- [Arsitektur M1–M4](docs/ARCHITECTURE.md)
 - [Kontrak desain](docs/DESIGN.md)
 - [Model keamanan](docs/SECURITY.md)
 - [Keputusan teknis](docs/DECISIONS.md)
 - [Bukti verifikasi M2](docs/M2_VERIFICATION.md)
 - [Kontrak API M3](docs/M3_API.md)
 - [Bukti verifikasi M3](docs/M3_VERIFICATION.md)
+- [Kontrak API M4](docs/M4_API.md)
+- [Bukti verifikasi M4](docs/M4_VERIFICATION.md)
