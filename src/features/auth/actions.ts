@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/integrations/supabase/server";
 import { getSafeRedirect } from "@/lib/auth/safeRedirect";
+import { appOrigin } from "@/lib/http/requestOrigin";
 import {
   forgotPasswordSchema,
   loginSchema,
@@ -31,19 +32,6 @@ function configurationError(): AuthActionState {
     status: "error",
     message: "Layanan akun belum dikonfigurasi. Hubungi pengelola aplikasi.",
   };
-}
-
-function appBaseUrl() {
-  const candidate = process.env.APP_BASE_URL ?? "http://localhost:3000";
-  try {
-    const url = new URL(candidate);
-    if (url.protocol !== "http:" && url.protocol !== "https:") {
-      return "http://localhost:3000";
-    }
-    return url.origin;
-  } catch {
-    return "http://localhost:3000";
-  }
 }
 
 export async function loginAction(
@@ -93,6 +81,9 @@ export async function registerAction(
     return validationError(parsed.error);
   }
 
+  const origin = appOrigin();
+  if (!origin) return configurationError();
+
   let supabase;
   try {
     supabase = await createClient();
@@ -106,7 +97,7 @@ export async function registerAction(
     password,
     options: {
       data: { display_name: displayName },
-      emailRedirectTo: `${appBaseUrl()}/auth/callback?next=/app/beranda`,
+      emailRedirectTo: `${origin}/auth/callback?next=/app/beranda`,
     },
   });
 
@@ -141,6 +132,9 @@ export async function forgotPasswordAction(
     return validationError(parsed.error);
   }
 
+  const origin = appOrigin();
+  if (!origin) return configurationError();
+
   let supabase;
   try {
     supabase = await createClient();
@@ -151,7 +145,7 @@ export async function forgotPasswordAction(
   const { error } = await supabase.auth.resetPasswordForEmail(
     parsed.data.email,
     {
-      redirectTo: `${appBaseUrl()}/auth/callback?next=/atur-ulang-kata-sandi`,
+      redirectTo: `${origin}/auth/callback?next=/atur-ulang-kata-sandi`,
     },
   );
 

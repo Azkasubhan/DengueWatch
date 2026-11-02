@@ -26,7 +26,9 @@ const old = await admin
 assert.ifError(old.error);
 const ids = (old.data ?? []).map((row) => row.id);
 if (dryRun) {
-  console.log(`Dry run: ${ids.length} AI analysis records older than 30 days.`);
+  console.log(
+    `Dry run: ${ids.length} AI analysis records older than 30 days in this batch (max 100).`,
+  );
   process.exit(0);
 }
 if (ids.length) {

@@ -19,10 +19,13 @@ hanya dijalankan setelah persetujuan eksplisit.
 
 - `next start` membentuk `request.url` dari alamat bind (`localhost:3000`), bukan dari
   domain publik.
-- Di production, `requestOrigin()` memakai `APP_BASE_URL` sebagai origin kanonik. `Host`,
-  `X-Forwarded-*`, dan `Forwarded` yang di-spoof tidak berpengaruh. Tanpa `APP_BASE_URL`
-  yang valid, semua mutation ditolak (fail-closed, 403). Callback Auth selalu redirect ke
-  origin kanonik.
+- Di production, `appOrigin()`/`requestOrigin()` memakai `APP_BASE_URL` sebagai origin
+  kanonik. Nilainya wajib `https://`; `http://` hanya diterima untuk `localhost`/`127.0.0.1`.
+  `Host`, `X-Forwarded-*`, dan `Forwarded` yang di-spoof tidak berpengaruh.
+- Tanpa `APP_BASE_URL` yang valid, sistem fail-closed: mutation ditolak (403), daftar dan
+  pemulihan kata sandi menampilkan "Layanan akun belum dikonfigurasi" (link email tidak
+  pernah mengarah ke localhost), dan callback Auth memakai redirect relatif. Bila valid,
+  callback selalu redirect ke origin kanonik.
 - Header dari proxy tetap wajib, karena Server Actions Next.js (login/daftar) membandingkan
   `Origin` dengan `X-Forwarded-Host`/`Host`. Nginx menimpa header tersebut. Node hanya
   bind ke `127.0.0.1`, dan `server_name` default menolak host lain.
@@ -292,7 +295,7 @@ set -a && . /etc/denguewatch/build.env && set +a
 NODE_OPTIONS=--max-old-space-size=2048 pnpm build
 
 # root
-install -d -o denguewatch -g denguewatch "$R/.next/cache"
+install -d "$R/.next/cache" && chown -R denguewatch:denguewatch "$R/.next/cache"
 ln -sfn "$R" /srv/denguewatch/current
 systemctl daemon-reload && systemctl enable --now denguewatch
 nginx -t && systemctl reload nginx && certbot --nginx -d dw.example.id

@@ -25,7 +25,9 @@ if (onlyId) query = query.eq("id", onlyId);
 const expired = await query.order("expires_at").limit(100);
 assert.ifError(expired.error);
 if (dryRun) {
-  console.info(`Dry run: ${expired.data?.length ?? 0} expired uploads found.`);
+  console.info(
+    `Dry run: ${expired.data?.length ?? 0} expired uploads in this batch (max 100).`,
+  );
   process.exit(0);
 }
 let cleaned = 0;

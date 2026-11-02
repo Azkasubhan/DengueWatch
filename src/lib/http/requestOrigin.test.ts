@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { requestOrigin } from "@/lib/http/requestOrigin";
+import { appOrigin, requestOrigin } from "@/lib/http/requestOrigin";
 import { sameOrigin } from "@/features/reports/http";
 
 const local = "http://localhost:3000/api/v1/reports";
@@ -23,6 +23,19 @@ describe("requestOrigin behind the reverse proxy", () => {
         }),
       ),
     ).toBe("https://dw.example.test");
+  });
+
+  it("normalizes the default port of the forwarded scheme", () => {
+    expect(
+      requestOrigin(
+        request({ host: "dw.example.test:443", "x-forwarded-proto": "https" }),
+      ),
+    ).toBe("https://dw.example.test");
+    expect(
+      requestOrigin(
+        request({ host: "dw.example.test:8443", "x-forwarded-proto": "https" }),
+      ),
+    ).toBe("https://dw.example.test:8443");
   });
 
   it("falls back to request.url without headers or with invalid values", () => {
@@ -78,14 +91,40 @@ describe("requestOrigin in production", () => {
     ).toBe(false);
   });
 
-  it.each([undefined, "not a url", "javascript:alert(1)"])(
-    "fails closed when APP_BASE_URL is %j",
-    (base) => {
-      production(base);
-      expect(requestOrigin(request(proxied))).toBeNull();
-      expect(
-        sameOrigin(request({ ...proxied, origin: "https://dw.example.test" })),
-      ).toBe(false);
-    },
-  );
+  it.each([
+    undefined,
+    "not a url",
+    "javascript:alert(1)",
+    "http://dw.example.test",
+  ])("fails closed when APP_BASE_URL is %j", (base) => {
+    production(base);
+    expect(requestOrigin(request(proxied))).toBeNull();
+    expect(
+      sameOrigin(request({ ...proxied, origin: "https://dw.example.test" })),
+    ).toBe(false);
+  });
+});
+
+describe("appOrigin", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("requires HTTPS in production except on loopback", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("APP_BASE_URL", "https://dw.example.test/x");
+    expect(appOrigin()).toBe("https://dw.example.test");
+    vi.stubEnv("APP_BASE_URL", "http://127.0.0.1:3000");
+    expect(appOrigin()).toBe("http://127.0.0.1:3000");
+    vi.stubEnv("APP_BASE_URL", "http://dw.example.test");
+    expect(appOrigin()).toBeNull();
+    vi.stubEnv("APP_BASE_URL", "");
+    expect(appOrigin()).toBeNull();
+  });
+
+  it("defaults to localhost outside production and rejects invalid values", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("APP_BASE_URL", "");
+    expect(appOrigin()).toBe("http://localhost:3000");
+    vi.stubEnv("APP_BASE_URL", "ftp://dw.example.test");
+    expect(appOrigin()).toBeNull();
+  });
 });
