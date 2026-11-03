@@ -1,28 +1,53 @@
 import Link from "next/link";
 import { Brand } from "@/components/layout/Brand";
-import { Container } from "@/components/layout/Container";
 import { LinkButton } from "@/components/ui/LinkButton";
 
-export function SiteHeader() {
+const sections = [
+  { href: "/#cara-kerja", label: "Cara kerja" },
+  { href: "/#pencegahan", label: "Pencegahan" },
+  { href: "/#faq", label: "FAQ" },
+];
+
+// `overlay` sits on top of the landing hero photo; `plain` is used on content pages.
+export function SiteHeader({
+  variant = "plain",
+}: {
+  variant?: "overlay" | "plain";
+}) {
+  const overlay = variant === "overlay";
   return (
-    <header className="border-b border-[var(--border)] bg-[var(--surface)]">
-      <Container className="flex min-h-18 flex-wrap items-center justify-between gap-3 py-3">
-        <Brand />
-        <nav
-          aria-label="Navigasi utama"
-          className="flex items-center gap-2 sm:gap-4"
-        >
+    <header
+      className={`flex min-h-18 items-center justify-between gap-3 px-5 py-4 sm:px-8 lg:px-12 ${overlay ? "text-white" : "border-b border-[var(--border)]"}`}
+    >
+      <Brand inverse={overlay} />
+      <nav aria-label="Navigasi utama" className="flex items-center gap-1">
+        {sections.map((section) => (
           <Link
-            className="rounded-md px-2 py-2 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-            href="/#cara-kerja"
+            className={`hidden rounded-full px-3 py-2 text-sm font-medium md:inline-flex ${overlay ? "text-white/85 hover:text-white" : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"}`}
+            href={section.href}
+            key={section.href}
           >
-            Cara kerja
+            {section.label}
           </Link>
-          <LinkButton href="/login" variant="secondary">
-            Masuk
-          </LinkButton>
-        </nav>
-      </Container>
+        ))}
+        <Link
+          className={`inline-flex min-h-11 items-center rounded-full px-3 text-sm font-semibold md:ml-3 ${overlay ? "hover:text-[var(--mint)]" : "hover:text-[var(--primary)]"}`}
+          href="/login"
+        >
+          Masuk
+        </Link>
+        <LinkButton
+          className={
+            overlay
+              ? "border-white bg-white text-[var(--foreground)] hover:bg-[var(--sand)]"
+              : ""
+          }
+          href="/daftar"
+          variant={overlay ? "secondary" : "primary"}
+        >
+          Daftar
+        </LinkButton>
+      </nav>
     </header>
   );
 }

@@ -21,9 +21,21 @@ body {
   line-height: 1.6;
 }
 
-button,
-input {
-  font: inherit;
+/* In the base layer so Tailwind utilities (text-sm, font-semibold) still apply to controls. */
+@layer base {
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  /* Native date/time inputs have a wide intrinsic size; let them shrink on narrow screens. */
+  input,
+  select,
+  textarea {
+    min-width: 0;
+  }
 }
 
 :focus-visible {

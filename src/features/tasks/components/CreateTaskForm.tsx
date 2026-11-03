@@ -120,9 +120,9 @@ export function CreateTaskForm({
       noValidate
       onSubmit={submit}
       aria-labelledby="create-task-title"
-      className="mt-5 grid gap-4 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-7"
+      className="mt-5 grid gap-4 rounded-[var(--radius-control)] bg-[var(--background)] p-3 sm:p-4 [&>*]:min-w-0"
     >
-      <h3 id="create-task-title" className="text-xl font-bold">
+      <h3 id="create-task-title" className="font-semibold">
         Buat tugas tindak lanjut
       </h3>
       <div className="grid gap-2">
@@ -200,7 +200,7 @@ export function CreateTaskForm({
           {failure}
         </p>
       ) : null}
-      <div>
+      <div className="flex sm:justify-end">
         <Button type="submit" isLoading={pending}>
           Buat tugas
         </Button>

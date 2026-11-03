@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
 import { ServiceUnavailable } from "@/components/feedback/ServiceUnavailable";
@@ -6,6 +5,7 @@ import { PendingArea } from "@/components/feedback/PendingArea";
 import { getDefaultPortal, getVerifiedAreas } from "@/features/areas/access";
 import { ReportForm } from "@/features/reports/components/ReportForm";
 import { getAccessContext } from "@/lib/auth/context";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -23,21 +23,11 @@ export default async function CreateReportPage() {
       displayName={access.context.displayName}
       role="resident"
     >
-      <div className="mb-8">
-        <Link
-          href="/app/laporan"
-          className="inline-flex min-h-11 items-center text-sm font-semibold text-[var(--primary)]"
-        >
-          ← Laporan saya
-        </Link>
-        <h1 className="mt-3 text-3xl font-bold tracking-tight">
-          Buat laporan lingkungan
-        </h1>
-        <p className="mt-2 max-w-2xl text-[var(--muted-foreground)]">
-          Catat temuan yang terlihat. Kader akan memeriksa laporan setelah
-          dikirim.
-        </p>
-      </div>
+      <PageHeader
+        back={{ href: "/app/laporan", label: "Laporan saya" }}
+        title="Buat laporan lingkungan"
+        description="Catat temuan yang terlihat. Kader akan memeriksa laporan setelah dikirim."
+      />
       {areas.length ? <ReportForm areas={areas} /> : <PendingArea />}
     </AppShell>
   );

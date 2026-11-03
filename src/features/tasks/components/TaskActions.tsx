@@ -206,16 +206,21 @@ export function TaskActions({
   const canSubmit = assignedToMe && status === "in_progress";
   const canReview =
     status === "awaiting_review" && pendingSubmittedByMe === false;
+  const othersTask =
+    !assignedToMe &&
+    (status === "assigned" ||
+      status === "reopened" ||
+      status === "in_progress");
 
   return (
     <section
       aria-labelledby="task-actions-title"
-      className="grid gap-5 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-7"
+      className="grid gap-5 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5"
     >
-      <h2 id="task-actions-title" className="text-xl font-bold">
+      <h2 id="task-actions-title" className="text-lg font-bold">
         Tindakan
       </h2>
-      <div aria-live="polite">
+      <div aria-live="polite" className="empty:sr-only">
         {notice ? (
           <p className="rounded-[var(--radius-control)] bg-[var(--primary-subtle)] p-4 font-semibold">
             {notice}
@@ -266,7 +271,11 @@ export function TaskActions({
       ) : null}
 
       {canSubmit ? (
-        <form noValidate onSubmit={submitEvidence} className="grid gap-4">
+        <form
+          noValidate
+          onSubmit={submitEvidence}
+          className="grid gap-4 rounded-[var(--radius-control)] bg-[var(--background)] p-3 sm:p-4 [&>*]:min-w-0"
+        >
           <div className="grid gap-2">
             <label htmlFor="evidence-photo" className="font-semibold">
               Foto bukti <span aria-hidden="true">*</span>
@@ -319,12 +328,20 @@ export function TaskActions({
             </p>
             {fieldError("description")}
           </div>
-          <div>
+          <div className="flex sm:justify-end">
             <Button type="submit" isLoading={pending === "evidence"}>
               Kirim bukti
             </Button>
           </div>
         </form>
+      ) : null}
+
+      {othersTask ? (
+        <p className="rounded-[var(--radius-control)] bg-[var(--primary-subtle)] p-4">
+          {status === "in_progress"
+            ? "Tugas sedang dikerjakan kader lain. Anda dapat memeriksa buktinya setelah dikirim."
+            : "Tugas ini ditugaskan kepada kader lain dan belum mulai dikerjakan."}
+        </p>
       ) : null}
 
       {status === "awaiting_review" && pendingSubmittedByMe ? (
@@ -335,7 +352,11 @@ export function TaskActions({
       ) : null}
 
       {canReview ? (
-        <form noValidate onSubmit={submitReview} className="grid gap-4">
+        <form
+          noValidate
+          onSubmit={submitReview}
+          className="grid gap-4 rounded-[var(--radius-control)] bg-[var(--background)] p-3 sm:p-4 [&>*]:min-w-0"
+        >
           <fieldset className="grid gap-3">
             <legend className="mb-2 font-semibold">Pemeriksaan bukti</legend>
             {(
@@ -397,7 +418,7 @@ export function TaskActions({
             </p>
             {fieldError("reason")}
           </div>
-          <div>
+          <div className="flex sm:justify-end">
             <Button type="submit" isLoading={pending === "review"}>
               Simpan pemeriksaan
             </Button>
@@ -434,6 +455,9 @@ export function TaskActions({
                 className="text-sm text-[var(--muted-foreground)]"
               >
                 10–500 karakter. Alasan tercatat pada riwayat.
+                {closing === "cancel"
+                  ? " Tugas yang dibatalkan tidak dapat dibuka kembali; buat tugas baru bila diperlukan."
+                  : ""}
               </p>
               {fieldError("closeReason")}
               <div className="flex flex-wrap gap-3">
@@ -456,10 +480,14 @@ export function TaskActions({
               </Button>
             </div>
           ) : (
-            <div>
+            <div className="flex flex-wrap items-center gap-3">
               <Button variant="secondary" onClick={() => setClosing("cancel")}>
                 Batalkan tugas
               </Button>
+              <p className="text-sm text-[var(--muted-foreground)]">
+                Hanya bila tugas tidak lagi relevan. Alasan tercatat pada
+                riwayat.
+              </p>
             </div>
           )}
         </div>

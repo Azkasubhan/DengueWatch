@@ -8,6 +8,7 @@ import {
   type TaskListParams,
 } from "@/features/tasks/components/TaskListPage";
 import { getAccessContext } from "@/lib/auth/context";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -32,13 +33,10 @@ export default async function CadreTasksPage({
         <PendingArea />
       ) : (
         <>
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold tracking-tight">Tugas</h1>
-            <p className="mt-2 max-w-2xl text-[var(--muted-foreground)]">
-              Tindak lanjut dari laporan terverifikasi. Tugas selesai setelah
-              bukti diperiksa kader lain.
-            </p>
-          </div>
+          <PageHeader
+            title="Tugas"
+            description="Tindak lanjut dari laporan terverifikasi. Tugas selesai setelah bukti diperiksa kader lain."
+          />
           <TaskListPage
             areas={areas}
             basePath="/kader/tugas"

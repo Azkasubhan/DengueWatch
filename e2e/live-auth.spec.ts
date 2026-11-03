@@ -18,15 +18,21 @@ test.describe("live Supabase authentication", () => {
   let admin: SupabaseClient;
   let userId: string | undefined;
 
+  // Local databases accumulate E2E fixture users, so search every page.
   async function findDemoUser(demoEmail: string) {
-    const { data, error } = await admin.auth.admin.listUsers({
-      page: 1,
-      perPage: 100,
-    });
-    expect(error).toBeNull();
-    const user = data.users.find((candidate) => candidate.email === demoEmail);
-    expect(user).toBeTruthy();
-    return user!;
+    for (let page = 1; page <= 50; page += 1) {
+      const { data, error } = await admin.auth.admin.listUsers({
+        page,
+        perPage: 100,
+      });
+      expect(error).toBeNull();
+      const user = data.users.find(
+        (candidate) => candidate.email === demoEmail,
+      );
+      if (user) return user;
+      if (data.users.length < 100) break;
+    }
+    throw new Error(`Demo user ${demoEmail} not found.`);
   }
 
   async function login(

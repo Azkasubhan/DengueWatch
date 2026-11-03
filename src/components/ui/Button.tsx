@@ -38,7 +38,9 @@ export function Button({
           className="size-4 animate-spin rounded-full border-2 border-current border-r-transparent"
         />
       ) : null}
-      <span>{isLoading ? "Memproses…" : children}</span>
+      <span className="inline-flex items-center gap-2">
+        {isLoading ? "Memproses…" : children}
+      </span>
     </button>
   );
 }

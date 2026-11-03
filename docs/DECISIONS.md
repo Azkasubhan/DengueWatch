@@ -228,3 +228,44 @@
   dan retensi AI berjalan lewat systemd timer dengan opt-in `ALLOW_HOSTED_CLEANUP=true` dan `CLEANUP_PROJECT_REF` yang harus cocok dengan URL.
 - **Alasan:** hemat biaya dan RAM, tanpa melonggarkan RLS/RPC, private Storage, atau audit.
   Rincian: `docs/DEPLOYMENT_VPS.md`.
+
+## T23 — Art direction landing publik
+
+- **Keputusan:** pemilik produk membuka kunci desain UI untuk landing publik. Landing memakai
+  palet natural yang di-scope ke `.landing` (krem, hutan, tanah liat, tombol pill; token
+  aplikasi tidak berubah). Struktur terinspirasi shot "Nature Landing Page!" (robiulalam6)
+  tanpa menyalin visualnya: hero foto penuh dengan navigasi di atas foto, kalimat dengan pil
+  foto, tiga kartu (alur, penanggung jawab, aturan 2 kader), kategori laporan dengan foto dan
+  kartu contoh laporan, empat tahap Temukan/Tindak/Tuntaskan/Pantau, jenis temuan dan
+  penanganannya, kegiatan pencegahan, banner CTA, peran, templat tim, batasan, FAQ, footer
+  gelap dengan templat kontak (nilai kosong tidak ditampilkan), serta halaman
+  `/kebijakan-privasi` dan `/syarat-layanan` yang isinya mengikuti fitur yang ada. Angka hanya
+  aturan sistem, bukan klaim dampak. Landing tidak memuat catatan demo atau keterangan foto.
+- **Identitas:** simbol tetesan air dengan centang (`BrandMark`) di samping wordmark, juga
+  sebagai favicon (`src/app/icon.svg`) dan ikon layar utama (`src/app/apple-icon.png`).
+- **Tetap berlaku:** WCAG 2.2 AA, Bahasa Indonesia, tanpa klaim diagnosis, kemitraan, atau
+  hasil epidemiologis. Label SIMULASI di dalam aplikasi tetap mengikuti data (`is_demo`).
+
+## T24 — Sistem desain aplikasi yang konsisten dengan landing
+
+- **Keputusan:** palet natural dipromosikan ke token global; aplikasi memakai kit komponen
+  bersama (`PageHeader`, `StatusBadge`, `Card`, `EmptyState`, `LoadingState`) dan `AppShell`
+  baru (simbol brand, chip peran, navigasi berikon dengan halaman aktif, bar wilayah).
+  Label kecil di atas judul dihapus. Status laporan dan tugas memakai satu pemetaan nada.
+  Antrean verifikasi menampilkan penanda umur "Menunggu N hari". Beranda warga menampilkan
+  laporan terbaru dan alur pemrosesan. Batas input memakai `--control-border` agar memenuhi
+  kontras non-teks 3:1. ESLint menolak warna hex mentah di `src`.
+- **Tetap berlaku:** teks status, label, dan alur yang diuji E2E tidak berubah; RLS, RPC, dan
+  logika fitur tidak disentuh.
+
+## T25 — Satu saran AI per laporan dan retensi 24 jam
+
+- **Keputusan:** trigger `link_ai_analysis_to_report` hanya menautkan analisis sukses terbaru
+  untuk foto sampul ke laporan; kader melihat satu saran. Percobaan lain tetap tidak tertaut
+  dan ikut dihitung kuota. `reserve_ai_analysis` menghapus analisis tidak tertaut yang berumur
+  lebih dari 24 jam (di luar jendela kuota harian) untuk semua akun. Migration
+  `202611030001` melepas tautan saran lama pada laporan yang sudah ada.
+- **Alasan:** kader butuh satu saran yang tegas; riwayat permintaan ulang tidak membantu
+  keputusan dan sejalan dengan retensi metadata terbatas (FR-24).
+- **Tetap berlaku:** kuota 10/jam dan 30/hari tidak dapat diakali karena hanya catatan di luar
+  jendela 24 jam yang dihapus; saran yang tertaut mengikuti cleanup 30 hari.

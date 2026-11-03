@@ -108,8 +108,9 @@ RPC `review_report` dan `add_report_information` (lihat T18 dan `docs/M5_VERIFIC
 4. JSON dari Gemini dianggap tidak tepercaya. Zod strict dan guard klaim eksplisit
    memvalidasi sebelum saran disimpan dan dikirim ke browser. Warga menerapkan atau
    mengabaikan saran; submit tetap menggunakan RPC M3.
-5. `ai_analyses` terpisah dari `reports`. Trigger pada `report_images` menautkan analisis
-   ke report ketika upload yang sama difinalisasi. Status report/event tidak berubah.
+5. `ai_analyses` terpisah dari `reports`. Trigger pada `report_images` menautkan satu
+   analisis sukses terbaru ke report ketika upload yang sama difinalisasi; analisis tidak
+   tertaut dihapus setelah 24 jam (T25). Status report/event tidak berubah.
    Cleanup lokal menghapus catatan lebih dari 30 hari; penjadwalan hosted belum dilakukan.
 
 ## Alur ActionLoop M6

@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(28);
+select plan(37);
 
 select has_table('public', 'ai_analyses', 'AI analysis table exists');
 select ok((select relrowsecurity and relforcerowsecurity from pg_class where oid = 'public.ai_analyses'::regclass), 'AI table forces RLS');
@@ -12,6 +12,7 @@ select ok(not has_function_privilege('anon', 'public.reserve_ai_analysis(uuid,uu
 select ok(not has_function_privilege('service_role', 'public.reserve_ai_analysis(uuid,uuid,text)', 'EXECUTE'), 'service role cannot impersonate reserve RPC');
 select ok((select prosecdef and proconfig @> array['search_path=""']::text[] from pg_proc where oid = 'public.reserve_ai_analysis(uuid,uuid,text)'::regprocedure), 'reserve RPC has empty search path');
 select ok((select prosecdef and proconfig @> array['search_path=""']::text[] from pg_proc where oid = 'private.link_ai_analysis_to_report()'::regprocedure), 'link trigger has empty search path');
+select has_index('public', 'ai_analyses', 'idx_ai_analyses_report', 'report lookup index exists');
 
 insert into auth.users (instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
 select '00000000-0000-0000-0000-000000000000', id, 'authenticated', 'authenticated', email, '', now(),
@@ -104,6 +105,45 @@ select set_config('request.jwt.claims','{"sub":"41000000-0000-4000-8000-00000000
 set local role authenticated;
 select throws_ok($$ select public.reserve_ai_analysis('42000000-0000-4000-8000-000000000001','43000000-0000-4000-8000-000000000003','gemini-test') $$,
   'P0403','area access denied','pending membership cannot request AI');
+
+reset role;
+insert into public.report_uploads (id,created_by,storage_path,mime_type,byte_size,width,height,uploaded_at,expires_at) values
+  ('43000000-0000-4000-8000-000000000005','41000000-0000-4000-8000-000000000002','41000000-0000-4000-8000-000000000002/43000000-0000-4000-8000-000000000005.webp','image/webp',128,16,16,now(),now()+interval '1 hour');
+insert into storage.objects (bucket_id,name,owner_id) values
+  ('report-photos','41000000-0000-4000-8000-000000000002/43000000-0000-4000-8000-000000000005.webp','41000000-0000-4000-8000-000000000002');
+insert into public.ai_analyses (id,request_user_id,area_id,upload_id,model_id,status,result_json,completed_at,error_code) values
+  ('44000000-0000-4000-8000-000000000001','41000000-0000-4000-8000-000000000002','42000000-0000-4000-8000-000000000002','43000000-0000-4000-8000-000000000002','gemini-test','success','{"requiresHumanVerification":true}',now()-interval '2 minutes',null),
+  ('44000000-0000-4000-8000-000000000002','41000000-0000-4000-8000-000000000002','42000000-0000-4000-8000-000000000002','43000000-0000-4000-8000-000000000002','gemini-test','success','{"requiresHumanVerification":true}',now()-interval '1 minute',null),
+  ('44000000-0000-4000-8000-000000000003','41000000-0000-4000-8000-000000000002','42000000-0000-4000-8000-000000000002','43000000-0000-4000-8000-000000000002','gemini-test','error',null,now(),'TEST');
+select set_config('request.jwt.claims','{"sub":"41000000-0000-4000-8000-000000000002","role":"authenticated"}',true);
+set local role authenticated;
+select lives_ok($$ select * from public.create_environmental_report(
+  '42000000-0000-4000-8000-000000000002','water_container','Wadah air tampak di halaman belakang rumah warga.',null,null,null,
+  array['43000000-0000-4000-8000-000000000002'::uuid],'m4-single-suggestion') $$, 'report submits after repeated AI requests');
+reset role;
+select is((select array_agg(id) from public.ai_analyses where report_id is not null and request_user_id='41000000-0000-4000-8000-000000000002'),
+  array['44000000-0000-4000-8000-000000000002'::uuid],'only the latest successful suggestion is linked to the report');
+
+update public.ai_analyses set created_at=now()-interval '3 days' where id='44000000-0000-4000-8000-000000000002';
+insert into public.ai_analyses (id,request_user_id,area_id,model_id,status,completed_at,error_code,created_at) values
+  ('44000000-0000-4000-8000-000000000004','41000000-0000-4000-8000-000000000002','42000000-0000-4000-8000-000000000002','gemini-test','error',now(),'TEST',now()-interval '25 hours'),
+  ('44000000-0000-4000-8000-000000000005','41000000-0000-4000-8000-000000000002','42000000-0000-4000-8000-000000000002','gemini-test','error',now(),'TEST',now()-interval '23 hours'),
+  ('44000000-0000-4000-8000-000000000006','41000000-0000-4000-8000-000000000001','42000000-0000-4000-8000-000000000001','gemini-test','error',now(),'TEST',now()-interval '25 hours');
+select set_config('request.jwt.claims','{"sub":"41000000-0000-4000-8000-000000000002","role":"authenticated"}',true);
+set local role authenticated;
+select lives_ok($$ select public.reserve_ai_analysis('42000000-0000-4000-8000-000000000002','43000000-0000-4000-8000-000000000005','gemini-test') $$,
+  'new request purges expired unlinked analyses');
+reset role;
+select ok(not exists (select 1 from public.ai_analyses where id='44000000-0000-4000-8000-000000000004'),
+  'unlinked analysis older than the daily window is deleted');
+select ok(not exists (select 1 from public.ai_analyses where id='44000000-0000-4000-8000-000000000006'),
+  'expired unlinked analyses of other accounts are deleted too');
+select ok(exists (select 1 from public.ai_analyses where id='44000000-0000-4000-8000-000000000005'),
+  'unlinked analysis inside the daily window still counts toward quota');
+select ok(exists (select 1 from public.ai_analyses where id='44000000-0000-4000-8000-000000000002'),
+  'suggestion linked to a report is never purged');
+select is((select count(*) from public.ai_analyses where id in ('44000000-0000-4000-8000-000000000001','44000000-0000-4000-8000-000000000003')),
+  2::bigint,'superseded attempts stay until the daily window passes');
 
 reset role;
 delete from public.area_memberships

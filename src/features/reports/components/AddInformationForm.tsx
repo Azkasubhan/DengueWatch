@@ -58,7 +58,7 @@ export function AddInformationForm({
   }
 
   return (
-    <form noValidate onSubmit={submit} className="mt-5 grid gap-3">
+    <form noValidate onSubmit={submit} className="mt-4 grid gap-3">
       <label htmlFor="information-note" className="font-semibold">
         Informasi tambahan <span aria-hidden="true">*</span>
       </label>
@@ -111,7 +111,7 @@ export function AddInformationForm({
           ) : null}
         </div>
       ) : null}
-      <div>
+      <div className="flex sm:justify-end">
         <Button type="submit" isLoading={pending}>
           Kirim informasi
         </Button>

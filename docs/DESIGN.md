@@ -1,30 +1,52 @@
-# Kontrak Desain M1–M2
+# Kontrak Desain DengueWatch
 
-Dokumen ini merangkum aturan visual PRD tanpa membuat spesifikasi alternatif.
+Dokumen ini merangkum aturan visual PRD tanpa membuat spesifikasi alternatif. Diperbarui
+dengan T23 (landing) dan T24 (sistem desain aplikasi).
 
 ## Arah visual
 
-Functional minimalism untuk HealthTech komunitas: informasi dan aksi lebih penting daripada
-dekorasi. Permukaan netral, satu aksen teal, border halus, tanpa gradient, glow,
-glassmorphism, neumorphism, kartu KPI warna-warni, emoji sebagai ikon, atau animasi dekoratif.
+Satu brand, dua kepadatan:
 
-## Token terkunci
+- **Halaman publik** (landing, kebijakan, auth) ekspresif: foto dokumenter permukiman,
+  tipografi besar, ritme editorial, tombol pill.
+- **Halaman aplikasi** tenang dan padat: fokus pada tugas, tanpa foto dekoratif. Foto muncul
+  hanya jika memang isi (foto laporan dan bukti).
 
-| Token            | Nilai     |
-| ---------------- | --------- |
-| Background       | `#F7F9F8` |
-| Surface          | `#FFFFFF` |
-| Foreground       | `#162826` |
-| Primary          | `#0F766E` |
-| Primary subtle   | `#E6F5F0` |
-| Muted foreground | `#596D67` |
-| Border           | `#DDE5E2` |
-| Danger           | `#B42318` |
-| Danger subtle    | `#FFF3F1` |
+Palet natural hangat dengan satu warna aksi teal. Tanpa glow, glassmorphism, neumorphism,
+kartu KPI warna-warni, emoji sebagai ikon, label kecil di atas setiap judul, atau animasi
+dekoratif. Gradien hanya dipakai sebagai lapisan gelap di atas foto untuk menjaga kontras.
 
-Implementasi single-source berada di `src/styles/tokens.css`. Font Plus Jakarta Sans
-disertakan secara self-hosted melalui package npm untuk menghindari ketergantungan jaringan
-saat build.
+## Token
+
+Sumber tunggal: `src/styles/tokens.css`. Warna di TSX wajib lewat `var(--…)`; ESLint
+menolak hex mentah di `src` (kecuali aset `BrandMark`).
+
+| Token                               | Nilai                             | Pemakaian                            |
+| ----------------------------------- | --------------------------------- | ------------------------------------ |
+| `--background`                      | `#F3F0E8`                         | latar halaman                        |
+| `--surface`                         | `#FBFAF6`                         | kartu, input                         |
+| `--foreground`                      | `#17251F`                         | teks utama                           |
+| `--muted-foreground`                | `#4F5D56`                         | teks sekunder                        |
+| `--primary` / `--primary-hover`     | `#0F766E` / `#0B5F59`             | aksi utama, tautan                   |
+| `--primary-subtle`                  | `#E2F1EA`                         | status berhasil                      |
+| `--border`                          | `#DDD6C6`                         | pemisah dan kartu                    |
+| `--control-border`                  | `#8B8473`                         | batas input (kontras non-teks ≥ 3:1) |
+| `--sand`                            | `#E8E2D4`                         | permukaan sekunder, status netral    |
+| `--forest` / `--forest-deep`        | `#1D3A2C` / `#13241B`             | blok gelap, status proses, footer    |
+| `--clay`                            | `#974A26`                         | aksen kecil (ikon lokasi, label)     |
+| `--mint`                            | `#9FE0D3`                         | aksen di atas foto atau latar gelap  |
+| `--warning` / `--info` / `--danger` | `#7A4B00` / `#1F4E79` / `#B42318` | teks status, dengan varian `-subtle` |
+
+Radius: kartu `1.25rem`, kontrol `0.75rem` (pill di `.landing`). Font Plus Jakarta Sans
+self-hosted; ikon Lucide.
+
+## Komponen inti
+
+`src/components/ui`: `Button`, `LinkButton`, `PageHeader` (judul, deskripsi, meta, aksi,
+tautan kembali), `StatusBadge` (satu pemetaan nada untuk status laporan dan tugas), `Card`,
+`EmptyState` (apa ini, kenapa kosong, cara memulai). `src/components/feedback`: `Alert`,
+`PendingArea`, `LoadingState`, `ServiceUnavailable`. Navigasi aplikasi: `AppShell` dan
+`AppNav` (penanda halaman aktif dengan `aria-current`). Brand: `Brand` dan `BrandMark`.
 
 ## Komponen dan state
 

@@ -76,11 +76,8 @@ export default async function ManagerSummaryPage({
         <PendingArea />
       ) : (
         <>
-          <div className="mb-6 max-w-3xl">
-            <p className="text-sm font-semibold text-[var(--primary)]">
-              Ringkasan pengelola
-            </p>
-            <h1 className="mt-2 text-3xl font-bold tracking-[-0.03em]">
+          <div className="mb-8 max-w-3xl">
+            <h1 className="text-3xl font-bold tracking-[-0.03em] sm:text-4xl">
               Ringkasan laporan wilayah
             </h1>
             <p className="mt-3 text-[var(--muted-foreground)]">

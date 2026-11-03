@@ -14,6 +14,17 @@ import {
   reportStatusLabels,
 } from "@/features/reports/validation";
 import { getAccessContext } from "@/lib/auth/context";
+import { Clock3, Inbox } from "lucide-react";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { StatusBadge, reportStatusTone } from "@/components/ui/StatusBadge";
+import { PageHeader } from "@/components/ui/PageHeader";
+
+// Aging signal for reports still waiting on a cadre decision (PRD 13.10); reports that
+// need information are waiting on the resident instead.
+function waitingDays(report: { status: string; submittedAt: string }) {
+  if (report.status !== "pending_verification") return 0;
+  return Math.floor((Date.now() - Date.parse(report.submittedAt)) / 86_400_000);
+}
 
 export const dynamic = "force-dynamic";
 
@@ -94,15 +105,10 @@ export default async function VerificationQueuePage({
 
   return shell(
     <>
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight">
-          Antrean verifikasi
-        </h1>
-        <p className="mt-2 max-w-2xl text-[var(--muted-foreground)]">
-          Laporan dari wilayah tugas Anda. Periksa foto dan keterangan sebelum
-          memutuskan.
-        </p>
-      </div>
+      <PageHeader
+        title="Antrean verifikasi"
+        description="Laporan dari wilayah tugas Anda. Periksa foto dan keterangan sebelum memutuskan."
+      />
       <form
         action="/kader/verifikasi"
         method="get"
@@ -230,16 +236,15 @@ export default async function VerificationQueuePage({
           </Link>
         </div>
       ) : !result?.data?.length ? (
-        <div className="max-w-2xl rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-6">
-          <p className="font-semibold">
-            {page > 1
+        <EmptyState
+          icon={Inbox}
+          title={
+            page > 1
               ? "Tidak ada laporan di halaman ini."
-              : "Tidak ada laporan yang sesuai filter."}
-          </p>
-          <p className="mt-2 text-[var(--muted-foreground)]">
-            Laporan baru dari wilayah tugas akan muncul di sini.
-          </p>
-        </div>
+              : "Tidak ada laporan yang sesuai filter."
+          }
+          description="Laporan baru dari wilayah tugas akan muncul di sini."
+        />
       ) : (
         <>
           <p
@@ -257,12 +262,12 @@ export default async function VerificationQueuePage({
                   className="block rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-5 hover:border-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
                 >
                   <div className="flex flex-wrap justify-between gap-2">
-                    <span className="font-bold text-[var(--primary)]">
+                    <span className="text-sm font-semibold text-[var(--muted-foreground)]">
                       {report.publicReference}
                     </span>
-                    <span className="rounded-[var(--radius-control)] bg-[var(--primary-subtle)] px-2 py-1 text-sm font-semibold">
+                    <StatusBadge tone={reportStatusTone[report.status]}>
                       {reportStatusLabels[report.status]}
-                    </span>
+                    </StatusBadge>
                   </div>
                   <p className="mt-2 font-semibold">
                     {reportCategoryLabels[report.category]}
@@ -275,6 +280,12 @@ export default async function VerificationQueuePage({
                     {areas.length > 1 ? ` · ${areaName(report.areaId)}` : ""}
                     {report.isDemo ? " · Data simulasi" : ""}
                   </p>
+                  {waitingDays(report) ? (
+                    <p className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--warning)]">
+                      <Clock3 aria-hidden="true" className="size-4" />
+                      Menunggu {waitingDays(report)} hari
+                    </p>
+                  ) : null}
                 </Link>
               </li>
             ))}

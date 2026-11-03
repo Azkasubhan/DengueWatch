@@ -137,9 +137,9 @@ export function ReviewDecisionForm({
       noValidate
       onSubmit={submit}
       aria-labelledby="review-title"
-      className="mt-8 grid gap-6 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-7"
+      className="grid gap-5 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5 [&>*]:min-w-0"
     >
-      <h2 id="review-title" className="text-2xl font-bold">
+      <h2 id="review-title" className="text-lg font-bold">
         Keputusan pemeriksaan
       </h2>
       <fieldset
@@ -150,7 +150,7 @@ export function ReviewDecisionForm({
         <legend className="mb-3 font-semibold">
           Pilih keputusan <span aria-hidden="true">*</span>
         </legend>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+        <div className="grid gap-3 sm:grid-cols-2">
           {decisions.map((option) => (
             <label
               key={option.value}
@@ -262,7 +262,7 @@ export function ReviewDecisionForm({
           ) : null}
         </div>
       ) : null}
-      <div>
+      <div className="flex sm:justify-end">
         <Button
           type="submit"
           isLoading={pending}

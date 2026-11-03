@@ -8,6 +8,9 @@ import {
   taskListQuerySchema,
   taskStatusLabels,
 } from "@/features/tasks/validation";
+import { ListChecks } from "lucide-react";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { StatusBadge, taskStatusTone } from "@/components/ui/StatusBadge";
 
 const openStatus = "assigned,in_progress,awaiting_review,reopened";
 const pageSize = 10;
@@ -164,12 +167,11 @@ export async function TaskListPage({
           </Link>
         </div>
       ) : !result?.data?.length ? (
-        <div className="max-w-2xl rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-6">
-          <p className="font-semibold">Tidak ada tugas yang sesuai filter.</p>
-          <p className="mt-2 text-[var(--muted-foreground)]">
-            Tugas dibuat dari laporan yang sudah diverifikasi kader.
-          </p>
-        </div>
+        <EmptyState
+          icon={ListChecks}
+          title="Tidak ada tugas yang sesuai filter."
+          description="Tugas dibuat dari laporan yang sudah diverifikasi kader."
+        />
       ) : (
         <>
           <p
@@ -187,9 +189,9 @@ export async function TaskListPage({
                     <span className="font-bold text-[var(--primary)]">
                       {task.title}
                     </span>
-                    <span className="rounded-[var(--radius-control)] bg-[var(--primary-subtle)] px-2 py-1 text-sm font-semibold">
+                    <StatusBadge tone={taskStatusTone[task.status]}>
                       {taskStatusLabels[task.status]}
-                    </span>
+                    </StatusBadge>
                   </div>
                   <p className="mt-2 line-clamp-2 break-words text-[var(--muted-foreground)]">
                     {task.description}
@@ -202,6 +204,9 @@ export async function TaskListPage({
                       : ""}
                     {task.assignedToMe ? " · Tugas saya" : ""}
                     {areas.length > 1 ? ` · ${areaName(task.areaId)}` : ""}
+                    {areas.find((area) => area.id === task.areaId)?.isDemo
+                      ? " · Data simulasi"
+                      : ""}
                   </p>
                 </>
               );

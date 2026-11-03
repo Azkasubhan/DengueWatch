@@ -1,17 +1,35 @@
+/* DengueWatch tokens: warm natural surfaces, one teal action color, calm status tones. */
 :root {
-  --background: #f7f9f8;
-  --surface: #ffffff;
-  --foreground: #162826;
+  --background: #f3f0e8;
+  --surface: #fbfaf6;
+  --foreground: #17251f;
   --primary: #0f766e;
   --primary-hover: #0b5f59;
-  --primary-subtle: #e6f5f0;
-  --muted-foreground: #596d67;
-  --border: #dde5e2;
+  --primary-subtle: #e2f1ea;
+  --muted-foreground: #4f5d56;
+  --border: #ddd6c6;
+  --control-border: #8b8473;
   --danger: #b42318;
-  --danger-subtle: #fff3f1;
+  --danger-subtle: #fbeceb;
+  --warning: #7a4b00;
+  --warning-subtle: #f8ecd2;
+  --info: #1f4e79;
+  --info-subtle: #e4ecf4;
+  --sand: #e8e2d4;
+  --forest: #1d3a2c;
+  --forest-deep: #13241b;
+  --forest-foreground: #eef0e6;
+  --forest-muted: #b9c4b5;
+  --clay: #974a26;
+  --mint: #9fe0d3;
   --focus: #0f766e;
-  --radius-card: 1rem;
-  --radius-control: 0.625rem;
+  --radius-card: 1.25rem;
+  --radius-control: 0.75rem;
   --page-max: 90rem;
   --form-max: 40rem;
+}
+
+/* Public marketing pages use pill-shaped controls. */
+.landing {
+  --radius-control: 9999px;
 }

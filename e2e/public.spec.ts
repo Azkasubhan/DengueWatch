@@ -27,7 +27,7 @@ for (const viewport of viewports) {
 
     await expect(
       page.getByRole("heading", {
-        name: "Temuan lingkungan menjadi tindakan yang dapat ditelusuri.",
+        name: "Genangan kecil di sekitar rumah, ditangani sampai tuntas.",
       }),
     ).toBeVisible();
     await expect(
@@ -46,7 +46,14 @@ for (const viewport of viewports) {
 test("public and authentication pages have no serious automated accessibility violations", async ({
   page,
 }) => {
-  for (const route of ["/", "/login", "/daftar", "/lupa-password"]) {
+  for (const route of [
+    "/",
+    "/login",
+    "/daftar",
+    "/lupa-password",
+    "/kebijakan-privasi",
+    "/syarat-layanan",
+  ]) {
     await page.goto(route);
     const results = await new AxeBuilder({ page }).analyze();
     const serious = results.violations.filter(

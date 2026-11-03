@@ -5,12 +5,16 @@ import { z } from "zod";
 import { PendingArea } from "@/components/feedback/PendingArea";
 import { ServiceUnavailable } from "@/components/feedback/ServiceUnavailable";
 import { AppShell } from "@/components/layout/AppShell";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatusBadge, taskStatusTone } from "@/components/ui/StatusBadge";
 import { decidePortalAccess, getVerifiedAreas } from "@/features/areas/access";
 import { formatJakarta } from "@/features/reports/components/ReportDetailView";
 import { TaskActions } from "@/features/tasks/components/TaskActions";
 import { getTaskDetail } from "@/features/tasks/data";
 import { taskEventLabels, taskStatusLabels } from "@/features/tasks/validation";
 import { getAccessContext } from "@/lib/auth/context";
+import { cardClass } from "@/components/ui/Card";
+import { Timeline } from "@/components/ui/Timeline";
 
 export const dynamic = "force-dynamic";
 
@@ -32,12 +36,9 @@ export default async function TaskDetailPage({
   const decision = decidePortalAccess(access.context, "cadre");
   if (decision.kind === "forbidden") redirect("/forbidden");
   const areas = getVerifiedAreas(access.context, "assigned_cadre");
-  const shell = (children: React.ReactNode) => (
-    <AppShell
-      area={areas[0]}
-      displayName={access.context.displayName}
-      role="cadre"
-    >
+  // Detail pages show the bar (and its SIMULASI flag) for the item's own area.
+  const shell = (children: React.ReactNode, area = areas[0]) => (
+    <AppShell area={area} displayName={access.context.displayName} role="cadre">
       {children}
     </AppShell>
   );
@@ -56,25 +57,71 @@ export default async function TaskDetailPage({
 
   return shell(
     <>
-      <Link
-        href="/kader/tugas"
-        className="inline-flex min-h-11 items-center text-sm font-semibold text-[var(--primary)]"
-      >
-        ← Daftar tugas
-      </Link>
-      <div className="mt-5 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:items-start">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-[var(--primary)]">
-            {task.reportReference ?? "Laporan"}
-          </p>
-          <h1 className="mt-2 break-words text-3xl font-bold tracking-tight">
-            {task.title}
-          </h1>
-          <p className="mt-3 inline-block rounded-[var(--radius-control)] bg-[var(--primary-subtle)] px-3 py-2 font-semibold">
-            {taskStatusLabels[task.status]}
-          </p>
-          <dl className="mt-7 grid gap-5 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-7">
-            <div>
+      <PageHeader
+        back={{ href: "/kader/tugas", label: "Daftar tugas" }}
+        title={task.title}
+        meta={
+          <>
+            <span className="font-semibold">
+              {task.reportReference ?? "Laporan"}
+            </span>
+            <StatusBadge tone={taskStatusTone[task.status]}>
+              {taskStatusLabels[task.status]}
+            </StatusBadge>
+          </>
+        }
+      />
+      <div className="grid gap-7 lg:grid-cols-12 lg:items-start">
+        <div className="grid min-w-0 gap-6 lg:col-span-5">
+          <section aria-labelledby="evidence-title" className={cardClass}>
+            <h2 id="evidence-title" className="text-lg font-bold">
+              Bukti
+            </h2>
+            {!task.evidence.length ? (
+              <p className="mt-3 text-[var(--muted-foreground)]">
+                Belum ada bukti yang dikirim.
+              </p>
+            ) : (
+              <ul className="mt-4 grid gap-4">
+                {task.evidence.map((item, index) => (
+                  <li
+                    key={item.id}
+                    className="grid gap-3 rounded-[var(--radius-control)] bg-[var(--background)] p-3"
+                  >
+                    <Image
+                      unoptimized
+                      src={item.url}
+                      alt={`Foto bukti ${index + 1}`}
+                      width={item.width}
+                      height={item.height}
+                      className="aspect-[4/3] w-full rounded-[var(--radius-control)] border border-[var(--border)] object-cover"
+                    />
+                    <div className="min-w-0">
+                      <p className="font-semibold">
+                        {reviewLabels[item.reviewStatus]}
+                        {item.submittedByMe ? " · dikirim oleh Anda" : ""}
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap break-words">
+                        {item.description}
+                      </p>
+                      {item.reviewReason ? (
+                        <p className="mt-2 break-words text-sm">
+                          Catatan pemeriksa: {item.reviewReason}
+                        </p>
+                      ) : null}
+                      <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+                        {formatJakarta(item.createdAt)} WIB
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+        <div className="grid min-w-0 gap-6 lg:col-span-7">
+          <dl className={`grid gap-5 sm:grid-cols-2 ${cardClass}`}>
+            <div className="sm:col-span-2">
               <dt className="text-sm font-semibold">Deskripsi</dt>
               <dd className="mt-1 whitespace-pre-wrap break-words">
                 {task.description}
@@ -114,77 +161,6 @@ export default async function TaskDetailPage({
               </dd>
             </div>
           </dl>
-
-          <section aria-labelledby="evidence-title" className="mt-8">
-            <h2 id="evidence-title" className="text-2xl font-bold">
-              Bukti
-            </h2>
-            {!task.evidence.length ? (
-              <p className="mt-3 text-[var(--muted-foreground)]">
-                Belum ada bukti yang dikirim.
-              </p>
-            ) : (
-              <ul className="mt-4 grid gap-4">
-                {task.evidence.map((item, index) => (
-                  <li
-                    key={item.id}
-                    className="grid gap-4 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 sm:grid-cols-[10rem_minmax(0,1fr)]"
-                  >
-                    <Image
-                      unoptimized
-                      src={item.url}
-                      alt={`Foto bukti ${index + 1}`}
-                      width={item.width}
-                      height={item.height}
-                      className="aspect-square w-full rounded-[var(--radius-control)] border border-[var(--border)] object-cover"
-                    />
-                    <div className="min-w-0">
-                      <p className="font-semibold">
-                        {reviewLabels[item.reviewStatus]}
-                        {item.submittedByMe ? " · dikirim oleh Anda" : ""}
-                      </p>
-                      <p className="mt-1 whitespace-pre-wrap break-words">
-                        {item.description}
-                      </p>
-                      {item.reviewReason ? (
-                        <p className="mt-2 break-words text-sm">
-                          Catatan pemeriksa: {item.reviewReason}
-                        </p>
-                      ) : null}
-                      <p className="mt-2 text-sm text-[var(--muted-foreground)]">
-                        {formatJakarta(item.createdAt)} WIB
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section aria-labelledby="task-history-title" className="mt-8">
-            <h2 id="task-history-title" className="text-2xl font-bold">
-              Riwayat tugas
-            </h2>
-            <ol className="mt-5 border-l-2 border-[var(--border)] pl-5">
-              {task.events.map((event) => (
-                <li key={event.id} className="pb-6">
-                  <p className="font-semibold">
-                    {taskEventLabels[event.eventType] ?? "Pembaruan tugas"}
-                  </p>
-                  {event.reason ? (
-                    <p className="mt-1 whitespace-pre-wrap break-words">
-                      {event.reason}
-                    </p>
-                  ) : null}
-                  <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                    {formatJakarta(event.createdAt)} WIB
-                  </p>
-                </li>
-              ))}
-            </ol>
-          </section>
-        </div>
-        <div className="min-w-0">
           <TaskActions
             taskId={task.id}
             status={task.status}
@@ -194,8 +170,19 @@ export default async function TaskDetailPage({
               pendingEvidence ? pendingEvidence.submittedByMe : null
             }
           />
+          <Timeline
+            id="task-history-title"
+            title="Riwayat tugas"
+            items={task.events.map((event) => ({
+              id: event.id,
+              label: taskEventLabels[event.eventType] ?? "Pembaruan tugas",
+              reason: event.reason,
+              time: `${formatJakarta(event.createdAt)} WIB`,
+            }))}
+          />
         </div>
       </div>
     </>,
+    areas.find((area) => area.id === task.areaId),
   );
 }

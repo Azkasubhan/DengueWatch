@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { FileText, Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { LinkButton } from "@/components/ui/LinkButton";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { ServiceUnavailable } from "@/components/feedback/ServiceUnavailable";
 import { getDefaultPortal, getVerifiedAreas } from "@/features/areas/access";
 import { listReports } from "@/features/reports/data";
-import {
-  reportCategoryLabels,
-  reportStatusLabels,
-} from "@/features/reports/validation";
+import { ReportListItem } from "@/features/reports/components/ReportListItem";
 import { getAccessContext } from "@/lib/auth/context";
 
 export const dynamic = "force-dynamic";
@@ -33,22 +34,18 @@ export default async function MyReportsPage({
       displayName={access.context.displayName}
       role="resident"
     >
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Laporan saya</h1>
-          <p className="mt-2 text-[var(--muted-foreground)]">
-            Lihat status dan riwayat temuan lingkungan Anda.
-          </p>
-        </div>
-        {area ? (
-          <Link
-            href="/app/laporan/buat"
-            className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] bg-[var(--primary)] px-5 font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2"
-          >
-            Buat laporan
-          </Link>
-        ) : null}
-      </div>
+      <PageHeader
+        title="Laporan saya"
+        description="Lihat status dan riwayat temuan lingkungan Anda."
+        actions={
+          area ? (
+            <LinkButton href="/app/laporan/buat">
+              <Plus aria-hidden="true" className="size-4" />
+              Buat laporan
+            </LinkButton>
+          ) : null
+        }
+      />
       {result.error ? (
         <div
           role="alert"
@@ -68,57 +65,38 @@ export default async function MyReportsPage({
           </form>
         </div>
       ) : !result.data?.length ? (
-        <div className="max-w-2xl rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-6">
-          <p className="font-semibold">
-            {page > 1
+        <EmptyState
+          icon={FileText}
+          title={
+            page > 1
               ? "Tidak ada laporan di halaman ini."
-              : "Belum ada laporan."}
-          </p>
-          <p className="mt-2 text-[var(--muted-foreground)]">
-            {page > 1
+              : "Belum ada laporan."
+          }
+          description={
+            page > 1
               ? "Kembali ke halaman sebelumnya untuk melihat laporan."
-              : "Temuan yang Anda kirim akan muncul di sini."}
-          </p>
-          {page > 1 ? (
-            <Link
-              href={`/app/laporan?page=${page - 1}`}
-              className="mt-3 inline-flex min-h-11 items-center font-semibold text-[var(--primary)] underline underline-offset-2"
-            >
-              ← Halaman sebelumnya
-            </Link>
-          ) : null}
-        </div>
+              : "Temuan yang Anda kirim akan muncul di sini."
+          }
+          action={
+            page > 1 ? (
+              <Link
+                href={`/app/laporan?page=${page - 1}`}
+                className="inline-flex min-h-11 items-center font-semibold text-[var(--primary)] underline underline-offset-2"
+              >
+                ← Halaman sebelumnya
+              </Link>
+            ) : null
+          }
+        />
       ) : (
         <>
           <ul className="grid gap-3">
             {result.data.map((report) => (
               <li key={report.id}>
-                <Link
+                <ReportListItem
                   href={`/app/laporan/${report.id}`}
-                  className="block rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-5 hover:border-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-2"
-                >
-                  <div className="flex flex-wrap justify-between gap-2">
-                    <span className="font-bold text-[var(--primary)]">
-                      {report.publicReference}
-                    </span>
-                    <span className="text-sm font-semibold">
-                      {reportStatusLabels[report.status]}
-                    </span>
-                  </div>
-                  <p className="mt-2 font-semibold">
-                    {reportCategoryLabels[report.category]}
-                  </p>
-                  <p className="mt-1 line-clamp-2 break-words text-[var(--muted-foreground)]">
-                    {report.description}
-                  </p>
-                  <p className="mt-3 text-sm text-[var(--muted-foreground)]">
-                    {new Intl.DateTimeFormat("id-ID", {
-                      dateStyle: "medium",
-                      timeZone: "Asia/Jakarta",
-                    }).format(new Date(report.submittedAt))}
-                    {report.isDemo ? " · Data simulasi" : ""}
-                  </p>
-                </Link>
+                  report={report}
+                />
               </li>
             ))}
           </ul>

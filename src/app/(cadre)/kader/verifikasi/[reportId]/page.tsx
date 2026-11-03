@@ -5,10 +5,17 @@ import { Alert } from "@/components/feedback/Alert";
 import { PendingArea } from "@/components/feedback/PendingArea";
 import { ServiceUnavailable } from "@/components/feedback/ServiceUnavailable";
 import { AppShell } from "@/components/layout/AppShell";
+import { PageHeader } from "@/components/ui/PageHeader";
+import {
+  StatusBadge,
+  reportStatusTone,
+  taskStatusTone,
+} from "@/components/ui/StatusBadge";
 import { decidePortalAccess, getVerifiedAreas } from "@/features/areas/access";
 import {
   formatJakarta,
-  ReportFacts,
+  ReportFactsCard,
+  ReportPhotos,
   ReportTimeline,
 } from "@/features/reports/components/ReportDetailView";
 import { ReviewDecisionForm } from "@/features/reports/components/ReviewDecisionForm";
@@ -27,6 +34,8 @@ import { CreateTaskForm } from "@/features/tasks/components/CreateTaskForm";
 import { listTasks } from "@/features/tasks/data";
 import { taskStatusLabels } from "@/features/tasks/validation";
 import { getAccessContext } from "@/lib/auth/context";
+import { cardClass } from "@/components/ui/Card";
+import { AiSuggestionDetails } from "@/features/ai/components/AiSuggestionDetails";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +47,7 @@ const suggestionSchema = z.array(
     draft_description: z.string(),
     suggested_precaution: z.string(),
     limitations: z.string(),
+    analyzed_at: z.string(),
   }),
 );
 
@@ -66,12 +76,9 @@ export default async function VerificationDetailPage({
   const decision = decidePortalAccess(access.context, "cadre");
   if (decision.kind === "forbidden") redirect("/forbidden");
   const areas = getVerifiedAreas(access.context, "assigned_cadre");
-  const shell = (children: React.ReactNode) => (
-    <AppShell
-      area={areas[0]}
-      displayName={access.context.displayName}
-      role="cadre"
-    >
+  // Detail pages show the bar (and its SIMULASI flag) for the item's own area.
+  const shell = (children: React.ReactNode, area = areas[0]) => (
+    <AppShell area={area} displayName={access.context.displayName} role="cadre">
       {children}
     </AppShell>
   );
@@ -99,6 +106,10 @@ export default async function VerificationDetailPage({
   const parsedSuggestions = suggestions.error
     ? null
     : suggestionSchema.safeParse(suggestions.data ?? []);
+  // A report links at most one suggestion: the last one the resident saw.
+  const suggestion = parsedSuggestions?.success
+    ? parsedSuggestions.data[0]
+    : undefined;
   const saved = (await searchParams).keputusan === "tersimpan" && !pending;
   const actionable = ["verified", "in_action", "resolved"].includes(
     report.status,
@@ -109,38 +120,62 @@ export default async function VerificationDetailPage({
 
   return shell(
     <>
-      <Link
-        href="/kader/verifikasi"
-        className="inline-flex min-h-11 items-center text-sm font-semibold text-[var(--primary)]"
-      >
-        ← Antrean verifikasi
-      </Link>
-      <div className="mt-5 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:items-start">
-        <div className="min-w-0">
+      <PageHeader
+        back={{ href: "/kader/verifikasi", label: "Antrean verifikasi" }}
+        title="Pemeriksaan laporan"
+        meta={
+          <>
+            <span className="font-semibold">{report.publicReference}</span>
+            <StatusBadge tone={reportStatusTone[report.status]}>
+              {reportStatusLabels[report.status]}
+            </StatusBadge>
+          </>
+        }
+      />
+      <div className="grid gap-7 lg:grid-cols-12 lg:items-start">
+        <div className="grid min-w-0 gap-6 lg:col-span-5">
+          <ReportPhotos images={detail.images.data} />
+          <section aria-labelledby="ai-title" className={cardClass}>
+            <h2 id="ai-title" className="text-lg font-bold">
+              Saran AI — perlu verifikasi
+            </h2>
+            <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+              Dibuat otomatis dari foto. Bukan diagnosis dan bukan keputusan;
+              periksa foto dan keterangan warga.
+            </p>
+            {!parsedSuggestions?.success ? (
+              <p className="mt-4 text-sm">Saran AI belum dapat dimuat.</p>
+            ) : !suggestion ? (
+              <p className="mt-4 text-sm">
+                Tidak ada saran AI untuk laporan ini.
+              </p>
+            ) : (
+              <div className="mt-4 grid gap-4">
+                <AiSuggestionDetails
+                  category={suggestion.suggested_category}
+                  visibleObjects={suggestion.visible_objects}
+                  draftDescription={suggestion.draft_description}
+                  precaution={suggestion.suggested_precaution}
+                  limitations={suggestion.limitations}
+                />
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  Dianalisis {formatJakarta(suggestion.analyzed_at)} WIB
+                </p>
+              </div>
+            )}
+          </section>
+        </div>
+        <div className="grid min-w-0 gap-6 lg:col-span-7">
           {saved ? (
-            <div className="mb-5">
+            <div>
               <Alert title="Keputusan tersimpan">
                 Status terbaru: {reportStatusLabels[report.status]}.
               </Alert>
             </div>
           ) : null}
-          <p className="text-sm font-semibold text-[var(--primary)]">
-            {report.publicReference}
-          </p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight">
-            Pemeriksaan laporan
-          </h1>
-          <p className="mt-3 inline-block rounded-[var(--radius-control)] bg-[var(--primary-subtle)] px-3 py-2 font-semibold">
-            {reportStatusLabels[report.status]}
-          </p>
-          {report.isDemo ? (
-            <p className="mt-4 text-sm font-semibold">
-              DATA SIMULASI — bukan data kasus DBD sebenarnya
-            </p>
-          ) : null}
-          <ReportFacts images={detail.images.data} report={report} />
+          <ReportFactsCard report={report} />
           {report.duplicateOfReportId ? (
-            <p className="mt-4">
+            <p>
               Duplikat dari{" "}
               <Link
                 href={`/kader/verifikasi/${report.duplicateOfReportId}`}
@@ -150,10 +185,31 @@ export default async function VerificationDetailPage({
               </Link>
             </p>
           ) : null}
-          <ReportTimeline events={detail.events.data} />
+          {pending ? (
+            candidates?.error ? (
+              <div>
+                <Alert variant="error" title="Form keputusan belum tersedia">
+                  Muat ulang halaman untuk mencoba lagi.
+                </Alert>
+              </div>
+            ) : (
+              <ReviewDecisionForm
+                reportId={report.id}
+                expectedVersion={report.version}
+                candidates={(candidates?.data ?? []).map((item) => ({
+                  id: item.id,
+                  label: `${item.publicReference} · ${reportCategoryLabels[item.category]} · ${formatJakarta(item.submittedAt, false)}`,
+                }))}
+              />
+            )
+          ) : (
+            <p className="rounded-[var(--radius-control)] bg-[var(--primary-subtle)] p-4">
+              {decidedNotes[report.status] ?? "Laporan sudah diputuskan."}
+            </p>
+          )}
           {actionable ? (
-            <section aria-labelledby="tasks-title" className="mt-8">
-              <h2 id="tasks-title" className="text-2xl font-bold">
+            <section aria-labelledby="tasks-title" className={cardClass}>
+              <h2 id="tasks-title" className="text-lg font-bold">
                 Tugas tindak lanjut
               </h2>
               {tasks?.error ? (
@@ -176,9 +232,9 @@ export default async function VerificationDetailPage({
                           {task.title}
                           {task.isMandatory ? "" : " (opsional)"}
                         </span>
-                        <span className="text-sm font-semibold">
+                        <StatusBadge tone={taskStatusTone[task.status]}>
                           {taskStatusLabels[task.status]}
-                        </span>
+                        </StatusBadge>
                       </Link>
                     </li>
                   ))}
@@ -197,74 +253,10 @@ export default async function VerificationDetailPage({
               )}
             </section>
           ) : null}
-        </div>
-        <div className="min-w-0">
-          <section
-            aria-labelledby="ai-title"
-            className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-7"
-          >
-            <h2 id="ai-title" className="text-xl font-bold">
-              Saran AI — perlu verifikasi
-            </h2>
-            <p className="mt-2 text-sm text-[var(--muted-foreground)]">
-              Dibuat otomatis dari foto. Bukan diagnosis dan bukan keputusan;
-              periksa foto dan keterangan warga.
-            </p>
-            {!parsedSuggestions?.success ? (
-              <p className="mt-4">Saran AI belum dapat dimuat.</p>
-            ) : !parsedSuggestions.data.length ? (
-              <p className="mt-4">Tidak ada saran AI untuk laporan ini.</p>
-            ) : (
-              parsedSuggestions.data.map((item) => (
-                <dl key={item.analysis_id} className="mt-4 grid gap-3">
-                  <div>
-                    <dt className="text-sm font-semibold">Usulan kategori</dt>
-                    <dd>{reportCategoryLabels[item.suggested_category]}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-semibold">Objek terlihat</dt>
-                    <dd>{item.visible_objects.join(", ")}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-semibold">Draf deskripsi</dt>
-                    <dd className="break-words">{item.draft_description}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-semibold">Saran pencegahan</dt>
-                    <dd className="break-words">{item.suggested_precaution}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-semibold">Batasan</dt>
-                    <dd className="break-words">{item.limitations}</dd>
-                  </div>
-                </dl>
-              ))
-            )}
-          </section>
-          {pending ? (
-            candidates?.error ? (
-              <div className="mt-8">
-                <Alert variant="error" title="Form keputusan belum tersedia">
-                  Muat ulang halaman untuk mencoba lagi.
-                </Alert>
-              </div>
-            ) : (
-              <ReviewDecisionForm
-                reportId={report.id}
-                expectedVersion={report.version}
-                candidates={(candidates?.data ?? []).map((item) => ({
-                  id: item.id,
-                  label: `${item.publicReference} · ${reportCategoryLabels[item.category]} · ${formatJakarta(item.submittedAt, false)}`,
-                }))}
-              />
-            )
-          ) : (
-            <p className="mt-8 rounded-[var(--radius-control)] bg-[var(--primary-subtle)] p-4">
-              {decidedNotes[report.status] ?? "Laporan sudah diputuskan."}
-            </p>
-          )}
+          <ReportTimeline events={detail.events.data} />
         </div>
       </div>
     </>,
+    areas.find((area) => area.id === report.areaId),
   );
 }

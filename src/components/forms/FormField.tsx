@@ -32,7 +32,7 @@ export function FormField({
         aria-describedby={describedBy}
         aria-invalid={Boolean(error)}
         className={`min-h-11 w-full rounded-[var(--radius-control)] border bg-[var(--surface)] px-3.5 py-2.5 text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] disabled:cursor-not-allowed disabled:bg-[var(--background)] disabled:opacity-70 ${
-          error ? "border-[var(--danger)]" : "border-[var(--border)]"
+          error ? "border-[var(--danger)]" : "border-[var(--control-border)]"
         } ${className}`}
         id={id}
         required={required}

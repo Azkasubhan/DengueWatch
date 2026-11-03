@@ -232,11 +232,18 @@ test.describe("live cadre verification (M5)", () => {
     await expect(
       page.getByRole("heading", { name: "Saran AI — perlu verifikasi" }),
     ).toBeVisible();
-    await expect(
-      page.getByText("wadah air terbuka, air terlihat"),
-    ).toBeVisible();
+    // Visible objects render as one chip per object.
+    for (const object of ["wadah air terbuka", "air terlihat di dalam wadah"]) {
+      await expect(page.getByText(object, { exact: true })).toBeVisible();
+    }
     await expect(page.getByAltText("Foto laporan 1")).toBeVisible();
-    await expect(page.getByText("-6.2, 106.8")).toBeVisible();
+    await expect(page.getByText("-6.20000, 106.80000")).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /Buka di Google Maps/ }),
+    ).toHaveAttribute(
+      "href",
+      "https://www.google.com/maps/search/?api=1&query=-6.2,106.8",
+    );
     for (const width of [320, 390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await expectNoOverflow(page);

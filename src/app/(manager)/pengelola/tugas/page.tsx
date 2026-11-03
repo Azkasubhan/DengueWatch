@@ -8,6 +8,7 @@ import {
   type TaskListParams,
 } from "@/features/tasks/components/TaskListPage";
 import { getAccessContext } from "@/lib/auth/context";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -34,12 +35,10 @@ export default async function ManagerTasksPage({
         <PendingArea />
       ) : (
         <>
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold tracking-tight">Tugas wilayah</h1>
-            <p className="mt-2 max-w-2xl text-[var(--muted-foreground)]">
-              Pantau tindak lanjut kader. Halaman ini hanya untuk dibaca.
-            </p>
-          </div>
+          <PageHeader
+            title="Tugas wilayah"
+            description="Pantau tindak lanjut kader. Halaman ini hanya untuk dibaca."
+          />
           <TaskListPage
             areas={areas}
             basePath="/pengelola/tugas"

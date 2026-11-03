@@ -1,13 +1,15 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatusBadge, reportStatusTone } from "@/components/ui/StatusBadge";
 import { Alert } from "@/components/feedback/Alert";
 import { ServiceUnavailable } from "@/components/feedback/ServiceUnavailable";
 import { getDefaultPortal, getVerifiedAreas } from "@/features/areas/access";
 import { getReportDetail } from "@/features/reports/data";
 import { AddInformationForm } from "@/features/reports/components/AddInformationForm";
 import {
-  ReportFacts,
+  ReportFactsCard,
+  ReportPhotos,
   ReportTimeline,
 } from "@/features/reports/components/ReportDetailView";
 import {
@@ -76,60 +78,57 @@ export default async function ReportDetailPage({
       displayName={access.context.displayName}
       role="resident"
     >
-      <Link
-        href="/app/laporan"
-        className="inline-flex min-h-11 items-center text-sm font-semibold text-[var(--primary)]"
-      >
-        ← Laporan saya
-      </Link>
-      <div className="mt-5 max-w-3xl">
-        {query.informasi === "terkirim" &&
-        report.status === "pending_verification" ? (
-          <div className="mb-5">
-            <Alert title="Informasi tambahan terkirim">
-              Laporan kembali menunggu pemeriksaan kader.
-            </Alert>
-          </div>
-        ) : null}
-        <p className="text-sm font-semibold text-[var(--primary)]">
-          {report.publicReference}
-        </p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight">
-          Detail laporan
-        </h1>
-        <p className="mt-3 inline-block rounded-[var(--radius-control)] bg-[var(--primary-subtle)] px-3 py-2 font-semibold">
-          {reportStatusLabels[report.status]}
-        </p>
-        {report.isDemo ? (
-          <p className="mt-4 text-sm font-semibold">
-            DATA SIMULASI — bukan data kasus DBD sebenarnya
+      <PageHeader
+        back={{ href: "/app/laporan", label: "Laporan saya" }}
+        title="Detail laporan"
+        meta={
+          <>
+            <span className="font-semibold">{report.publicReference}</span>
+            <StatusBadge tone={reportStatusTone[report.status]}>
+              {reportStatusLabels[report.status]}
+            </StatusBadge>
+          </>
+        }
+      />
+      {query.informasi === "terkirim" &&
+      report.status === "pending_verification" ? (
+        <div className="mb-6 max-w-3xl">
+          <Alert title="Informasi tambahan terkirim">
+            Laporan kembali menunggu pemeriksaan kader.
+          </Alert>
+        </div>
+      ) : null}
+      <div className="grid gap-7 lg:grid-cols-12 lg:items-start">
+        <div className="grid gap-6 lg:col-span-5">
+          <ReportPhotos images={detail.images.data} />
+          <p className="rounded-[var(--radius-control)] bg-[var(--primary-subtle)] p-4">
+            {statusNotes[report.status] ??
+              "Status laporan diperbarui oleh kader wilayah."}
           </p>
-        ) : null}
-        <ReportFacts images={detail.images.data} report={report} />
-        {report.status === "needs_information" ? (
-          <section
-            aria-labelledby="information-title"
-            className="mt-8 rounded-[var(--radius-card)] border border-[var(--primary)] bg-[var(--surface)] p-5 sm:p-7"
-          >
-            <h2 id="information-title" className="text-2xl font-bold">
-              Kader meminta informasi tambahan
-            </h2>
-            {request?.reason ? (
-              <p className="mt-3 whitespace-pre-wrap break-words">
-                {request.reason}
-              </p>
-            ) : null}
-            <AddInformationForm
-              reportId={report.id}
-              expectedVersion={report.version}
-            />
-          </section>
-        ) : null}
-        <ReportTimeline events={detail.events.data} />
-        <p className="mb-10 rounded-[var(--radius-control)] bg-[var(--primary-subtle)] p-4">
-          {statusNotes[report.status] ??
-            "Status laporan diperbarui oleh kader wilayah."}
-        </p>
+        </div>
+        <div className="grid gap-6 lg:col-span-7">
+          <ReportFactsCard report={report} />
+          {report.status === "needs_information" ? (
+            <section
+              aria-labelledby="information-title"
+              className="rounded-[var(--radius-card)] border border-[var(--primary)] bg-[var(--surface)] p-5"
+            >
+              <h2 id="information-title" className="text-lg font-bold">
+                Kader meminta informasi tambahan
+              </h2>
+              {request?.reason ? (
+                <p className="mt-2 whitespace-pre-wrap break-words">
+                  {request.reason}
+                </p>
+              ) : null}
+              <AddInformationForm
+                reportId={report.id}
+                expectedVersion={report.version}
+              />
+            </section>
+          ) : null}
+          <ReportTimeline events={detail.events.data} />
+        </div>
       </div>
     </AppShell>
   );

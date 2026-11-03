@@ -7,6 +7,7 @@ import {
   reportCategoryLabels,
 } from "@/features/reports/validation";
 import { Button } from "@/components/ui/Button";
+import { AiSuggestionDetails } from "@/features/ai/components/AiSuggestionDetails";
 import {
   aiReportSuggestionSchema,
   type AiReportSuggestion,
@@ -27,6 +28,7 @@ export function ReportForm({ areas }: { areas: Area[] }) {
   const [coordinates, setCoordinates] = useState<{
     latitude: number;
     longitude: number;
+    accuracy: number;
   } | null>(null);
   const [preview, setPreview] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -50,6 +52,8 @@ export function ReportForm({ areas }: { areas: Area[] }) {
   const [aiMessage, setAiMessage] = useState("");
   const [suggestion, setSuggestion] = useState<AiReportSuggestion | null>(null);
   const [confirmApply, setConfirmApply] = useState(false);
+  // Marks fields copied from the AI suggestion until the resident edits them.
+  const [aiFilled, setAiFilled] = useState(false);
   const [restoreValues, setRestoreValues] = useState<{
     category: typeof category;
     description: string;
@@ -235,8 +239,12 @@ export function ReportForm({ areas }: { areas: Area[] }) {
     setDescription(suggestion.draftDescription);
     setRequestKey(crypto.randomUUID());
     setConfirmApply(false);
+    setAiFilled(true);
     setAiMessage(
       "Saran disalin ke formulir. Periksa dan ubah sebelum mengirim.",
+    );
+    requestAnimationFrame(() =>
+      document.getElementById("description")?.focus(),
     );
   }
 
@@ -278,6 +286,7 @@ export function ReportForm({ areas }: { areas: Area[] }) {
         setCoordinates({
           latitude: coords.latitude,
           longitude: coords.longitude,
+          accuracy: Math.round(coords.accuracy),
         });
         setRequestKey(crypto.randomUUID());
         setError("");
@@ -370,7 +379,7 @@ export function ReportForm({ areas }: { areas: Area[] }) {
   }
 
   const control =
-    "min-h-11 w-full rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] px-3.5 py-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]";
+    "min-h-11 w-full rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] px-3.5 py-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]";
   const fieldError = (name: string) =>
     fieldErrors[name] ? (
       <p id={`${name}-error`} className="text-sm text-[var(--danger)]">
@@ -390,7 +399,7 @@ export function ReportForm({ areas }: { areas: Area[] }) {
   };
 
   return (
-    <div className="grid max-w-2xl gap-7">
+    <div className={`grid gap-7 ${preview ? "max-w-3xl" : ""}`}>
       {activeErrors.length ? (
         <div
           ref={errorSummaryRef}
@@ -425,398 +434,410 @@ export function ReportForm({ areas }: { areas: Area[] }) {
         </p>
       ) : null}
       {!preview ? (
-        <>
-          <div className="grid gap-2">
-            <p id="photos-label" className="text-sm font-semibold">
-              Foto lingkungan <span aria-hidden="true">*</span>
-            </p>
-            <input
-              id="photos"
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              multiple
-              onChange={(event) => {
-                changePhotos(event.currentTarget.files);
-                event.currentTarget.value = "";
-              }}
-              aria-labelledby="photos-label"
-              aria-required="true"
-              aria-describedby="photos-help photos-selected photos-error"
-              aria-invalid={Boolean(fieldErrors.photos)}
-              className="peer sr-only"
-            />
-            <label
-              htmlFor="photos"
-              className="inline-flex min-h-11 w-fit cursor-pointer items-center rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm font-semibold hover:border-[var(--primary)] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--focus)]"
-            >
-              {photos.length ? "Ganti pilihan foto" : "Pilih foto"}
-            </label>
-            <p
-              id="photos-selected"
-              aria-live="polite"
-              className="text-sm text-[var(--muted-foreground)]"
-            >
-              {photos.length
-                ? `${photos.length} foto dipilih`
-                : "Belum ada foto dipilih"}
-            </p>
-            <p
-              id="photos-help"
-              className="text-sm text-[var(--muted-foreground)]"
-            >
-              Pilih 1–3 foto JPG, PNG, atau WebP, masing-masing maksimal 5 MiB.
-              Pilihan baru mengganti foto sebelumnya. Hindari wajah, plat
-              kendaraan, dan alamat rumah.
-            </p>
-            {fieldError("photos")}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {photos.map((photo, index) => (
-                <div
-                  key={photo.url}
-                  className="rounded-[var(--radius-control)] border border-[var(--border)] p-2"
-                >
-                  {/* Image is a local blob preview; the server creates normalized private copies. */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={photo.url}
-                    alt={`Pratinjau foto ${index + 1}`}
-                    className="aspect-square w-full rounded object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removePhoto(index)}
-                    className="mt-2 min-h-11 w-full text-sm font-semibold text-[var(--danger)] focus-visible:outline-2"
+        <div className="grid gap-7 lg:grid-cols-12 lg:items-start">
+          <div className="grid gap-6 lg:col-span-5">
+            <div className="grid gap-2">
+              <p id="photos-label" className="text-sm font-semibold">
+                Foto lingkungan <span aria-hidden="true">*</span>
+              </p>
+              <input
+                id="photos"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                onChange={(event) => {
+                  changePhotos(event.currentTarget.files);
+                  event.currentTarget.value = "";
+                }}
+                aria-labelledby="photos-label"
+                aria-required="true"
+                aria-describedby="photos-help photos-selected photos-error"
+                aria-invalid={Boolean(fieldErrors.photos)}
+                className="peer sr-only"
+              />
+              <label
+                htmlFor="photos"
+                className="inline-flex min-h-11 w-fit cursor-pointer items-center rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm font-semibold hover:border-[var(--primary)] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--focus)]"
+              >
+                {photos.length ? "Ganti pilihan foto" : "Pilih foto"}
+              </label>
+              <p
+                id="photos-selected"
+                aria-live="polite"
+                className="text-sm text-[var(--muted-foreground)]"
+              >
+                {photos.length
+                  ? `${photos.length} foto dipilih`
+                  : "Belum ada foto dipilih"}
+              </p>
+              <p
+                id="photos-help"
+                className="text-sm text-[var(--muted-foreground)]"
+              >
+                Pilih 1–3 foto JPG, PNG, atau WebP, masing-masing maksimal 5
+                MiB. Pilihan baru mengganti foto sebelumnya. Hindari wajah, plat
+                kendaraan, dan alamat rumah.
+              </p>
+              {fieldError("photos")}
+              <div className="grid grid-cols-3 gap-3">
+                {photos.map((photo, index) => (
+                  <div
+                    key={photo.url}
+                    className="rounded-[var(--radius-control)] border border-[var(--border)] p-2"
                   >
-                    Hapus foto {index + 1}
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-          {photos.length ? (
-            <section
-              aria-labelledby="ai-heading"
-              className="grid gap-4 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5"
-            >
-              <div className="grid gap-1">
-                <h2 id="ai-heading" className="text-lg font-semibold">
-                  Bantuan Gemini (opsional)
-                </h2>
-                <p className="text-sm text-[var(--muted-foreground)]">
-                  Foto yang dipilih akan diproses oleh layanan AI eksternal
-                  untuk membantu menyusun laporan. Hasil AI merupakan saran dan
-                  perlu diperiksa kembali.
-                </p>
-                <p className="text-sm text-[var(--muted-foreground)]">
-                  Hanya foto pertama yang dianalisis. Lokasi dan data akun tidak
-                  dikirim ke Gemini.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                {!uploadedIds[0] ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={busy || aiStage === "preparing"}
-                    onClick={preparePrimaryPhoto}
-                  >
-                    {aiStage === "preparing"
-                      ? "Menyiapkan foto…"
-                      : "Siapkan foto untuk AI"}
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={busy || aiStage === "loading"}
-                    onClick={requestAi}
-                  >
-                    {aiStage === "loading"
-                      ? "Menganalisis…"
-                      : "Bantu dengan Gemini"}
-                  </Button>
-                )}
-                {aiStage === "loading" ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => {
-                      aiGenerationRef.current += 1;
-                      aiControllerRef.current?.abort();
-                      setAiStage("cancelled");
-                      setAiMessage(
-                        "Analisis dibatalkan. Isian Anda tetap tersedia.",
-                      );
-                    }}
-                  >
-                    Batalkan analisis
-                  </Button>
-                ) : null}
-              </div>
-              {aiStage === "preparing" || aiStage === "loading" ? (
-                <p role="status" aria-live="polite" className="text-sm">
-                  {aiStage === "preparing"
-                    ? "Foto sedang divalidasi dan disimpan privat…"
-                    : "Gemini sedang menyiapkan saran. Anda tetap dapat mengisi laporan."}
-                </p>
-              ) : null}
-              {aiMessage ? (
-                <p
-                  role={
-                    aiStage === "unavailable" ||
-                    aiStage === "invalid" ||
-                    aiStage === "rate"
-                      ? "alert"
-                      : "status"
-                  }
-                  className="text-sm text-[var(--muted-foreground)]"
-                >
-                  {aiMessage}
-                </p>
-              ) : null}
-              {suggestion && aiStage === "success" ? (
-                <div
-                  className="grid gap-3 border-t border-[var(--border)] pt-4"
-                  aria-labelledby="ai-result-heading"
-                >
-                  <h3 id="ai-result-heading" className="font-semibold">
-                    Saran AI — perlu verifikasi
-                  </h3>
-                  <div>
-                    <p className="text-sm font-semibold">
-                      Yang tampak pada foto
-                    </p>
-                    <ul className="list-disc pl-5 text-sm">
-                      {suggestion.visibleObjects.map((object, index) => (
-                        <li key={`${index}-${object}`}>{object}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <p className="text-sm">
-                    <span className="font-semibold">Kategori usulan:</span>{" "}
-                    {reportCategoryLabels[suggestion.suggestedCategory]}
-                  </p>
-                  <p className="whitespace-pre-wrap break-words text-sm">
-                    <span className="font-semibold">Deskripsi usulan:</span>{" "}
-                    {suggestion.draftDescription}
-                  </p>
-                  <p className="whitespace-pre-wrap break-words text-sm">
-                    <span className="font-semibold">Saran pencegahan:</span>{" "}
-                    {suggestion.suggestedPrecaution}
-                  </p>
-                  <p className="whitespace-pre-wrap break-words text-sm">
-                    <span className="font-semibold">Batasan:</span>{" "}
-                    {suggestion.limitations}
-                  </p>
-                  {confirmApply ? (
-                    <div
-                      role="alert"
-                      className="grid gap-2 rounded-[var(--radius-control)] border border-[var(--border)] p-3"
+                    {/* Image is a local blob preview; the server creates normalized private copies. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={photo.url}
+                      alt={`Pratinjau foto ${index + 1}`}
+                      className="aspect-[4/3] w-full rounded object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(index)}
+                      className="mt-1 min-h-11 w-full text-sm font-semibold text-[var(--danger)] focus-visible:outline-2"
                     >
-                      <p className="text-sm">
-                        Kategori atau deskripsi saat ini sudah terisi. Ganti
-                        dengan saran AI? Isian lama dapat dipulihkan segera
-                        setelahnya.
-                      </p>
+                      Hapus foto {index + 1}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {photos.length ? (
+              <section
+                aria-labelledby="ai-heading"
+                className="grid gap-4 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5"
+              >
+                <div className="grid gap-1">
+                  <h2 id="ai-heading" className="text-lg font-semibold">
+                    Bantuan Gemini (opsional)
+                  </h2>
+                  <p className="text-sm text-[var(--muted-foreground)]">
+                    Foto pertama dianalisis layanan AI eksternal untuk menyusun
+                    draf. Lokasi dan data akun tidak dikirim ke Gemini. Hasilnya
+                    saran yang perlu Anda periksa.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  {!uploadedIds[0] ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={busy || aiStage === "preparing"}
+                      onClick={preparePrimaryPhoto}
+                    >
+                      {aiStage === "preparing"
+                        ? "Menyiapkan foto…"
+                        : "Siapkan foto untuk AI"}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={busy || aiStage === "loading"}
+                      onClick={requestAi}
+                    >
+                      {aiStage === "loading"
+                        ? "Menganalisis…"
+                        : "Bantu dengan Gemini"}
+                    </Button>
+                  )}
+                  {aiStage === "loading" ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => {
+                        aiGenerationRef.current += 1;
+                        aiControllerRef.current?.abort();
+                        setAiStage("cancelled");
+                        setAiMessage(
+                          "Analisis dibatalkan. Isian Anda tetap tersedia.",
+                        );
+                      }}
+                    >
+                      Batalkan analisis
+                    </Button>
+                  ) : null}
+                </div>
+                {aiStage === "preparing" || aiStage === "loading" ? (
+                  <p role="status" aria-live="polite" className="text-sm">
+                    {aiStage === "preparing"
+                      ? "Foto sedang divalidasi dan disimpan privat…"
+                      : "Gemini sedang menyiapkan saran. Anda tetap dapat mengisi laporan."}
+                  </p>
+                ) : null}
+                {aiMessage ? (
+                  <p
+                    role={
+                      aiStage === "unavailable" ||
+                      aiStage === "invalid" ||
+                      aiStage === "rate"
+                        ? "alert"
+                        : "status"
+                    }
+                    className="text-sm text-[var(--muted-foreground)]"
+                  >
+                    {aiMessage}
+                  </p>
+                ) : null}
+                {suggestion && aiStage === "success" ? (
+                  <div
+                    className="grid gap-3 border-t border-[var(--border)] pt-4"
+                    aria-labelledby="ai-result-heading"
+                  >
+                    <h3 id="ai-result-heading" className="font-semibold">
+                      Saran AI — perlu verifikasi
+                    </h3>
+                    <AiSuggestionDetails
+                      category={suggestion.suggestedCategory}
+                      visibleObjects={suggestion.visibleObjects}
+                      draftDescription={suggestion.draftDescription}
+                      precaution={suggestion.suggestedPrecaution}
+                      limitations={suggestion.limitations}
+                    />
+                    {confirmApply ? (
+                      <div
+                        role="alert"
+                        className="grid gap-2 rounded-[var(--radius-control)] border border-[var(--border)] p-3"
+                      >
+                        <p className="text-sm">
+                          Kategori atau deskripsi saat ini sudah terisi. Ganti
+                          dengan saran AI? Isian lama dapat dipulihkan segera
+                          setelahnya.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="button" onClick={applySuggestion}>
+                            Ya, ganti isian
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => setConfirmApply(false)}
+                          >
+                            Batal
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
                       <div className="flex flex-wrap gap-2">
                         <Button type="button" onClick={applySuggestion}>
-                          Ya, ganti isian
+                          Terapkan saran ke formulir
                         </Button>
                         <Button
                           type="button"
                           variant="ghost"
-                          onClick={() => setConfirmApply(false)}
+                          onClick={() => {
+                            setSuggestion(null);
+                            setAiStage("idle");
+                            setAiMessage(
+                              "Saran diabaikan. Isian manual tetap tersedia.",
+                            );
+                          }}
                         >
-                          Batal
+                          Abaikan saran
                         </Button>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap gap-2">
-                      <Button type="button" onClick={applySuggestion}>
-                        Terapkan saran ke formulir
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => {
-                          setSuggestion(null);
-                          setAiStage("idle");
-                          setAiMessage(
-                            "Saran diabaikan. Isian manual tetap tersedia.",
-                          );
-                        }}
-                      >
-                        Abaikan saran
-                      </Button>
-                    </div>
+                    )}
+                    <p className="text-xs text-[var(--muted-foreground)]">
+                      Anda dapat mengubah kategori dan deskripsi setelah
+                      menerapkan saran. Laporan tidak dikirim otomatis.
+                    </p>
+                  </div>
+                ) : null}
+                {restoreValues ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setCategory(restoreValues.category);
+                      setDescription(restoreValues.description);
+                      setRestoreValues(null);
+                      setAiFilled(false);
+                      setRequestKey(crypto.randomUUID());
+                      setAiMessage("Isian sebelumnya dipulihkan.");
+                    }}
+                  >
+                    Pulihkan isian sebelumnya
+                  </Button>
+                ) : null}
+              </section>
+            ) : null}
+          </div>
+          <div className="grid gap-4 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-5 lg:col-span-7">
+            <div className="grid gap-5 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <label htmlFor="areaId" className="text-sm font-semibold">
+                  Wilayah <span aria-hidden="true">*</span>
+                </label>
+                <select
+                  id="areaId"
+                  value={areaId}
+                  aria-required="true"
+                  aria-invalid={Boolean(fieldErrors.areaId)}
+                  aria-describedby={
+                    fieldErrors.areaId ? "areaId-error" : undefined
+                  }
+                  onChange={(event) => {
+                    setAreaId(event.target.value);
+                    invalidateAi();
+                    setRequestKey(crypto.randomUUID());
+                  }}
+                  className={control}
+                >
+                  {areas.map((area) => (
+                    <option key={area.id} value={area.id}>
+                      {area.name}
+                      {area.isDemo && !area.name.includes("(Simulasi)")
+                        ? " (Simulasi)"
+                        : ""}
+                    </option>
+                  ))}
+                </select>
+                {fieldError("areaId")}
+              </div>
+              <div className="grid gap-2">
+                <label htmlFor="category" className="text-sm font-semibold">
+                  Kategori temuan <span aria-hidden="true">*</span>
+                  {aiFilled ? (
+                    <span className="ml-2 rounded-full bg-[var(--info-subtle)] px-2 py-0.5 text-xs font-semibold text-[var(--info)]">
+                      Diisi dari saran AI · bisa diubah
+                    </span>
+                  ) : null}
+                </label>
+                <select
+                  id="category"
+                  value={category}
+                  aria-required="true"
+                  aria-invalid={Boolean(fieldErrors.category)}
+                  aria-describedby={
+                    fieldErrors.category ? "category-error" : undefined
+                  }
+                  onChange={(event) => {
+                    setCategory(event.target.value as typeof category);
+                    manualRevisionRef.current += 1;
+                    setRestoreValues(null);
+                    setAiFilled(false);
+                    setRequestKey(crypto.randomUUID());
+                  }}
+                  className={control}
+                >
+                  <option value="">Pilih kategori</option>
+                  {Object.entries(reportCategoryLabels).map(
+                    ([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ),
                   )}
-                  <p className="text-xs text-[var(--muted-foreground)]">
-                    Anda dapat mengubah kategori dan deskripsi setelah
-                    menerapkan saran. Laporan tidak dikirim otomatis.
+                </select>
+                {fieldError("category")}
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <label htmlFor="description" className="text-sm font-semibold">
+                Deskripsi lingkungan <span aria-hidden="true">*</span>
+                {aiFilled ? (
+                  <span className="ml-2 rounded-full bg-[var(--info-subtle)] px-2 py-0.5 text-xs font-semibold text-[var(--info)]">
+                    Diisi dari saran AI · bisa diubah
+                  </span>
+                ) : null}
+              </label>
+              <textarea
+                id="description"
+                value={description}
+                aria-required="true"
+                onChange={(event) => {
+                  setDescription(event.target.value);
+                  manualRevisionRef.current += 1;
+                  setRestoreValues(null);
+                  setAiFilled(false);
+                  setRequestKey(crypto.randomUUID());
+                }}
+                maxLength={1000}
+                rows={3}
+                aria-invalid={Boolean(fieldErrors.description)}
+                aria-describedby="description-help description-error"
+                className={control}
+                placeholder="Jelaskan objek dan kondisinya tanpa menyebut identitas penghuni."
+              />
+              <p
+                id="description-help"
+                className="text-sm text-[var(--muted-foreground)]"
+              >
+                10–1000 karakter. Deskripsikan yang terlihat, tanpa diagnosis.
+              </p>
+              {fieldError("description")}
+            </div>
+            <div className="grid gap-3 rounded-[var(--radius-control)] bg-[var(--background)] p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold">Lokasi titik (opsional)</p>
+                  <p className="text-sm text-[var(--muted-foreground)]">
+                    Hanya terlihat oleh Anda dan petugas berwenang.
                   </p>
                 </div>
-              ) : null}
-              {restoreValues ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => {
-                    setCategory(restoreValues.category);
-                    setDescription(restoreValues.description);
-                    setRestoreValues(null);
-                    setRequestKey(crypto.randomUUID());
-                    setAiMessage("Isian sebelumnya dipulihkan.");
-                  }}
-                >
-                  Pulihkan isian sebelumnya
-                </Button>
-              ) : null}
-            </section>
-          ) : null}
-          <div className="grid gap-2">
-            <label htmlFor="areaId" className="text-sm font-semibold">
-              Wilayah <span aria-hidden="true">*</span>
-            </label>
-            <select
-              id="areaId"
-              value={areaId}
-              aria-required="true"
-              aria-invalid={Boolean(fieldErrors.areaId)}
-              aria-describedby={fieldErrors.areaId ? "areaId-error" : undefined}
-              onChange={(event) => {
-                setAreaId(event.target.value);
-                invalidateAi();
-                setRequestKey(crypto.randomUUID());
-              }}
-              className={control}
-            >
-              {areas.map((area) => (
-                <option key={area.id} value={area.id}>
-                  {area.name}
-                  {area.isDemo && !area.name.includes("(Simulasi)")
-                    ? " (Simulasi)"
-                    : ""}
-                </option>
-              ))}
-            </select>
-            {fieldError("areaId")}
-          </div>
-          <div className="grid gap-2">
-            <label htmlFor="category" className="text-sm font-semibold">
-              Kategori temuan <span aria-hidden="true">*</span>
-            </label>
-            <select
-              id="category"
-              value={category}
-              aria-required="true"
-              aria-invalid={Boolean(fieldErrors.category)}
-              aria-describedby={
-                fieldErrors.category ? "category-error" : undefined
-              }
-              onChange={(event) => {
-                setCategory(event.target.value as typeof category);
-                manualRevisionRef.current += 1;
-                setRestoreValues(null);
-                setRequestKey(crypto.randomUUID());
-              }}
-              className={control}
-            >
-              <option value="">Pilih kategori</option>
-              {Object.entries(reportCategoryLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-            {fieldError("category")}
-          </div>
-          <div className="grid gap-2">
-            <label htmlFor="description" className="text-sm font-semibold">
-              Deskripsi lingkungan <span aria-hidden="true">*</span>
-            </label>
-            <textarea
-              id="description"
-              value={description}
-              aria-required="true"
-              onChange={(event) => {
-                setDescription(event.target.value);
-                manualRevisionRef.current += 1;
-                setRestoreValues(null);
-                setRequestKey(crypto.randomUUID());
-              }}
-              maxLength={1000}
-              rows={5}
-              aria-invalid={Boolean(fieldErrors.description)}
-              aria-describedby="description-help description-error"
-              className={control}
-              placeholder="Jelaskan objek dan kondisinya tanpa menyebut identitas penghuni."
-            />
-            <p
-              id="description-help"
-              className="text-sm text-[var(--muted-foreground)]"
-            >
-              10–1000 karakter. Deskripsikan yang terlihat, tanpa diagnosis.
-            </p>
-            {fieldError("description")}
-          </div>
-          <div className="grid gap-3 rounded-[var(--radius-card)] border border-[var(--border)] p-4">
-            <p className="font-semibold">Lokasi titik (opsional)</p>
-            <p className="text-sm text-[var(--muted-foreground)]">
-              Titik presisi hanya terlihat oleh Anda dan petugas yang berwenang.
-              Anda dapat melapor tanpa memberikan lokasi perangkat.
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <Button type="button" variant="secondary" onClick={useLocation}>
-                Gunakan lokasi perangkat
-              </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={useLocation}
+                  >
+                    Gunakan lokasi perangkat
+                  </Button>
+                  {coordinates ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => {
+                        setCoordinates(null);
+                        setRequestKey(crypto.randomUUID());
+                      }}
+                    >
+                      Hapus titik
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
               {coordinates ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => {
-                    setCoordinates(null);
-                    setRequestKey(crypto.randomUUID());
-                  }}
-                >
-                  Hapus titik
-                </Button>
+                <p className="text-sm" role="status">
+                  Titik GPS tersimpan · akurasi sekitar ±
+                  {coordinates.accuracy.toLocaleString("id-ID")} m.
+                  {coordinates.accuracy > 100
+                    ? " Titik ini kurang tepat; tambahkan petunjuk lokasi agar kader mudah menemukannya."
+                    : ""}
+                </p>
               ) : null}
+              <label htmlFor="locationNote" className="text-sm font-semibold">
+                Petunjuk lokasi umum (opsional)
+              </label>
+              <input
+                id="locationNote"
+                value={locationNote}
+                aria-invalid={Boolean(fieldErrors.location)}
+                aria-describedby={
+                  fieldErrors.location ? "location-error" : undefined
+                }
+                onChange={(event) => {
+                  setLocationNote(event.target.value);
+                  setRequestKey(crypto.randomUUID());
+                }}
+                maxLength={250}
+                className={control}
+                placeholder="Contoh: gang sebelah masjid, dekat pos ronda"
+              />
+              {fieldError("location")}
             </div>
-            {coordinates ? (
-              <p className="text-sm">
-                Titik dipilih. Koordinat tidak ditampilkan pada halaman publik.
-              </p>
-            ) : null}
-            <label htmlFor="locationNote" className="text-sm font-semibold">
-              Petunjuk lokasi umum (opsional)
-            </label>
-            <input
-              id="locationNote"
-              value={locationNote}
-              aria-invalid={Boolean(fieldErrors.location)}
-              aria-describedby={
-                fieldErrors.location ? "location-error" : undefined
-              }
-              onChange={(event) => {
-                setLocationNote(event.target.value);
-                setRequestKey(crypto.randomUUID());
+            <Button
+              type="button"
+              className="sm:justify-self-end"
+              onClick={() => {
+                if (validate()) setPreview(true);
               }}
-              maxLength={250}
-              className={control}
-              placeholder="Contoh: dekat saluran umum"
-            />
-            {fieldError("location")}
+            >
+              Tinjau laporan
+            </Button>
           </div>
-          <Button
-            type="button"
-            onClick={() => {
-              if (validate()) setPreview(true);
-            }}
-          >
-            Tinjau laporan
-          </Button>
-        </>
+        </div>
       ) : (
         <section
           className="grid gap-5 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-7"
@@ -839,7 +860,7 @@ export function ReportForm({ areas }: { areas: Area[] }) {
           <p>
             <span className="font-semibold">Lokasi:</span>{" "}
             {coordinates
-              ? "Titik lokasi privat disertakan"
+              ? `Titik GPS disertakan (akurasi ±${coordinates.accuracy.toLocaleString("id-ID")} m)`
               : "Tanpa titik lokasi"}
             {locationNote ? ` — ${locationNote}` : ""}
           </p>
