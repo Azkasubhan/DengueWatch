@@ -6,7 +6,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { LinkButton } from "@/components/ui/LinkButton";
 import { decidePortalAccess, getVerifiedAreas } from "@/features/areas/access";
 import { getAccessContext } from "@/lib/auth/context";
-import { ClipboardCheck, ListChecks } from "lucide-react";
+import { ListChecks } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 
 export const dynamic = "force-dynamic";
@@ -48,46 +48,24 @@ export default async function CadreSummaryPage({
             Wilayah tugas terverifikasi
           </h1>
           <p className="mt-3 max-w-3xl text-[var(--muted-foreground)]">
-            Akun ini berwenang sebagai kader hanya pada wilayah yang
-            ditampilkan. Laporan warga dari wilayah ini tersedia di antrean
-            verifikasi.
+            Akun ini berwenang sebagai kader pada wilayah yang ditampilkan.
+            Pengelola wilayah memeriksa laporan warga lalu menugaskan tindak
+            lanjutnya kepada Anda.
           </p>
-          <div className="mt-8 grid max-w-4xl gap-4 md:grid-cols-2">
+          <div className="mt-8 max-w-2xl">
             <Card className="flex flex-col justify-between gap-6">
               <div>
                 <span className="grid size-11 place-items-center rounded-full bg-[var(--forest)] text-[var(--forest-foreground)]">
-                  <ClipboardCheck aria-hidden="true" className="size-5" />
-                </span>
-                <h2 className="mt-4 text-lg font-bold">
-                  Periksa laporan warga
-                </h2>
-                <p className="mt-1 text-[var(--muted-foreground)]">
-                  Verifikasi, minta informasi, atau tandai duplikat.
-                </p>
-              </div>
-              <LinkButton href="/kader/verifikasi" className="self-start">
-                Buka antrean verifikasi
-              </LinkButton>
-            </Card>
-            <Card className="flex flex-col justify-between gap-6">
-              <div>
-                <span className="grid size-11 place-items-center rounded-full bg-[var(--sand)]">
-                  <ListChecks
-                    aria-hidden="true"
-                    className="size-5 text-[var(--forest)]"
-                  />
+                  <ListChecks aria-hidden="true" className="size-5" />
                 </span>
                 <h2 className="mt-4 text-lg font-bold">Kerjakan tugas</h2>
                 <p className="mt-1 text-[var(--muted-foreground)]">
-                  Mulai tugas, kirim bukti, dan periksa bukti kader lain.
+                  Buka lokasi laporan, mulai tugas, lalu kirim foto bukti untuk
+                  diperiksa pengelola.
                 </p>
               </div>
-              <LinkButton
-                href="/kader/tugas"
-                className="self-start"
-                variant="secondary"
-              >
-                Buka daftar tugas
+              <LinkButton href="/kader/tugas" className="self-start">
+                Buka tugas saya
               </LinkButton>
             </Card>
           </div>

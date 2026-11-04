@@ -53,6 +53,7 @@ const taskId = "69000000-0000-4000-8000-000000000001";
 const userId = "61000000-0000-4000-8000-000000000002";
 const otherCadre = "61000000-0000-4000-8000-000000000003";
 const uploadId = "64000000-0000-4000-8000-000000000001";
+const evidenceId = "30000000-0000-4000-8000-0000000000e1";
 
 function context(
   role: AccessContext["role"],
@@ -109,8 +110,11 @@ const taskRow = {
 const validTask = {
   title: "Kuras wadah balai",
   description: "Kuras dan tutup wadah air di balai warga.",
-  assignedTo: userId,
+  assignees: [otherCadre],
+  dueDate: "2026-11-05",
 };
+const cadre = () => context("cadre", "assigned_cadre");
+const manager = () => context("manager", "manager");
 const createPath = `/api/v1/reports/${reportId}/tasks`;
 const key = { "idempotency-key": "m6-key-task-0001" };
 
@@ -123,6 +127,9 @@ beforeEach(() => {
 });
 
 describe("POST /api/v1/reports/:id/tasks", () => {
+  // T27: managers create tasks and assign cadres.
+  beforeEach(() => signIn(manager()));
+
   it("rejects cross-origin requests", async () => {
     const response = await createTask(
       post(createPath, validTask, { ...key, origin: "https://evil.test" }),
@@ -135,8 +142,8 @@ describe("POST /api/v1/reports/:id/tasks", () => {
   it.each([
     ["unauthenticated", null, 401],
     ["resident", context("resident", "resident"), 403],
-    ["manager", context("manager", "manager"), 403],
-    ["unverified cadre", context("cadre", "assigned_cadre", false), 403],
+    ["cadre", context("cadre", "assigned_cadre"), 403],
+    ["unverified manager", context("manager", "manager", false), 403],
   ] as const)("denies %s", async (_label, actor, status) => {
     signIn(actor);
     const response = await createTask(
@@ -159,9 +166,13 @@ describe("POST /api/v1/reports/:id/tasks", () => {
   it.each([
     [{ ...validTask, title: "Kur" }, "title"],
     [{ ...validTask, description: "pendek" }, "description"],
-    [{ ...validTask, assignedTo: "me" }, "assignedTo"],
-    [{ ...validTask, dueAt: "2026-11-05T10:00:00" }, "dueAt"],
-    [{ ...validTask, isMandatory: "yes" }, "isMandatory"],
+    [{ ...validTask, assignees: ["me"] }, "assignees.0"],
+    [{ ...validTask, assignees: [] }, "assignees"],
+    [{ ...validTask, assignees: [otherCadre, otherCadre] }, "assignees"],
+    [{ ...validTask, dueDate: undefined }, "dueDate"],
+    [{ ...validTask, dueDate: "2026-11-05T10:00:00+07:00" }, "dueDate"],
+    [{ ...validTask, dueDate: "05/11/2026" }, "dueDate"],
+    [{ ...validTask, isMandatory: false }, "body"],
     [{ ...validTask, status: "completed" }, "body"],
   ])("rejects invalid payload %j", async (body, field) => {
     const response = await createTask(
@@ -175,17 +186,30 @@ describe("POST /api/v1/reports/:id/tasks", () => {
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
 
+  it("accepts more than ten distinct cadres; the RPC checks each one", async () => {
+    mocks.rpc.mockResolvedValue({
+      data: [{ ...taskRow, status: "assigned", version: 1 }],
+      error: null,
+    });
+    const assignees = Array.from({ length: 12 }, () => crypto.randomUUID());
+    const response = await createTask(
+      post(createPath, { ...validTask, assignees }, key),
+      params(reportId),
+    );
+    expect(response.status).toBe(201);
+    expect(mocks.rpc).toHaveBeenCalledWith(
+      "create_action_task",
+      expect.objectContaining({ p_assignees: assignees }),
+    );
+  });
+
   it("creates through the RPC and returns camelCase", async () => {
     mocks.rpc.mockResolvedValue({
       data: [{ ...taskRow, status: "assigned", version: 1 }],
       error: null,
     });
     const response = await createTask(
-      post(
-        createPath,
-        { ...validTask, dueAt: "2026-11-05T10:00:00+07:00" },
-        key,
-      ),
+      post(createPath, validTask, key),
       params(reportId),
     );
     expect(response.status).toBe(201);
@@ -202,9 +226,8 @@ describe("POST /api/v1/reports/:id/tasks", () => {
       p_report_id: reportId,
       p_title: validTask.title,
       p_description: validTask.description,
-      p_assigned_to: userId,
-      p_due_at: "2026-11-05T10:00:00+07:00",
-      p_is_mandatory: true,
+      p_assignees: [otherCadre],
+      p_due_date: "2026-11-05",
       p_idempotency_key: "m6-key-task-0001",
     });
   });
@@ -212,6 +235,8 @@ describe("POST /api/v1/reports/:id/tasks", () => {
   it.each([
     ["P0409", "idempotency conflict", 409, "IDEMPOTENCY_CONFLICT"],
     ["P0422", "invalid task assignee", 422, "VALIDATION_ERROR"],
+    ["P0422", "invalid task assignment", 422, "VALIDATION_ERROR"],
+    ["P0422", "invalid due date", 422, "VALIDATION_ERROR"],
     ["P0422", "invalid report transition", 422, "INVALID_TRANSITION"],
     ["P0404", "report not found", 404, "NOT_FOUND"],
   ])("maps %s %s", async (code, message, status, errorCode) => {
@@ -230,17 +255,41 @@ describe("POST /api/v1/reports/:id/tasks", () => {
 describe("task action routes", () => {
   const path = (action: string) => `/api/v1/tasks/${taskId}/${action}`;
 
-  it("manager and resident cannot run task actions", async () => {
-    for (const actor of [
-      context("manager", "manager"),
-      context("resident", "resident"),
-    ]) {
+  it("manager and resident cannot start tasks", async () => {
+    for (const actor of [manager(), context("resident", "resident")]) {
       signIn(actor);
       const response = await startTask(
         post(path("start"), { expectedVersion: 1 }),
         params(),
       );
       expect(response.status).toBe(403);
+    }
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("cadre and resident cannot review, cancel, or reopen", async () => {
+    for (const actor of [cadre(), context("resident", "resident")]) {
+      signIn(actor);
+      for (const [handler, action, body] of [
+        [
+          reviewEvidence,
+          "review",
+          { evidenceId, decision: "approve", expectedVersion: 3 },
+        ],
+        [
+          cancelTask,
+          "cancel",
+          { reason: "Ditangani pengelola fasilitas.", expectedVersion: 1 },
+        ],
+        [
+          reopenTask,
+          "reopen",
+          { reason: "Genangan muncul kembali.", expectedVersion: 4 },
+        ],
+      ] as const) {
+        const response = await handler(post(path(action), body), params());
+        expect(response.status).toBe(403);
+      }
     }
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
@@ -263,8 +312,13 @@ describe("task action routes", () => {
       }),
       params(),
     );
+    signIn(manager());
     await reviewEvidence(
-      post(path("review"), { decision: "approve", expectedVersion: 3 }),
+      post(path("review"), {
+        evidenceId,
+        decision: "approve",
+        expectedVersion: 3,
+      }),
       params(),
     );
     await cancelTask(
@@ -296,6 +350,7 @@ describe("task action routes", () => {
         "review_task_evidence",
         {
           p_task_id: taskId,
+          p_evidence_id: evidenceId,
           p_decision: "approve",
           p_reason: null,
           p_expected_version: 3,
@@ -324,8 +379,12 @@ describe("task action routes", () => {
     ["start", { expectedVersion: "1" }],
     ["start", { expectedVersion: 1, status: "completed" }],
     ["evidence", { description: "Bukti tanpa foto.", expectedVersion: 2 }],
-    ["review", { decision: "request_revision", expectedVersion: 3 }],
-    ["review", { decision: "complete", expectedVersion: 3 }],
+    [
+      "review",
+      { evidenceId, decision: "request_revision", expectedVersion: 3 },
+    ],
+    ["review", { evidenceId, decision: "complete", expectedVersion: 3 }],
+    ["review", { decision: "approve", expectedVersion: 3 }],
     ["cancel", { expectedVersion: 1 }],
     ["reopen", { reason: "Lagi", expectedVersion: 1 }],
   ])("rejects invalid %s payload %j", async (action, body) => {
@@ -336,6 +395,7 @@ describe("task action routes", () => {
       cancel: cancelTask,
       reopen: reopenTask,
     }[action]!;
+    signIn(action === "start" || action === "evidence" ? cadre() : manager());
     const response = await handler(post(path(action), body), params());
     expect(response.status).toBe(422);
     expect(mocks.rpc).not.toHaveBeenCalled();
@@ -343,13 +403,13 @@ describe("task action routes", () => {
 
   it.each([
     ["P0403", "self review not permitted", 403, "SELF_REVIEW_FORBIDDEN"],
-    ["P0403", "task not assigned to user", 403, "NOT_ASSIGNEE"],
     ["P0403", "action not permitted", 403, "FORBIDDEN"],
     ["P0404", "task not found", 404, "NOT_FOUND"],
     ["P0409", "stale task version", 409, "STALE_VERSION"],
     ["P0409", "upload references unavailable", 409, "UPLOAD_UNAVAILABLE"],
     ["P0422", "invalid task transition", 422, "INVALID_TRANSITION"],
     ["P0422", "evidence unavailable", 422, "EVIDENCE_UNAVAILABLE"],
+    ["P0422", "evidence already submitted", 422, "EVIDENCE_ALREADY_SUBMITTED"],
     [
       "42P01",
       'relation "public.action_tasks" does not exist',
@@ -359,9 +419,14 @@ describe("task action routes", () => {
   ])(
     "maps %s %s to %i without leaking SQL",
     async (code, message, status, errorCode) => {
+      signIn(manager());
       mocks.rpc.mockResolvedValue({ data: null, error: { code, message } });
       const response = await reviewEvidence(
-        post(path("review"), { decision: "approve", expectedVersion: 3 }),
+        post(path("review"), {
+          evidenceId,
+          decision: "approve",
+          expectedVersion: 3,
+        }),
         params(),
       );
       expect(response.status).toBe(status);
@@ -434,13 +499,14 @@ describe("task reads", () => {
         area_id: areaId,
         title: "Kuras wadah balai",
         description: "Kuras dan tutup wadah air di balai warga.",
-        assigned_to: otherCadre,
+        action_task_assignees: [{ profile_id: otherCadre }],
         created_by: userId,
         status: "awaiting_review",
         is_mandatory: true,
         due_at: null,
         completed_at: null,
         version: 3,
+        evidence_round: 1,
         created_at: "2026-10-31T10:00:00Z",
         updated_at: "2026-10-31T11:00:00Z",
         reports: { public_reference: "DW-2026-000001" },
@@ -510,14 +576,14 @@ describe("POST /api/v1/tasks/:id/evidence-uploads", () => {
   it("does not store bytes when the task lease is refused", async () => {
     mocks.rpc.mockResolvedValue({
       data: null,
-      error: { code: "P0403", message: "task not assigned to user" },
+      error: { code: "P0404", message: "task not found" },
     });
     const response = await uploadEvidence(
       await multipart(await samplePhoto()),
       params(),
     );
-    expect(response.status).toBe(403);
-    expect((await response.json()).error.code).toBe("NOT_ASSIGNEE");
+    expect(response.status).toBe(404);
+    expect((await response.json()).error.code).toBe("NOT_FOUND");
     expect(mocks.storageUpload).not.toHaveBeenCalled();
   });
 

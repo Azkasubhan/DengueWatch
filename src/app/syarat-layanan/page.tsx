@@ -49,25 +49,25 @@ export default function TermsPage() {
             melanggar hak orang lain.
           </li>
           <li>
-            Kader dapat meminta informasi tambahan, menandai laporan sebagai
-            duplikat, atau tidak menyetujui laporan yang tidak sesuai.
+            Pengelola wilayah dapat meminta informasi tambahan, menandai laporan
+            sebagai duplikat, atau tidak menyetujui laporan yang tidak sesuai.
           </li>
         </ul>
       </section>
       <section>
         <h2>Saran AI</h2>
         <p>
-          Saran AI adalah draf yang dapat Anda ubah atau abaikan. Keputusan isi
-          laporan tetap berada pada Anda, dan keputusan verifikasi tetap berada
-          pada kader.
+          Isian yang dibuat AI adalah draf yang wajib Anda periksa dan dapat
+          Anda ubah seluruhnya. Keputusan isi laporan tetap berada pada Anda,
+          dan keputusan verifikasi tetap berada pada pengelola wilayah.
         </p>
       </section>
       <section>
         <h2>Penyelesaian laporan</h2>
         <p>
-          Laporan dinyatakan selesai setelah bukti penanganan disetujui oleh
-          kader yang berbeda dari pelaksana tugas. Riwayat tindakan dicatat dan
-          tidak dapat diubah.
+          Laporan dinyatakan selesai setelah bukti penanganan dari kader
+          disetujui oleh pengelola wilayah. Riwayat tindakan dicatat dan tidak
+          dapat diubah.
         </p>
       </section>
       <section>

@@ -12,9 +12,11 @@ export async function POST(
     "review_task_evidence",
     (id, input) => ({
       p_task_id: id,
+      p_evidence_id: input.evidenceId,
       p_decision: input.decision,
       p_reason: input.reason ?? null,
       p_expected_version: input.expectedVersion,
     }),
+    "manager",
   );
 }

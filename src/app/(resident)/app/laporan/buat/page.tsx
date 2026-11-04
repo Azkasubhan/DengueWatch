@@ -26,7 +26,7 @@ export default async function CreateReportPage() {
       <PageHeader
         back={{ href: "/app/laporan", label: "Laporan saya" }}
         title="Buat laporan lingkungan"
-        description="Catat temuan yang terlihat. Kader akan memeriksa laporan setelah dikirim."
+        description="Catat temuan yang terlihat. Pengelola wilayah akan memeriksa laporan setelah dikirim."
       />
       {areas.length ? <ReportForm areas={areas} /> : <PendingArea />}
     </AppShell>

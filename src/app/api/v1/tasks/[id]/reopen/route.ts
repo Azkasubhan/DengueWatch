@@ -15,5 +15,6 @@ export async function POST(
       p_reason: input.reason,
       p_expected_version: input.expectedVersion,
     }),
+    "manager",
   );
 }

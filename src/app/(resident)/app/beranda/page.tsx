@@ -19,12 +19,18 @@ import { listReports } from "@/features/reports/data";
 import { getAccessContext } from "@/lib/auth/context";
 
 const steps = [
-  { title: "Dikirim", text: "Laporan Anda masuk ke antrean kader wilayah." },
-  { title: "Diperiksa", text: "Kader memverifikasi foto dan keterangan." },
-  { title: "Ditangani", text: "Kader membuat tugas dan mengerjakannya." },
+  {
+    title: "Dikirim",
+    text: "Laporan Anda masuk ke antrean pengelola wilayah.",
+  },
+  { title: "Diperiksa", text: "Pengelola memverifikasi foto dan keterangan." },
+  {
+    title: "Ditangani",
+    text: "Pengelola menugaskan kader untuk menanganinya.",
+  },
   {
     title: "Selesai",
-    text: "Bukti penanganan disetujui oleh kader lain.",
+    text: "Bukti penanganan dari kader disetujui pengelola.",
   },
 ];
 
@@ -73,7 +79,7 @@ export default async function ResidentHomePage({
         <>
           <PageHeader
             title={`Selamat datang, ${result.context.displayName}`}
-            description="Laporkan temuan di sekitar rumah. Kader di wilayah Anda akan memeriksa dan menindaklanjutinya."
+            description="Laporkan temuan di sekitar rumah. Pengelola wilayah akan memeriksanya dan menugaskan kader untuk menindaklanjuti."
             actions={
               <LinkButton href="/app/laporan/buat">
                 <Plus aria-hidden="true" className="size-4" />

@@ -54,8 +54,8 @@
 DengueWatch melibatkan tiga peran operasional:
 
 - **Warga (`resident`)**: mencatat temuan lingkungan, melihat progres penanganan, dan menjalankan checklist pemberantasan sarang nyamuk (PSN) mingguan.
-- **Kader Jumantik (`cadre`)**: memverifikasi temuan dalam wilayah tugas, mengoordinasikan penanganan, memeriksa bukti hasil, dan mengelola inspeksi terverifikasi bila modul tersedia.
-- **Pengelola kesehatan/komunitas (`manager`)**: memantau agregat laporan, durasi penanganan, partisipasi PSN, serta membantu perencanaan aksi berbasis data tanpa mengakses informasi di luar wewenang.
+- **Kader Jumantik (`cadre`)**: mengerjakan tugas tindak lanjut yang ditugaskan pengelola di wilayahnya dan mengirim bukti hasil (T27).
+- **Pengelola kesehatan/komunitas (`manager`)**: memverifikasi laporan warga, menugaskan satu atau beberapa kader per tugas, memeriksa bukti hasil, membatalkan atau membuka kembali tugas (T27), serta memantau agregat laporan, durasi penanganan, dan partisipasi PSN tanpa mengakses informasi di luar wewenang.
 
 **Gemini AI** digunakan sebagai *assistive intelligence*: analisis awal foto lingkungan dan penyusunan deskripsi/kategori yang dapat dikoreksi warga; ringkasan laporan agregat bagi pengelola. Seluruh keputusan penting tetap melalui validasi manusia. **Model AI bukan sumber kebenaran kesehatan.**
 
@@ -209,8 +209,8 @@ Pernyataan berikut **belum boleh ditulis sebagai fakta universal** tanpa wawanca
 | **P0 — wajib vertical slice** | Auth, role & area | Login, daftar warga, role server-side, area membership, RLS |
 | **P0** | Create report | Foto, kategori, deskripsi, lokasi privat, validasi, persistensi |
 | **P0** | Gemini assistance | Foto → JSON terstruktur → draft editable → human confirmation + fallback |
-| **P0** | Cadre verification | Queue, accept/reject/request_info dengan audit |
-| **P0** | Action workflow | Task assignment → progress → evidence → cadre review → close/reopen |
+| **P0** | Manager verification | Queue, accept/reject/request_info dengan audit (T27) |
+| **P0** | Action workflow | Task assignment → progress → evidence → manager review → close/reopen (T27) |
 | **P0** | Citizen tracking | Timeline laporan yang jujur dan status up-to-date |
 | **P0** | Core UI quality | Responsif, design tokens, accessibility, states, usable flow |
 | **P1 — kuat untuk lomba** | Community map | Peta privat kader + tampilan publik agregat, legenda dan filter |
@@ -235,9 +235,9 @@ Pernyataan berikut **belum boleh ditulis sebagai fakta universal** tanpa wawanca
 1. Pengguna masuk / daftar; memilih area demo (atau area disetujui manager).
 2. Dari dashboard warga, pilih **Buat Laporan**.
 3. Pilih foto lingkungan, izinkan geolokasi (opsional) atau pilih titik melalui peta/area yang tersedia. Tidak meminta lokasi presisi kecuali benar-benar diperlukan.
-4. Input deskripsi ringkas, pilih kategori manual atau klik **Bantu dengan Gemini**.
-5. Backend memvalidasi foto lalu Gemini mengusulkan `visible_objects`, `suggested_category`, `draft_description`, `suggested_precaution`, `limitations`.
-6. Hasil AI ditandai **Saran AI — belum terverifikasi**, tidak disimpan sebagai fakta medis. Pengguna boleh edit atau abaikan.
+4. Begitu foto dipilih, backend memvalidasi foto pertama dan Gemini langsung mengisi formulir: kategori, yang tampak pada foto, deskripsi, dan saran pencegahan (T29). AI hanya mengisi kolom yang masih kosong.
+5. Kolom hasil AI diberi penanda **Diisi AI · periksa** dan dapat diedit seluruhnya; keempat kolom wajib diisi. Tidak ada panel saran terpisah dan tidak ada kolom batasan.
+6. Jika AI limit, gagal, atau dibatalkan, warga mengisi keempat kolom sendiri; isian AI tidak disimpan sebagai fakta medis.
 7. Pengguna meninjau preview dan *privacy notice*, kirim laporan.
 8. Backend membuat laporan `pending_verification`; event `report_created` ditulis dalam satu transaksi logis.
 9. UI menampilkan nomor laporan, tanggal, status, dan history.
@@ -245,26 +245,26 @@ Pernyataan berikut **belum boleh ditulis sebagai fakta universal** tanpa wawanca
 
 **Alternative paths:** AI timeout → form manual tetap bisa dikirim; foto gagal upload → tidak membuat laporan yatim; lokasi ditolak → pilih area/peta secara manual; data validasi gagal → field error spesifik.
 
-### 6.2 Alur kader — verifikasi
+### 6.2 Alur pengelola — verifikasi
 
-1. Kader login dan membuka `Verification Queue` yang hanya menampilkan laporan area tugas.
-2. Filter `pending_verification`, `needs_information`, tanggal/kategori/area.
-3. Lihat foto melalui URL bertanda tangan terbatas, keterangan, waktu, peta privat, serta **AI draft sebagai suggestion**.
-4. Putuskan `verified` / `rejected` / `needs_information`, dengan alasan wajib pada keputusan non-verified.
-5. Jika verified, kader dapat membuat `action_task` (assigned user, tindakan, due date, prioritas operasional).
+1. Pengelola login dan membuka `Antrean verifikasi` yang hanya menampilkan laporan di wilayah yang ia kelola.
+2. Filter `pending_verification`, `needs_information`, tanggal/kategori.
+3. Lihat foto melalui URL bertanda tangan terbatas, keterangan, waktu, lokasi privat, serta **AI draft sebagai suggestion**.
+4. Putuskan `verified` / `rejected` / `needs_information` / `duplicate`, dengan alasan wajib pada keputusan non-verified.
+5. Jika verified, pengelola membuat `action_task` dan menugaskan **minimal satu kader** di wilayah tersebut (boleh lebih dari satu).
 6. Semua keputusan membuat record audit yang tak bisa ditimpa warga.
 
-**Alternative paths:** laporan duplikat → kaitkan `duplicate_of_report_id` pada laporan dan beri alasan; area berbeda → forbidden; race condition dua kader → conflict 409, UI refresh.
+**Alternative paths:** laporan duplikat → kaitkan `duplicate_of_report_id` dan beri alasan; area berbeda → not found; race condition dua pengelola → conflict 409, UI refresh. Kader tidak memiliki antrean verifikasi; kader hanya melihat laporan yang terkait dengan tugasnya.
 
 ### 6.3 Alur action task — penyelesaian terverifikasi
 
-1. Kader membuat task pada laporan verified.
-2. Kader atau manager menugaskan ke pengguna yang berwenang dalam area (MVP: kader sendiri; P1: verified assignee).
-3. Assignee memperbarui status `in_progress`, menambah catatan/bukti setelah tindakan.
-4. Submit evidence mengubah task menjadi `awaiting_review`.
-5. Kader berbeda/yang berwenang memeriksa bukti dan memilih `approved` (→ completed) atau `revision_required` (→ in_progress).
-6. Jika masalah berulang, buat `task_reopened` dan history; jangan menghapus record sebelumnya.
-7. Status laporan dapat diturunkan dari tugas yang terkait **dengan aturan deterministik**.
+1. Pengelola membuat task pada laporan verified.
+2. Pengelola memilih satu atau beberapa kader terverifikasi di area yang sama sebagai pelaksana (T27).
+3. Salah satu kader pelaksana memulai tugas (`in_progress`) dan dapat melihat foto serta lokasi laporan terkait.
+4. Setiap kader pelaksana mengirim catatan/bukti sendiri; task menjadi `awaiting_review` (T33).
+5. Pengelola memeriksa bukti per kader dan memilih `approved` atau `revision_required`. Task `completed` hanya setelah bukti semua kader pelaksana disetujui; selain itu kembali `in_progress` (atau tetap `awaiting_review` bila masih ada bukti pending).
+6. Hanya pengelola yang dapat membatalkan tugas atau membukanya kembali (`reopened`) bila masalah berulang; record sebelumnya tidak dihapus.
+7. Status laporan diturunkan dari tugas terkait **dengan aturan deterministik**.
 
 ### 6.4 Alur checklist PSN mingguan
 
@@ -292,15 +292,15 @@ flowchart TD
   C --> E[Warga konfirmasi dan kirim]
   D --> E
   E --> F[Pending verification]
-  F --> G{Review kader}
+  F --> G{Review pengelola}
   G -->|Butuh info| H[Needs information]
   H --> F
   G -->|Tidak valid| I[Rejected]
   G -->|Valid| J[Verified]
-  J --> K[Create and assign task]
+  J --> K[Pengelola menugaskan kader]
   K --> L[In progress]
   L --> M[Upload evidence]
-  M --> N{Review evidence}
+  M --> N{Review bukti oleh pengelola}
   N -->|Revisi| L
   N -->|Disetujui| O[Completed]
   O --> P[Update analytics and history]
@@ -359,21 +359,21 @@ Format ID: `FR-XX` untuk requirement; `AC-XX` untuk acceptance criteria. Field d
 ### EPIC 4 — Verification Queue
 
 - **FR-30** Inbox paginated per area dengan filter status/date/category.
-- **FR-31** Kader berwenang dapat memilih verify, reject, request information, atau mark duplicate.
+- **FR-31** Pengelola berwenang dapat memilih verify, reject, request information, atau mark duplicate (T27).
 - **FR-32** Reject/request-info wajib alasan bermakna (mis. 10–500 karakter).
 - **FR-33** Keputusan membuat event audit; `version` increment untuk optimistic concurrency.
 - **FR-34** Warga mendapat in-app notification perubahan status.
 
 **AC-30:** transisi status ilegal ditolak HTTP 409/422.  
-**AC-31:** dua kader mengubah laporan sama berdasarkan versi lama → satu perubahan gagal 409.  
-**AC-32:** user yang bukan kader berwenang tidak bisa melihat private report queue.
+**AC-31:** dua pengelola mengubah laporan sama berdasarkan versi lama → satu perubahan gagal 409.  
+**AC-32:** user yang bukan pengelola berwenang tidak bisa melihat private report queue; kader hanya melihat laporan yang terkait dengan tugasnya (T27).
 
 ### EPIC 5 — ActionLoop / Task Management
 
 - **FR-40** Membuat tugas hanya dari report verified.
-- **FR-41** Setiap task: title, description, due_at, assigned_to (authorized), status, created_by, report_id.
+- **FR-41** Setiap task: title, description, tenggat tanggal wajib (`due_at` = 23.59 WIB), minimal satu assignee kader terverifikasi di area yang sama tanpa batas tetap (`action_task_assignees`), status, created_by, report_id; semua task baru wajib (T27, T28).
 - **FR-42** Workflow draft/assigned/in_progress/awaiting_review/completed/reopened/cancelled dengan aturan tegas.
-- **FR-43** Evidence foto/note diunggah sebagai private file; submit evidence tidak otomatis menutup tugas.
+- **FR-43** Evidence foto/note diunggah sebagai private file oleh setiap kader pelaksana; submit evidence tidak otomatis menutup tugas, dan tugas selesai hanya bila bukti semua kader disetujui (T33).
 - **FR-44** Reviewer menolak evidence dengan reason; tugas kembali in_progress.
 - **FR-45** Semua transisi dicatat sebagai task events append-only.
 - **FR-46** Report dapat dianggap resolved hanya jika seluruh task wajib yang aktif selesai diverifikasi.
@@ -631,6 +631,7 @@ erDiagram
 - `id uuid PK`, `public_reference varchar(20) UNIQUE` seperti `DW-2026-000123` yang dihasilkan server (jangan jadikan sequence predictable sebagai authorization)
 - `reporter_id uuid FK profiles`, `area_id uuid FK areas`
 - `category report_category NOT NULL`, `description varchar(1000) NOT NULL`
+- `visible_objects varchar(500)`, `prevention_advice varchar(500)` — wajib untuk laporan baru melalui RPC, `NULL` untuk laporan sebelum T29
 - `status report_status NOT NULL DEFAULT 'pending_verification'`
 - `latitude numeric(9,6) NULL`, `longitude numeric(9,6) NULL` **private only**
 - `location_note varchar(250) NULL`, `is_demo boolean NOT NULL DEFAULT false`
@@ -655,10 +656,14 @@ erDiagram
 
 **`action_tasks`**
 - `id uuid PK`, `report_id uuid FK`, `title varchar(140)`, `description varchar(1000)`
-- `assigned_to uuid FK profiles`, `created_by uuid FK profiles`
+- `created_by uuid FK profiles`; assignee disimpan di `action_task_assignees` (T27)
 - `status task_status`, `due_at timestamptz NULL`, `completed_at timestamptz NULL`, `version int DEFAULT 1`
 - `is_mandatory boolean DEFAULT true`, `created_at`, `updated_at`.
 - `CHECK (due_at IS NULL OR due_at >= created_at)` bila sesuai business rule; jangan menolak task yang sudah overdue akibat edit timeline yang sah tanpa aturan khusus.
+
+**`action_task_assignees`** (T27)
+- `task_id uuid FK action_tasks`, `profile_id uuid FK profiles`, `assigned_at timestamptz`, `PRIMARY KEY (task_id, profile_id)`
+- Minimal satu kader per tugas tanpa batas tetap (T28); ditulis hanya melalui RPC pengelola.
 
 **`task_events`**
 - `id uuid PK`, `task_id uuid FK`, `actor_id uuid FK`, `event_type`, `old_status`, `new_status`, `reason`, `created_at`
@@ -684,8 +689,8 @@ CREATE INDEX idx_reports_area_status_created
   ON reports (area_id, status, created_at DESC);
 CREATE INDEX idx_reports_reporter_created
   ON reports (reporter_id, created_at DESC);
-CREATE INDEX idx_action_tasks_assigned_status
-  ON action_tasks (assigned_to, status);
+CREATE INDEX idx_action_task_assignees_profile
+  ON action_task_assignees (profile_id, task_id);
 CREATE INDEX idx_events_report_created
   ON report_events (report_id, created_at DESC);
 CREATE INDEX idx_memberships_profile_area
@@ -764,16 +769,16 @@ Untuk akses role lintas area, implementasikan helper DB function yang **tidak me
 | Method + path | Actor | Request | Response | Security |
 |---|---|---|---|---|
 | `POST /api/v1/ai/analyze-report` | Resident | private validated photo upload reference | AI suggestion | user rate limit, photo owner, schema |
-| `POST /api/v1/reports` | Resident | category, description, area, location, upload refs, idem key | report ID + status | area membership, RLS |
+| `POST /api/v1/reports` | Resident | category, description, visibleObjects, preventionAdvice, area, location, upload refs, idem key | report ID + status | area membership, RLS |
 | `GET /api/v1/reports` | Resident/Cadre/Manager | filters, cursor | scoped paginated list | scope by server |
-| `GET /api/v1/reports/:id` | owner/in-scope cadre | id | detail + event history + signed images | object-level auth |
+| `GET /api/v1/reports/:id` | owner/area manager/assigned cadre | id | detail + event history + signed images | object-level auth |
 | `POST /api/v1/reports/:id/add-information` | owner | note; expectedVersion | status updated | only needs_information |
-| `POST /api/v1/reports/:id/review` | cadre | decision, reason, expectedVersion | updated report/event | transition, area |
-| `POST /api/v1/reports/:id/tasks` | cadre | title, desc, assignee, dueAt | task | verified report, scope |
-| `GET /api/v1/tasks` | cadre/manager/assignee | filters | scoped tasks | role+scope |
-| `POST /api/v1/tasks/:id/start` | assignee | expectedVersion | updated task | task ownership |
-| `POST /api/v1/tasks/:id/evidence` | assignee | note, image refs, expectedVersion | awaiting_review | private storage |
-| `POST /api/v1/tasks/:id/review` | reviewer | decision, reason, expectedVersion | completed/in_progress | scoped reviewer |
+| `POST /api/v1/reports/:id/review` | manager | decision, reason, expectedVersion | updated report/event | transition, area |
+| `POST /api/v1/reports/:id/tasks` | manager | title, desc, assignees[], dueDate | task | verified report, scope |
+| `GET /api/v1/tasks` | manager/assigned cadre | filters | scoped tasks | role+scope |
+| `POST /api/v1/tasks/:id/start` | assigned cadre | expectedVersion | updated task | task ownership |
+| `POST /api/v1/tasks/:id/evidence` | assigned cadre | note, image refs, expectedVersion | awaiting_review | private storage |
+| `POST /api/v1/tasks/:id/review` | manager | evidenceId, decision, reason, expectedVersion | completed/in_progress | scoped reviewer |
 | `GET /api/v1/psn/checklist` | Resident | ISO week | own entries | owner |
 | `PUT /api/v1/psn/checklist` | Resident | week+items | saved entries | owner + unique constraint |
 | `GET /api/v1/map/reports` | Cadre/Manager | bounds/filters | scoped GeoJSON | private exact points |
@@ -939,7 +944,7 @@ export function parseRequiredInteger(raw: string, min: number, max: number) {
 | `reason` (review) | 10–500 when required | conditional schema | service transition prerequisite |
 | `taskTitle` | 5–140 chars | Zod min/max | varchar NOT NULL |
 | `taskDescription` | 10–1000 chars | Zod min/max | varchar bound |
-| `dueAt` | datetime picker | valid ISO date, timezone explicit | valid timestamp/business rule |
+| `dueDate` | tombol cepat + date picker (T28) | wajib, `YYYY-MM-DD`, hari ini–366 hari (WIB) | valid date/business rule |
 | `assignedTo` | allowed scoped users | UUID | FK + area/role rule |
 | `expectedVersion` | hidden numeric state | positive safe integer | atomic version check |
 | `page`, `limit` | numbers UI/select | integer, page ≥1, limit 1–50 | server cap regardless query |
@@ -1543,7 +1548,7 @@ Security resources:
 - `reports_created`: count reports submitted in range, not number of dengue infections.
 - `reports_verified`: verified by authorized cadre, not laboratory-confirmed dengue cases.
 - `completion_rate`: number of eligible, validated reports that meet completed definition / eligible validated reports in same cohort. Document how cancelled/duplicate/reopened reports are handled.
-- `median_verification_time`: median difference first submitted → first valid cadre review; exclude invalid anomalies and document methodology.
+- `median_verification_time`: median difference first submitted → first valid manager review (T27); exclude invalid anomalies and document methodology.
 - `median_completion_time`: median verified → fully resolved, or submitted → resolved (choose and label consistently).
 - `psn_participation`: unique eligible registered resident users with a weekly checklist / eligible registered resident users in that area/week. This is **digital participation**, not all homes in RT.
 - `ABJ`: **not** from resident PSN checklist; only if verified inspections with valid denominator are captured in future module.
@@ -1559,7 +1564,7 @@ Security resources:
 - **Unit tests (Vitest):** numeric parsers, Zod schemas, state transitions, role policy helpers, statistics, date week logic, Gemini response parsing, safe text sanitizer.
 - **Component tests (Testing Library):** form validation, accessible errors, file preview, status display, modal focus, role navigation.
 - **Integration tests:** Supabase policies, transaction or RPC, authenticated API, storage authorization, task workflow, idempotency.
-- **E2E (Playwright):** full resident → cadre → assignee → reviewer workflow and mobile keyboard/navigation.
+- **E2E (Playwright):** full resident → manager verify → assigned cadre → manager review workflow and mobile keyboard/navigation.
 - **Accessibility:** axe scans + manual keyboard/screen-reader sampling; automated testing doesn't cover every issue.
 - **Visual regression:** screenshots 390/768/1440 px, compare differences and review manually.
 - **Security tests:** OWASP-oriented negative cases and direct unauthorized API calls.
@@ -1605,9 +1610,9 @@ Security resources:
 1. Register/login demo resident (or use seeded account).
 2. Submit photo + valid details; optionally call Gemini; confirm draft.
 3. See `pending_verification` with history.
-4. Login cadre in same area; verify report.
-5. Create task; start; upload evidence; request review.
-6. Cadre approves evidence → task completed; report resolved by rule.
+4. Login manager in same area; verify report; create task and assign cadre(s).
+5. Assigned cadre starts task, uploads evidence, requests review.
+6. Manager approves evidence → task completed; report resolved by rule.
 7. Resident sees status/history; manager dashboard count updates.
 8. Peta/list does not reveal private residential coordinate to guest.
 
@@ -1617,7 +1622,7 @@ Security resources:
 3. Resident completes manual form; report persists and workflow proceeds.
 
 **E2E-C — Unauthorized access**
-1. Resident attempts direct POST cadre verify endpoint; server refuses.
+1. Resident or cadre attempts direct POST manager verify endpoint; server refuses.
 2. Cadre outside area attempts read report media; server refuses.
 3. View source/network: no `GEMINI_API_KEY`, secret service key, or public storage image URL.
 
@@ -1680,7 +1685,7 @@ Security resources:
 - No service key inside frontend.
 
 **Milestone 3 — Vertical Slice**
-- End-to-end one report: citizen create → cadre verify → task → evidence → review → report resolution.
+- End-to-end one report: citizen create → manager verify → task to cadre → evidence → manager review → report resolution.
 - Verify authorization and persistence at each step.
 - Integrate Gemini after manual report flow works; AI failure cannot block submission.
 
@@ -1815,7 +1820,7 @@ These are **targets to evaluate**, not claims of proven effects:
 - One primary teal accent, neutral palette, Plus Jakarta Sans.
 - No gradients, no colorful KPI cards, no gimmicky animation.
 - Three primary roles: resident, cadre, manager.
-- AI advisory only; cadre verifies; task evidence reviewed before completion.
+- AI advisory only; manager verifies; assigned cadre acts; manager reviews evidence before completion (T27).
 - Locations/photos private, public map generalized or aggregated.
 - Strict multi-layer numeric validation (letters and scientific notation rejected for integer-only fields).
 - Prioritize P0 before P1/P2.
@@ -1824,7 +1829,7 @@ These are **targets to evaluate**, not claims of proven effects:
 
 1. Pilot area: apakah menggunakan wilayah fiktif sepenuhnya atau mengajak RT/RW lokal secara resmi?
 2. Registration: bebas daftar sebagai resident atau memerlukan invitation/approval untuk area tertentu?
-3. Who can perform action task: cadre only for MVP, or verified volunteer role later?
+3. ~~Who can perform action task~~ — terjawab T27: hanya kader yang ditugaskan pengelola.
 4. File privacy retention: durasi dan penghapusan foto final untuk penggunaan nyata.
 5. Peta: pilih penyedia tiles legal, kuota, dan style peta desaturated.
 6. Apakah ada consent/izin menggunakan foto lingkungan nyata untuk demo video publik?

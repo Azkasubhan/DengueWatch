@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getReportAiSuggestions } from "@/features/reports/data";
 import {
-  cadreContext,
+  managerContext,
   reportError,
   reportJson,
   reviewRpcError,
@@ -21,14 +21,14 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await cadreContext();
+  const auth = await managerContext();
   if (auth.error) return auth.error;
   const { id } = await params;
   if (!z.uuid().safeParse(id).success)
     return reportError(404, "NOT_FOUND", "Laporan tidak ditemukan.");
   const result = await getReportAiSuggestions(id);
   if (result.error) return reviewRpcError(result.error);
-  // AI output stays a suggestion; the cadre makes the decision.
+  // AI output stays a suggestion; the manager makes the decision.
   return reportJson({
     data: ((result.data ?? []) as SuggestionRow[]).map((row) => ({
       analysisId: row.analysis_id,

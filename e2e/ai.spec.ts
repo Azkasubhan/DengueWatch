@@ -32,17 +32,35 @@ test.describe("M4 deterministic AI with live local Auth, DB and Storage", () => 
     await expect(page).toHaveURL(/\/app\/beranda$/);
   }
 
-  async function openReport(page: Page) {
+  // T29: selecting a photo uploads it and asks the AI to fill the form right away.
+  async function openReport(
+    page: Page,
+    scenario?: "unavailable" | "slow" | "hang",
+  ) {
     await login(page);
+    if (scenario === "hang")
+      // The analysis never answers while the test runs; the client aborts it on submit.
+      await page.route("**/api/v1/ai/analyze-report", () => {});
+    else if (scenario)
+      await page.route("**/api/v1/ai/analyze-report", async (route) => {
+        if (scenario === "slow")
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+        await route.continue({
+          headers: {
+            ...route.request().headers(),
+            ...(scenario === "unavailable"
+              ? { "x-ai-test-scenario": "unavailable" }
+              : {}),
+          },
+        });
+      });
     await page.goto("/app/laporan/buat");
     const areaId = await page.locator("#areaId").inputValue();
     await page.locator("#photos").setInputFiles(photo);
-    await page.getByRole("button", { name: "Siapkan foto untuk AI" }).click();
-    await expect(
-      page.getByRole("button", { name: "Bantu dengan Gemini" }),
-    ).toBeVisible();
     return areaId;
   }
+
+  const aiFilled = (page: Page) => page.getByText("Diisi AI · periksa");
 
   async function submit(page: Page, description: string) {
     await expect(page.locator("#description")).toHaveValue(description);
@@ -56,34 +74,27 @@ test.describe("M4 deterministic AI with live local Auth, DB and Storage", () => 
     return page.url().split("/").at(-1)!;
   }
 
-  test("E2E-A: review, confirm replacement, edit, and submit through M3", async ({
+  test("E2E-A: AI fills every field, resident edits, and submits through M3", async ({
     page,
   }) => {
     await openReport(page);
-    await page.locator("#category").selectOption("other");
-    await page
-      .locator("#description")
-      .fill("Isian manual awal untuk laporan lingkungan ini.");
-    await page.getByRole("button", { name: "Bantu dengan Gemini" }).click();
     await expect(
-      page.getByRole("heading", { name: "Saran AI — perlu verifikasi" }),
+      page.getByText("AI mengisi formulir dari foto pertama", { exact: false }),
     ).toBeVisible();
-    await expect(page.locator("#description")).toHaveValue(
-      "Isian manual awal untuk laporan lingkungan ini.",
-    );
-    await page
-      .getByRole("button", { name: "Terapkan saran ke formulir" })
-      .click();
-    await expect(
-      page.getByText("Ganti dengan saran AI?", { exact: false }),
-    ).toBeVisible();
-    await page.getByRole("button", { name: "Ya, ganti isian" }).click();
     await expect(page.locator("#category")).toHaveValue("water_container");
-    await expect(
-      page.getByRole("button", { name: "Pulihkan isian sebelumnya" }),
-    ).toBeVisible();
+    await expect(page.locator("#visibleObjects")).toHaveValue(
+      "wadah air terbuka, air terlihat di dalam wadah",
+    );
+    await expect(page.locator("#description")).toHaveValue(
+      "Foto tampak menunjukkan wadah terbuka yang berisi air dan perlu diperiksa lebih lanjut.",
+    );
+    await expect(page.locator("#preventionAdvice")).toHaveValue(
+      "Periksa dan kosongkan genangan jika aman dilakukan.",
+    );
+    await expect(aiFilled(page)).toHaveCount(4);
     const description = `Foto menunjukkan wadah terbuka yang perlu diperiksa. Revisi warga ${randomUUID()}.`;
     await page.locator("#description").fill(description);
+    await expect(aiFilled(page)).toHaveCount(3);
     const reportId = await submit(page, description);
     const admin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -101,47 +112,134 @@ test.describe("M4 deterministic AI with live local Auth, DB and Storage", () => 
       "requiresHumanVerification",
       true,
     );
+    const report = await admin
+      .from("reports")
+      .select("visible_objects,prevention_advice")
+      .eq("id", reportId)
+      .single();
+    expect(report.data).toEqual({
+      visible_objects: "wadah air terbuka, air terlihat di dalam wadah",
+      prevention_advice: "Periksa dan kosongkan genangan jika aman dilakukan.",
+    });
   });
 
-  test("E2E-B: unavailable AI keeps photo and manual submission", async ({
+  test("E2E-B: unavailable AI leaves every field to the resident", async ({
     page,
   }) => {
-    await openReport(page);
+    await openReport(page, "unavailable");
+    await expect(
+      page
+        .getByRole("alert")
+        .filter({ hasText: "Silakan isi kolom secara manual" }),
+    ).toBeVisible();
+    await expect(page.locator("#visibleObjects")).toHaveValue("");
+    await expect(page.getByAltText("Pratinjau foto 1")).toBeVisible();
+    // Every field stays required on the manual path.
+    await page.getByRole("button", { name: "Tinjau laporan" }).click();
+    const summary = page.locator('[aria-labelledby="report-errors-title"]');
+    await expect(
+      summary.getByRole("link", { name: /Tulis apa yang tampak pada foto/ }),
+    ).toHaveAttribute("href", "#visibleObjects");
+    await expect(
+      summary.getByRole("link", { name: /Tulis saran pencegahan/ }),
+    ).toHaveAttribute("href", "#preventionAdvice");
     const description = `Isian warga tetap ada setelah AI gagal ${randomUUID()}.`;
     await page.locator("#category").selectOption("other");
+    await page.locator("#visibleObjects").fill("Ember terbuka berisi air");
     await page.locator("#description").fill(description);
-    await page.route("**/api/v1/ai/analyze-report", (route) =>
-      route.continue({
-        headers: {
-          ...route.request().headers(),
-          "x-ai-test-scenario": "unavailable",
-        },
-      }),
-    );
-    await page.getByRole("button", { name: "Bantu dengan Gemini" }).click();
-    await expect(
-      page.getByRole("alert").filter({ hasText: "Analisis AI tidak tersedia" }),
-    ).toBeVisible();
-    await expect(page.locator("#description")).toHaveValue(description);
-    await expect(page.getByAltText("Pratinjau foto 1")).toBeVisible();
+    await page
+      .locator("#preventionAdvice")
+      .fill("Tutup ember dan kuras seminggu sekali.");
+    await expect(aiFilled(page)).toHaveCount(0);
     await submit(page, description);
   });
 
-  test("E2E-C: ignored suggestion leaves manual content unchanged", async ({
+  test("E2E-C: AI fills only empty fields and never overwrites the resident", async ({
     page,
   }) => {
-    await openReport(page);
+    await openReport(page, "slow");
+    await expect(
+      page.getByText("AI sedang membaca foto pertama", { exact: false }),
+    ).toBeVisible();
     const description = `Wadah perlu pemeriksaan manual ${randomUUID()}.`;
     await page.locator("#category").selectOption("other");
     await page.locator("#description").fill(description);
-    await page.getByRole("button", { name: "Bantu dengan Gemini" }).click();
     await expect(
-      page.getByRole("heading", { name: "Saran AI — perlu verifikasi" }),
+      page.getByText("Kolom yang sudah Anda isi tidak diubah.", {
+        exact: false,
+      }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Abaikan saran" }).click();
-    await expect(page.locator("#description")).toHaveValue(description);
     await expect(page.locator("#category")).toHaveValue("other");
+    await expect(page.locator("#description")).toHaveValue(description);
+    await expect(page.locator("#visibleObjects")).toHaveValue(
+      "wadah air terbuka, air terlihat di dalam wadah",
+    );
+    await expect(aiFilled(page)).toHaveCount(2);
     await submit(page, description);
+  });
+
+  test("a hanging analysis never blocks a manually completed report", async ({
+    page,
+  }) => {
+    await openReport(page, "hang");
+    await expect(
+      page.getByText("AI sedang membaca foto pertama", { exact: false }),
+    ).toBeVisible();
+    const description = `Laporan manual saat AI belum menjawab ${randomUUID()}.`;
+    await page.locator("#category").selectOption("other");
+    await page.locator("#visibleObjects").fill("Ember terbuka berisi air");
+    await page.locator("#description").fill(description);
+    await page
+      .locator("#preventionAdvice")
+      .fill("Tutup ember dan kuras seminggu sekali.");
+    await submit(page, description);
+  });
+
+  test("a replaced photo refreshes unedited AI fields and keeps resident edits", async ({
+    page,
+  }) => {
+    await openReport(page);
+    await expect(aiFilled(page)).toHaveCount(4);
+    const advice = `Saran warga sendiri ${randomUUID()}.`;
+    await page.locator("#preventionAdvice").fill(advice);
+    const second =
+      "Foto kedua menunjukkan ban bekas yang perlu diperiksa lebih lanjut.";
+    await page.route("**/api/v1/ai/analyze-report", async (route) => {
+      const response = await route.fetch();
+      const json = await response.json();
+      json.data.suggestion.draftDescription = second;
+      await route.fulfill({ response, json });
+    });
+    await page
+      .locator("#photos")
+      .setInputFiles(resolve("assets/demo-reports/discarded-tire.png"));
+    await expect(page.locator("#description")).toHaveValue(second);
+    await expect(page.locator("#preventionAdvice")).toHaveValue(advice);
+    await expect(aiFilled(page)).toHaveCount(3);
+  });
+
+  test("cancelled analysis can be retried without re-uploading the photo", async ({
+    page,
+  }) => {
+    // Cancel while the analysis itself runs, after the photo upload finished.
+    const analyzing = page.waitForRequest("**/api/v1/ai/analyze-report");
+    await openReport(page, "slow");
+    await analyzing;
+    let uploads = 0;
+    page.on("request", (request) => {
+      if (
+        request.method() === "POST" &&
+        request.url().endsWith("/api/v1/report-uploads")
+      )
+        uploads += 1;
+    });
+    await page.getByRole("button", { name: "Batalkan analisis" }).click();
+    await expect(page.getByText("Analisis dibatalkan.")).toBeVisible();
+    await expect(page.locator("#description")).toHaveValue("");
+    await page.getByRole("button", { name: "Analisis ulang" }).click();
+    await expect(page.locator("#category")).toHaveValue("water_container");
+    await expect(aiFilled(page)).toHaveCount(4);
+    expect(uploads).toBe(0);
   });
 
   test("E2E-D: authenticated resident cannot analyze another resident's upload", async ({
@@ -203,14 +301,11 @@ test.describe("M4 deterministic AI with live local Auth, DB and Storage", () => 
     }
   });
 
-  test("E2E-E: responsive suggestion, keyboard focus, reduced motion and axe", async ({
+  test("E2E-E: responsive autofill, keyboard editing, reduced motion and axe", async ({
     page,
   }, testInfo) => {
     await openReport(page);
-    await page.getByRole("button", { name: "Bantu dengan Gemini" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Saran AI — perlu verifikasi" }),
-    ).toBeVisible();
+    await expect(aiFilled(page)).toHaveCount(4);
     await page.emulateMedia({ reducedMotion: "reduce" });
     for (const width of [320, 390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
@@ -228,14 +323,13 @@ test.describe("M4 deterministic AI with live local Auth, DB and Storage", () => 
         fullPage: true,
       });
     }
-    await page
-      .getByRole("button", { name: "Terapkan saran ke formulir" })
-      .focus();
-    await expect(
-      page.getByRole("button", { name: "Terapkan saran ke formulir" }),
-    ).toBeFocused();
-    await page.keyboard.press("Enter");
-    await expect(page.locator("#category")).toHaveValue("water_container");
+    await page.locator("#visibleObjects").focus();
+    await page.keyboard.press("End");
+    await page.keyboard.type(", ban bekas");
+    await expect(page.locator("#visibleObjects")).toHaveValue(
+      "wadah air terbuka, air terlihat di dalam wadah, ban bekas",
+    );
+    await expect(aiFilled(page)).toHaveCount(3);
     const axe = await new AxeBuilder({ page }).include("main").analyze();
     expect(axe.violations).toEqual([]);
   });
@@ -315,27 +409,5 @@ test.describe("M4 deterministic AI with live local Auth, DB and Storage", () => 
         headers,
       });
     }
-  });
-
-  test("stale AI response cannot replace a newer manual edit", async ({
-    page,
-  }) => {
-    await openReport(page);
-    await page.route("**/api/v1/ai/analyze-report", async (route) => {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      await route.continue();
-    });
-    await page.getByRole("button", { name: "Bantu dengan Gemini" }).click();
-    const description = `Isian baru setelah permintaan AI ${randomUUID()}.`;
-    await page.locator("#description").fill(description);
-    await expect(
-      page
-        .getByRole("alert")
-        .filter({ hasText: "Isian berubah saat analisis berjalan" }),
-    ).toBeVisible();
-    await expect(page.locator("#description")).toHaveValue(description);
-    await expect(
-      page.getByRole("heading", { name: "Saran AI — perlu verifikasi" }),
-    ).toHaveCount(0);
   });
 });

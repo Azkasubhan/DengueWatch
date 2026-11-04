@@ -23,15 +23,15 @@ export const dynamic = "force-dynamic";
 
 const statusNotes: Partial<Record<ReportStatus, string>> = {
   pending_verification:
-    "Laporan menunggu pemeriksaan kader. Belum ada keputusan verifikasi atau tindakan yang dicatat.",
+    "Laporan menunggu pemeriksaan pengelola. Belum ada keputusan verifikasi atau tindakan yang dicatat.",
   needs_information:
-    "Kader membutuhkan informasi tambahan sebelum memutuskan laporan ini.",
-  verified: "Laporan telah diverifikasi kader wilayah.",
-  rejected: "Laporan tidak disetujui. Alasan kader tercatat pada riwayat.",
+    "Pengelola membutuhkan informasi tambahan sebelum memutuskan laporan ini.",
+  verified: "Laporan telah diverifikasi pengelola wilayah.",
+  rejected: "Laporan tidak disetujui. Alasan pengelola tercatat pada riwayat.",
   duplicate: "Laporan ditandai sama dengan laporan lain yang lebih awal.",
-  in_action: "Kader sedang menindaklanjuti temuan ini.",
+  in_action: "Kader yang ditugaskan sedang menindaklanjuti temuan ini.",
   resolved:
-    "Tindak lanjut selesai dan buktinya telah diperiksa kader. Terima kasih atas laporan Anda.",
+    "Tindak lanjut selesai dan buktinya telah diperiksa pengelola. Terima kasih atas laporan Anda.",
 };
 
 export default async function ReportDetailPage({
@@ -94,7 +94,7 @@ export default async function ReportDetailPage({
       report.status === "pending_verification" ? (
         <div className="mb-6 max-w-3xl">
           <Alert title="Informasi tambahan terkirim">
-            Laporan kembali menunggu pemeriksaan kader.
+            Laporan kembali menunggu pemeriksaan pengelola.
           </Alert>
         </div>
       ) : null}
@@ -103,7 +103,7 @@ export default async function ReportDetailPage({
           <ReportPhotos images={detail.images.data} />
           <p className="rounded-[var(--radius-control)] bg-[var(--primary-subtle)] p-4">
             {statusNotes[report.status] ??
-              "Status laporan diperbarui oleh kader wilayah."}
+              "Status laporan diperbarui oleh pengelola wilayah."}
           </p>
         </div>
         <div className="grid gap-6 lg:col-span-7">
@@ -114,7 +114,7 @@ export default async function ReportDetailPage({
               className="rounded-[var(--radius-card)] border border-[var(--primary)] bg-[var(--surface)] p-5"
             >
               <h2 id="information-title" className="text-lg font-bold">
-                Kader meminta informasi tambahan
+                Pengelola meminta informasi tambahan
               </h2>
               {request?.reason ? (
                 <p className="mt-2 whitespace-pre-wrap break-words">

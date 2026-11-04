@@ -9,8 +9,8 @@ pencegahan dengue yang terverifikasi. Implementasi saat ini hanya mencakup:
   wilayah, protected route, RLS, dan seed demo yang dijaga.
 - **M3 Environmental Reports:** laporan manual warga, foto privat, daftar/detail, riwayat,
   API, serta pengujian keamanan dan integrasi lokal.
-- **M4 Gemini SmartSpot:** bantuan AI opsional pada foto laporan, dengan tinjauan dan
-  keputusan akhir tetap pada warga. Satu alur Gemini nyata telah lulus di development lokal.
+- **M4 Gemini SmartSpot:** AI mengisi draf formulir laporan dari foto (T29); semua kolom
+  dapat diedit dan keputusan akhir tetap pada warga. Satu alur Gemini nyata telah lulus di development lokal.
 
 Verifikasi laporan, ActionLoop, peta, PSN, dan analitik belum diimplementasikan.
 
@@ -108,8 +108,8 @@ Script memuat `.env.local` melalui Node, menolak placeholder, menolak berjalan k
 Resident dengan membership area terverifikasi dapat membuka `/app/laporan/buat`, mengirim
 1–3 foto, dan melihat daftar serta detail laporan yang persisten. Foto disimpan sebagai
 WebP tanpa metadata dalam bucket privat `report-photos`. Setiap laporan baru berstatus
-`pending_verification` dan memiliki event `report_created`. Keputusan verifikasi kader
-berada di milestone lain dan tidak dipengaruhi Gemini.
+`pending_verification` dan memiliki event `report_created`. Pengelola wilayah memverifikasi
+laporan, menugaskan kader, dan memeriksa bukti (T27); Gemini tidak memengaruhi keputusan itu.
 
 Setelah seed M2, buat tiga laporan simulasi deterministik beserta foto sintetis dari
 `assets/demo-reports/`:

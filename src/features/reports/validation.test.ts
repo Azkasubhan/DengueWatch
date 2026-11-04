@@ -12,6 +12,8 @@ const valid = {
   areaId: "20000000-0000-4000-8000-000000000001",
   category: "water_container",
   description: "Ada wadah terbuka berisi air di area umum.",
+  visibleObjects: "Wadah terbuka, air tergenang",
+  preventionAdvice: "Tutup wadah dan kuras seminggu sekali.",
   imageUploadIds: ["30000000-0000-4000-8000-000000000001"],
   location: null,
 };
@@ -29,6 +31,20 @@ describe("report validation", () => {
       createReportSchema.safeParse({ ...valid, category: "medical_risk" })
         .success,
     ).toBe(false);
+  });
+
+  it("requires visible objects and prevention advice (T29)", () => {
+    for (const patch of [
+      { visibleObjects: undefined },
+      { visibleObjects: "air" },
+      { visibleObjects: "x".repeat(501) },
+      { preventionAdvice: undefined },
+      { preventionAdvice: "Tutup." },
+      { preventionAdvice: "Tutup wadah\nsegera hari ini." },
+    ])
+      expect(createReportSchema.safeParse({ ...valid, ...patch }).success).toBe(
+        false,
+      );
   });
 
   it("trims description, bounds length, and rejects control characters", () => {

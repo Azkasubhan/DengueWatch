@@ -27,8 +27,10 @@ membership berasal dari database.
 - User tidak memiliki INSERT/UPDATE/DELETE pada `area_memberships`.
 - Trigger membership menolak tipe membership yang tidak sesuai dengan role profile.
 - Cadre memerlukan role `cadre` dan membership `assigned_cadre` terverifikasi.
-- Manager memerlukan role `manager` dan membership `manager` terverifikasi; role ini tidak
-  memperoleh kewenangan kader.
+- Manager memerlukan role `manager` dan membership `manager` terverifikasi. Sejak T27 manager
+  memverifikasi laporan, menugaskan kader, memeriksa bukti, serta membatalkan atau membuka
+  kembali task; kader hanya memulai task dan mengirim bukti. Setiap kader pelaksana mengirim
+  bukti sendiri dan task selesai hanya bila semua bukti disetujui (T33).
 - Policy area memakai function `SECURITY DEFINER` di schema `private`, `search_path=''`,
   nama relation schema-qualified, dan EXECUTE hanya untuk `authenticated`.
 
@@ -83,8 +85,8 @@ nyata, termasuk refresh token dan recovery PKCE melalui Mailpit. Browser live me
   terverifikasi, ownership foto, masa lease, dan status awal diperiksa di database. Semua
   write final dalam satu transaksi. Advisory lock dan tabel idempotency mencegah duplikasi
   akibat retry bersamaan.
-- Resident hanya membaca laporan sendiri. Cadre/manager dapat membaca report di area
-  terverifikasi sesuai role; manager tidak mendapat hak verifikasi. `storage.objects`
+- Resident hanya membaca laporan sendiri. Manager membaca report di area kelolanya; cadre
+  hanya membaca report yang memiliki task yang ditugaskan kepadanya (T27). `storage.objects`
   mengizinkan pembacaan hanya jika objek sudah terhubung dengan report yang boleh dibaca.
 - Bucket `report-photos` privat. Upload menerima JPEG/PNG/WebP maksimal 5 MiB, memeriksa
   signature dan decode, membatasi dimensi/pixel, lalu menyimpan WebP tanpa EXIF. Signed URL
@@ -92,8 +94,8 @@ nyata, termasuk refresh token dan recovery PKCE melalui Mailpit. Browser live me
   mengaksesnya selama masa berlaku; ini adalah batasan signed URL, bukan session-bound URL.
 - Write endpoint memeriksa Origin sama dan mengembalikan error generik, tanpa database
   error mentah. Response privat diberi `no-store`. Batas 10 report dan 30 reservasi upload
-  per user per jam diterapkan di database. Percobaan upload dicatat pada ledger terpisah
-  sehingga menghapus lease tidak menghapus hitungan kuota.
+  per user per jam telah dihapus (T30, T31); upload tetap memerlukan pemilik terautentikasi,
+  validasi gambar, dan lease singkat. Kuota AI per akun juga dihapus (T32).
 - Unggahan sementara yang gagal/ditinggalkan tidak menghasilkan report. Owner dapat
   menghapusnya; cleanup terjaga menghapus objek kedaluwarsa. Jadwalkan cleanup produksi
   dan verifikasi provider Storage hosted sebelum go-live.
@@ -112,8 +114,8 @@ nyata, termasuk refresh token dan recovery PKCE melalui Mailpit. Browser live me
 - `ai_analyses` hanya dapat dibaca owner yang tetap resident terverifikasi pada area
   analisis melalui RLS. Browser tidak diberi grant write;
   finalisasi oleh server memakai secret key setelah reservation RPC berbasis session.
-  Analisis tidak mengubah report status. Ledger membatasi 10/jam, 30/hari, dan satu
-  permintaan aktif per akun lintas instance. Lease aktif berakhir setelah satu menit bila
+  Analisis tidak mengubah report status. Ledger membatasi satu permintaan aktif per akun
+  lintas instance; tidak ada kuota AI per akun (T32), hanya batas provider Gemini. Lease aktif berakhir setelah satu menit bila
   server berhenti. Percobaan tetap terhitung setelah gagal.
 - Adapter deterministik hanya aktif dengan flag eksplisit, `NODE_ENV` nonproduction,
   dan URL Supabase loopback. Tes itu tidak membuktikan provider Gemini live.

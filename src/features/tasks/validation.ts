@@ -27,10 +27,16 @@ export const createTaskSchema = z
   .object({
     title: safeText(5, 140, "Judul minimal 5 karakter."),
     description: safeText(10, 1000, "Deskripsi minimal 10 karakter."),
-    assignedTo: z.uuid(),
-    // Explicit offset keeps the due time unambiguous across time zones.
-    dueAt: z.iso.datetime({ offset: true }).nullable().default(null),
-    isMandatory: z.boolean().default(true),
+    // T27/T28: one task may go to any number of distinct cadres of the area.
+    assignees: z
+      .array(z.uuid())
+      .min(1, "Pilih minimal satu kader.")
+      .refine(
+        (ids) => new Set(ids).size === ids.length,
+        "Kader tidak boleh dipilih dua kali.",
+      ),
+    // T28: a calendar date; the RPC stores the end of that day in WIB.
+    dueDate: z.iso.date("Pilih tanggal tenggat."),
   })
   .strict();
 
@@ -44,9 +50,11 @@ export const submitEvidenceSchema = z
   })
   .strict();
 
+// T33: managers review one cadre's evidence at a time.
 export const reviewEvidenceSchema = z.discriminatedUnion("decision", [
   z
     .object({
+      evidenceId: z.uuid(),
       decision: z.literal("approve"),
       reason: actionReason.nullable().optional(),
       expectedVersion,
@@ -54,6 +62,7 @@ export const reviewEvidenceSchema = z.discriminatedUnion("decision", [
     .strict(),
   z
     .object({
+      evidenceId: z.uuid(),
       decision: z.literal("request_revision"),
       reason: actionReason,
       expectedVersion,
@@ -113,7 +122,7 @@ export const taskEventLabels: Record<string, string> = {
   task_created: "Tugas dibuat dan ditugaskan",
   task_started: "Tugas mulai dikerjakan",
   task_evidence_submitted: "Bukti dikirim",
-  task_evidence_approved: "Bukti disetujui, tugas selesai",
+  task_evidence_approved: "Bukti kader disetujui",
   task_revision_requested: "Bukti perlu diperbaiki",
   task_cancelled: "Tugas dibatalkan",
   task_reopened: "Tugas dibuka kembali",

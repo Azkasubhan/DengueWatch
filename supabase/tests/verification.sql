@@ -5,7 +5,7 @@ select plan(64);
 
 select has_function('public', 'review_report', array['uuid','text','text','integer','uuid'], 'review RPC exists');
 select has_function('public', 'add_report_information', array['uuid','text','integer'], 'add information RPC exists');
-select has_function('public', 'get_report_ai_suggestions', array['uuid'], 'cadre AI suggestion reader exists');
+select has_function('public', 'get_report_ai_suggestions', array['uuid'], 'manager AI suggestion reader exists');
 select ok((select prosecdef and proconfig @> array['search_path=""']::text[] from pg_proc where oid = 'public.review_report(uuid,text,text,integer,uuid)'::regprocedure), 'review RPC is definer with empty search path');
 select ok((select prosecdef and proconfig @> array['search_path=""']::text[] from pg_proc where oid = 'public.add_report_information(uuid,text,integer)'::regprocedure), 'add information RPC is definer with empty search path');
 select ok((select prosecdef and proconfig @> array['search_path=""']::text[] from pg_proc where oid = 'public.get_report_ai_suggestions(uuid)'::regprocedure), 'suggestion reader is definer with empty search path');
@@ -31,11 +31,13 @@ from (values
   ('51000000-0000-4000-8000-000000000003'::uuid, 'm5-cadre-a1@example.test'),
   ('51000000-0000-4000-8000-000000000004'::uuid, 'm5-cadre-a2@example.test'),
   ('51000000-0000-4000-8000-000000000005'::uuid, 'm5-cadre-b@example.test'),
-  ('51000000-0000-4000-8000-000000000006'::uuid, 'm5-manager-a@example.test')
+  ('51000000-0000-4000-8000-000000000006'::uuid, 'm5-manager-a@example.test'),
+  ('51000000-0000-4000-8000-000000000007'::uuid, 'm5-manager-a2@example.test'),
+  ('51000000-0000-4000-8000-000000000008'::uuid, 'm5-manager-b@example.test')
 ) as fixtures(id,email);
 
 update public.profiles set role = 'cadre' where id in ('51000000-0000-4000-8000-000000000003','51000000-0000-4000-8000-000000000004','51000000-0000-4000-8000-000000000005');
-update public.profiles set role = 'manager' where id = '51000000-0000-4000-8000-000000000006';
+update public.profiles set role = 'manager' where id in ('51000000-0000-4000-8000-000000000006','51000000-0000-4000-8000-000000000007','51000000-0000-4000-8000-000000000008');
 insert into public.areas (id,code,name,is_demo) values
   ('52000000-0000-4000-8000-000000000001','M5-T-A','M5 Test Area A',true),
   ('52000000-0000-4000-8000-000000000002','M5-T-B','M5 Test Area B',true);
@@ -45,7 +47,9 @@ insert into public.area_memberships (profile_id,area_id,membership_type,verified
   ('51000000-0000-4000-8000-000000000003','52000000-0000-4000-8000-000000000001','assigned_cadre',now()),
   ('51000000-0000-4000-8000-000000000004','52000000-0000-4000-8000-000000000001','assigned_cadre',now()),
   ('51000000-0000-4000-8000-000000000005','52000000-0000-4000-8000-000000000002','assigned_cadre',now()),
-  ('51000000-0000-4000-8000-000000000006','52000000-0000-4000-8000-000000000001','manager',now());
+  ('51000000-0000-4000-8000-000000000006','52000000-0000-4000-8000-000000000001','manager',now()),
+  ('51000000-0000-4000-8000-000000000007','52000000-0000-4000-8000-000000000001','manager',now()),
+  ('51000000-0000-4000-8000-000000000008','52000000-0000-4000-8000-000000000002','manager',now());
 
 insert into public.reports (id,public_reference,reporter_id,area_id,category,description,is_demo,submitted_at) values
   ('53000000-0000-4000-8000-000000000001','M5-T-000001','51000000-0000-4000-8000-000000000001','52000000-0000-4000-8000-000000000001','discarded_tire','Ban bekas menampung air di dekat pos ronda.',true,now() - interval '5 hours'),
@@ -66,30 +70,30 @@ insert into public.ai_analyses (request_user_id,area_id,report_id,model_id,statu
 insert into public.ai_analyses (request_user_id,area_id,report_id,model_id,status,completed_at,error_code) values
   ('51000000-0000-4000-8000-000000000001','52000000-0000-4000-8000-000000000001','53000000-0000-4000-8000-000000000001','gemini-test','error',now(),'PROVIDER_ERROR');
 
--- Resident, manager, and out-of-area cadre cannot review.
+-- Resident, cadre, and out-of-area manager cannot review (T27: managers review).
 select set_config('request.jwt.claims','{"sub":"51000000-0000-4000-8000-000000000001","role":"authenticated"}',true);
 set local role authenticated;
 select throws_ok($$ select * from public.review_report('53000000-0000-4000-8000-000000000001','verify',null,1) $$,
   'P0403','review not permitted','resident cannot review');
 select throws_ok($$ select * from public.get_report_ai_suggestions('53000000-0000-4000-8000-000000000001') $$,
-  'P0403','suggestion access not permitted','resident uses owner RLS, not cadre reader');
+  'P0403','suggestion access not permitted','resident uses owner RLS, not manager reader');
 select is((select count(*) from public.ai_analyses),3::bigint,'owner AI RLS is unchanged');
 
 reset role;
-select set_config('request.jwt.claims','{"sub":"51000000-0000-4000-8000-000000000006","role":"authenticated"}',true);
+select set_config('request.jwt.claims','{"sub":"51000000-0000-4000-8000-000000000003","role":"authenticated"}',true);
 set local role authenticated;
 select throws_ok($$ select * from public.review_report('53000000-0000-4000-8000-000000000001','verify',null,1) $$,
-  'P0403','review not permitted','manager in area cannot review');
+  'P0403','review not permitted','cadre in area cannot review');
 select throws_ok($$ select * from public.get_report_ai_suggestions('53000000-0000-4000-8000-000000000001') $$,
-  'P0403','suggestion access not permitted','manager cannot use cadre AI reader');
+  'P0403','suggestion access not permitted','cadre cannot use manager AI reader');
 
 reset role;
-select set_config('request.jwt.claims','{"sub":"51000000-0000-4000-8000-000000000005","role":"authenticated"}',true);
+select set_config('request.jwt.claims','{"sub":"51000000-0000-4000-8000-000000000008","role":"authenticated"}',true);
 set local role authenticated;
 select throws_ok($$ select * from public.review_report('53000000-0000-4000-8000-000000000001','verify',null,1) $$,
-  'P0404','report not found','cross-area cadre cannot review');
+  'P0404','report not found','cross-area manager cannot review');
 select throws_ok($$ select * from public.get_report_ai_suggestions('53000000-0000-4000-8000-000000000001') $$,
-  'P0404','report not found','cross-area cadre cannot read AI suggestion');
+  'P0404','report not found','cross-area manager cannot read AI suggestion');
 
 reset role;
 select set_config('request.jwt.claims','{"role":"authenticated"}',true);
@@ -99,7 +103,7 @@ select throws_ok($$ select * from public.review_report('53000000-0000-4000-8000-
 
 -- Input validation and the first valid decision.
 reset role;
-select set_config('request.jwt.claims','{"sub":"51000000-0000-4000-8000-000000000003","role":"authenticated"}',true);
+select set_config('request.jwt.claims','{"sub":"51000000-0000-4000-8000-000000000006","role":"authenticated"}',true);
 set local role authenticated;
 select throws_ok($$ select * from public.review_report('53000000-0000-4000-8000-000000000099','verify',null,1) $$,
   'P0404','report not found','unknown report is not found');
@@ -114,8 +118,8 @@ select throws_ok($$ select * from public.review_report('53000000-0000-4000-8000-
 select throws_ok($$ select * from public.review_report('53000000-0000-4000-8000-000000000001','verify',null,0) $$,
   'P0422','invalid expected version','expected version must be positive');
 select is((select r.status::text || ':' || r.version from public.review_report('53000000-0000-4000-8000-000000000001','verify',null,1) as r),
-  'verified:2','cadre verifies pending report and version increments');
-select is((select count(*) from public.ai_analyses),0::bigint,'cadre still cannot read ai_analyses directly');
+  'verified:2','manager verifies pending report and version increments');
+select is((select count(*) from public.ai_analyses),0::bigint,'manager still cannot read ai_analyses directly');
 select is((select count(*) from public.get_report_ai_suggestions('53000000-0000-4000-8000-000000000001')),1::bigint,
   'reader returns only valid successful analyses');
 select results_eq($$ select suggested_category::text, draft_description, suggested_precaution, limitations
@@ -125,9 +129,9 @@ select results_eq($$ select suggested_category::text, draft_description, suggest
 select is((select visible_objects from public.get_report_ai_suggestions('53000000-0000-4000-8000-000000000001')),
   array['ban bekas','air tergenang'],'reader keeps visible objects in order');
 
--- A second cadre acting on the old version loses (AC-31); terminal states stay terminal (AC-30).
+-- A second manager acting on the old version loses (AC-31); terminal states stay terminal (AC-30).
 reset role;
-select set_config('request.jwt.claims','{"sub":"51000000-0000-4000-8000-000000000004","role":"authenticated"}',true);
+select set_config('request.jwt.claims','{"sub":"51000000-0000-4000-8000-000000000007","role":"authenticated"}',true);
 set local role authenticated;
 select throws_ok($$ select * from public.review_report('53000000-0000-4000-8000-000000000001','reject','Foto tidak menunjukkan genangan air.',1) $$,
   'P0409','stale report version','stale version conflicts');
@@ -141,12 +145,12 @@ select is((select count(*) from public.report_events where report_id = '53000000
   2::bigint,'failed requests write no audit event');
 
 -- Request information, resident response, then rejection.
-select set_config('request.jwt.claims','{"sub":"51000000-0000-4000-8000-000000000003","role":"authenticated"}',true);
+select set_config('request.jwt.claims','{"sub":"51000000-0000-4000-8000-000000000006","role":"authenticated"}',true);
 set local role authenticated;
 select is((select r.status::text || ':' || r.version from public.review_report('53000000-0000-4000-8000-000000000002','request_information','Mohon kirim foto dari jarak lebih dekat.',1) as r),
-  'needs_information:2','cadre requests information');
+  'needs_information:2','manager requests information');
 select throws_ok($$ select * from public.add_report_information('53000000-0000-4000-8000-000000000002','Foto tambahan sudah saya ambil dari dekat.',2) $$,
-  'P0403','information update not permitted','cadre cannot answer for resident');
+  'P0403','information update not permitted','manager cannot answer for resident');
 
 reset role;
 select set_config('request.jwt.claims','{"sub":"51000000-0000-4000-8000-000000000002","role":"authenticated"}',true);
@@ -169,10 +173,10 @@ select throws_ok($$ select * from public.add_report_information('53000000-0000-4
   'P0422','invalid report transition','information cannot be added twice');
 
 reset role;
-select set_config('request.jwt.claims','{"sub":"51000000-0000-4000-8000-000000000003","role":"authenticated"}',true);
+select set_config('request.jwt.claims','{"sub":"51000000-0000-4000-8000-000000000006","role":"authenticated"}',true);
 set local role authenticated;
 select is((select r.status::text || ':' || r.version from public.review_report('53000000-0000-4000-8000-000000000002','reject','Lokasi berada di luar fasilitas umum.',3) as r),
-  'rejected:4','cadre rejects after resubmission');
+  'rejected:4','manager rejects after resubmission');
 
 -- Duplicate target rules.
 select throws_ok($$ select * from public.review_report('53000000-0000-4000-8000-000000000003','mark_duplicate','Objek sama dengan laporan sebelumnya.',1,'53000000-0000-4000-8000-000000000003') $$,
@@ -190,7 +194,7 @@ select throws_ok($$ select * from public.review_report('53000000-0000-4000-8000-
 select throws_ok($$ select * from public.review_report('53000000-0000-4000-8000-000000000003','mark_duplicate',null,1,'53000000-0000-4000-8000-000000000001') $$,
   'P0422','invalid review reason','mark_duplicate requires reason');
 select is((select r.status::text || ':' || r.version from public.review_report('53000000-0000-4000-8000-000000000003','mark_duplicate','Objek sama dengan laporan sebelumnya.',1,'53000000-0000-4000-8000-000000000001') as r),
-  'duplicate:2','cadre marks duplicate of earlier report');
+  'duplicate:2','manager marks duplicate of earlier report');
 select throws_ok($$ select * from public.review_report('53000000-0000-4000-8000-000000000004','mark_duplicate','Objek sama dengan laporan sebelumnya.',1,'53000000-0000-4000-8000-000000000003') $$,
   'P0422','invalid duplicate target','duplicate chains are rejected');
 
@@ -200,9 +204,9 @@ select set_eq($$ select event_type, old_status::text, new_status::text, actor_id
   where report_id = '53000000-0000-4000-8000-000000000002' $$,
   $$ values
     ('report_created', null::text, 'pending_verification', '51000000-0000-4000-8000-000000000001'::uuid, null::varchar),
-    ('report_information_requested', 'pending_verification', 'needs_information', '51000000-0000-4000-8000-000000000003'::uuid, 'Mohon kirim foto dari jarak lebih dekat.'::varchar),
+    ('report_information_requested', 'pending_verification', 'needs_information', '51000000-0000-4000-8000-000000000006'::uuid, 'Mohon kirim foto dari jarak lebih dekat.'::varchar),
     ('report_information_added', 'needs_information', 'pending_verification', '51000000-0000-4000-8000-000000000001'::uuid, 'Foto tambahan sudah saya ambil dari dekat.'::varchar),
-    ('report_rejected', 'pending_verification', 'rejected', '51000000-0000-4000-8000-000000000003'::uuid, 'Lokasi berada di luar fasilitas umum.'::varchar) $$,
+    ('report_rejected', 'pending_verification', 'rejected', '51000000-0000-4000-8000-000000000006'::uuid, 'Lokasi berada di luar fasilitas umum.'::varchar) $$,
   'every transition records actor, statuses, and reason');
 select is((select metadata ->> 'duplicateOfReportId' from public.report_events
   where report_id = '53000000-0000-4000-8000-000000000003' and event_type = 'report_marked_duplicate'),

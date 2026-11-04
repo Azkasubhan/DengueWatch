@@ -87,12 +87,12 @@ export const faqs = [
   {
     question: "Apakah saran AI selalu benar?",
     answer:
-      "Tidak selalu. Saran AI hanya draf kategori dan deskripsi yang bisa Anda ubah. Jika layanan AI sedang tidak tersedia, laporan tetap bisa dikirim secara manual.",
+      "Tidak selalu. AI hanya mengisi draf formulir dari foto, dan semua kolom bisa Anda ubah. Jika layanan AI sedang tidak tersedia, Anda cukup mengisi kolomnya sendiri.",
   },
   {
     question: "Apa arti status laporan saya?",
     answer:
-      "Menunggu Pemeriksaan berarti laporan belum diperiksa kader. Terverifikasi dan Dalam Penanganan berarti tugas sedang dikerjakan. Selesai berarti bukti penanganan sudah disetujui kader lain. Kader juga dapat meminta informasi tambahan, menandai laporan duplikat, atau tidak menyetujuinya.",
+      "Menunggu Pemeriksaan berarti laporan belum diperiksa pengelola. Terverifikasi dan Dalam Penanganan berarti kader sedang mengerjakan tugasnya. Selesai berarti bukti penanganan sudah disetujui pengelola. Pengelola juga dapat meminta informasi tambahan, menandai laporan duplikat, atau tidak menyetujuinya.",
   },
   {
     question: "Bagaimana cara menjadi kader?",

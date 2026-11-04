@@ -110,8 +110,9 @@
 ## T13 — Batas reservasi media
 
 - **Status:** accepted.
-- **Keputusan:** trigger database membatasi 30 lease upload per akun per jam, sedangkan RPC
-  membatasi 10 laporan per akun per jam. Keduanya berlaku lintas instance aplikasi.
+- **Keputusan:** (dihapus oleh T30 dan T31) trigger database membatasi 30 lease upload per akun per jam, sedangkan RPC
+  membatasi 10 laporan per akun per jam (batas laporan dihapus oleh T30). Keduanya
+  berlaku lintas instance aplikasi.
 - **Alasan:** mencegah storage abuse dasar tanpa menambah in-memory limiter yang tidak
   konsisten pada beberapa instance.
 
@@ -122,7 +123,8 @@
   `report_upload_attempts`; trigger kuota menghitung ledger ini, bukan baris lease aktif.
 - **Alasan:** hitungan pada `report_uploads` dapat dilewati dengan menghapus lease segera
   setelah upload. Ledger tetap menghitung percobaan dalam jendela satu jam. pgTAP menguji
-  bahwa penghapusan lease tidak mereset hitungan dan reservasi ke-31 ditolak.
+  bahwa penghapusan lease tidak mereset hitungan dan reservasi ke-31 ditolak. Dihapus
+  bersama kuotanya oleh T31.
 
 ## T15 — Analisis sebelum submit memakai lease foto M3
 
@@ -137,7 +139,7 @@
 
 - **Status:** accepted untuk M4 lokal, 31 Oktober 2026.
 - **Keputusan:** RPC user-scoped memesan satu analisis dengan advisory lock, batas
-  10/jam, 30/hari, dan satu permintaan aktif per akun. Catatan aktif memiliki lease satu
+  10/jam, 30/hari (dihapus oleh T32), dan satu permintaan aktif per akun. Catatan aktif memiliki lease satu
   menit. Finalisasi server-only memakai secret key. SDK resmi `@google/genai` 2.32.0
   memakai model dari `GEMINI_MODEL`, timeout per percobaan, maksimal dua percobaan untuk
   429/5xx, dan validasi output di aplikasi.
@@ -267,8 +269,8 @@
   `202611030001` melepas tautan saran lama pada laporan yang sudah ada.
 - **Alasan:** kader butuh satu saran yang tegas; riwayat permintaan ulang tidak membantu
   keputusan dan sejalan dengan retensi metadata terbatas (FR-24).
-- **Tetap berlaku:** kuota 10/jam dan 30/hari tidak dapat diakali karena hanya catatan di luar
-  jendela 24 jam yang dihapus; saran yang tertaut mengikuti cleanup 30 hari.
+- **Tetap berlaku:** cleanup hanya menghapus catatan di luar jendela 24 jam (kuota per akun
+  yang dulu bergantung padanya dihapus oleh T32); saran yang tertaut mengikuti cleanup 30 hari.
 
 ## T26 — Navbar publik liquid glass yang melayang
 
@@ -280,3 +282,123 @@
 - **Fallback:** latar padat bila `prefers-reduced-transparency: reduce` atau browser tidak
   mendukung `backdrop-filter`.
 - **Alasan:** permintaan product owner; satu-satunya pengecualian aturan tanpa glassmorphism.
+
+## T27 — Alur dipimpin pengelola: verifikasi, penugasan, dan pemeriksaan bukti
+
+- **Status:** diputuskan product owner, 4 November 2026. Menggantikan aturan peran pada PRD
+  6.2–6.3 dan T18/T19 yang menyebut kader memverifikasi serta pengelola hanya memantau.
+- **Keputusan:** laporan warga masuk ke antrean pengelola area (`/pengelola/verifikasi`).
+  Pengelola memverifikasi, meminta informasi, menolak, atau menandai duplikat; membuat task
+  dan menugaskan kader terverifikasi area itu (`action_task_assignees`, kolom
+  `assigned_to` dihapus); memeriksa bukti; serta membatalkan atau membuka kembali task.
+  Setiap kader yang ditugaskan dapat memulai task dan mengirim bukti (sejak T33 setiap kader
+  wajib mengirim bukti sendiri). Kader hanya melihat
+  task yang ditugaskan kepadanya dan laporan terkait (foto, lokasi privat). Migration
+  `202611040001` mengganti RPC M5/M6 (`review_report`, `create_action_task(uuid[])`,
+  `review_task_evidence`, `cancel_action_task`, `reopen_action_task`,
+  `get_report_ai_suggestions`, `reserve_task_evidence_upload`), `can_read_report`,
+  `can_read_task`, dan menambah `list_area_cadres` serta `list_task_assignees` (nama tanpa ID).
+- **Tetap berlaku:** RPC atomik, optimistic concurrency, idempotency, audit append-only,
+  pengirim bukti tidak pernah memeriksa buktinya sendiri (CHECK), aturan penutupan laporan
+  T19, dan scope area. Kader di luar daftar penugasan menerima 404, bukan 403.
+- **Alasan:** rantai komando yang jelas (pengelola membagi tugas, kader mengerjakan) dan
+  wilayah dengan satu kader tetap dapat menuntaskan laporan.
+
+## T28 — Penugasan kader tanpa batas, tenggat tanggal wajib, semua tugas wajib
+
+- **Status:** diputuskan product owner, 4 November 2026. Mengubah batas 1–10 kader dari T27
+  dan field `dueAt`/`isMandatory` pada API pembuatan task.
+- **Keputusan:** pengelola memilih kader satu per satu (dropdown nama + "Tambah kader"),
+  minimal satu dan tanpa batas tetap; batas praktisnya jumlah kader terverifikasi area, dan
+  RPC tetap memeriksa setiap ID. Tenggat wajib berupa tanggal (`dueDate`, `YYYY-MM-DD`),
+  dari hari ini sampai 366 hari ke depan menurut WIB, disimpan sebagai 23.59.59 WIB pada
+  `due_at`. Setiap task baru `is_mandatory = true`; field `isMandatory` dihapus dari API.
+  Rentang tanggal diperiksa setelah pencarian idempotency, sehingga retry dengan kunci yang
+  sama setelah tengah malam tetap mengembalikan task semula. Tombol "Buat tugas" nonaktif
+  bila area belum punya kader terverifikasi.
+- **Tetap berlaku:** task lama yang terlanjur opsional tetap tercatat dan diabaikan oleh
+  aturan resolusi T19; UI hanya memberi label "Opsional" pada task tersebut.
+- **Alasan:** semua tugas memang harus tuntas agar laporan selesai, dan tenggat tanpa jam
+  lebih mudah dipilih serta dibaca kader.
+
+## T29 — AI mengisi formulir laporan secara langsung
+
+- **Status:** diputuskan product owner, 4 November 2026. Menggantikan panel "Saran AI"
+  terpisah dan tombol "Bantu dengan Gemini" pada M4.
+- **Keputusan:** memilih foto langsung mengunggah foto pertama secara privat dan meminta
+  analisis AI. Hasilnya mengisi kategori, yang tampak pada foto, deskripsi, dan saran
+  pencegahan, tetapi hanya pada kolom yang masih kosong atau masih berisi isian AI yang belum
+  diubah (misalnya setelah foto diganti). Keempat kolom wajib (kolom baru
+  `reports.visible_objects` 5–500 karakter dan `reports.prevention_advice` 10–500
+  karakter; laporan lama tetap `NULL`) dan dapat diedit; kolom yang diisi AI diberi
+  penanda sampai diubah. Batasan AI tidak lagi ditampilkan. Bila AI limit, gagal, atau
+  dibatalkan, warga mengisi sendiri; tombol "Analisis ulang" memakai unggahan yang sama.
+  Mengirim laporan saat analisis masih berjalan membatalkan analisis itu, sehingga AI yang
+  lambat tidak pernah menghalangi pelaporan manual. Halaman pengelola tidak lagi memiliki
+  panel saran; label "Diisi dengan bantuan AI" muncul bila minimal satu kolom teks masih
+  identik dengan hasil AI yang tertaut, ditambah "tidak diubah warga" bila keempat kolom
+  identik.
+- **Tetap berlaku:** validasi output, guard klaim, kuota, satu analisis tertaut per
+  laporan (T25), retensi, dan Gemini tidak pernah menerima lokasi atau data akun.
+- **Alasan:** alur lebih singkat bagi warga, sementara kontrol isi tetap di tangan warga
+  dan pengelola dapat melihat laporan yang dikirim apa adanya dari AI.
+
+## T30 — Batas 10 laporan per jam dihapus
+
+- **Status:** diputuskan product owner, 4 November 2026. Mengubah sebagian T13.
+- **Keputusan:** RPC `create_environmental_report` tidak lagi menolak laporan ke-11 dalam
+  satu jam, dan API tidak lagi memetakan `RATE_LIMIT` untuk pembuatan laporan.
+- **Tetap berlaku:** membership area terverifikasi, idempotency, serta verifikasi manusia
+  oleh pengelola. Kuota AI per akun kemudian dihapus oleh T32.
+- **Risiko yang diterima:** satu akun dapat mengirim lebih banyak laporan. Batas unggah
+  yang semula membatasinya secara tidak langsung juga dihapus (T31).
+
+## T31 — Batas 30 unggahan foto per jam dihapus
+
+- **Status:** diputuskan product owner, 4 November 2026. Menghapus sisa T13 dan T14.
+- **Keputusan:** migration `202611040004` menghapus trigger
+  `report_upload_quota_before_insert`, fungsi `private.enforce_report_upload_quota`, dan
+  tabel ledger `report_upload_attempts`. API unggah foto laporan dan bukti tugas tidak lagi
+  memetakan `RATE_LIMIT`.
+- **Tetap berlaku:** pemilik terautentikasi, validasi signature/decode/dimensi, normalisasi
+  WebP tanpa metadata, bucket privat, lease satu jam, dan cleanup lease tak terpakai. Kuota AI
+  per akun kemudian dihapus oleh T32.
+- **Risiko yang diterima:** tidak ada batas jumlah unggahan per akun, sehingga
+  penyalahgunaan storage oleh akun terverifikasi hanya dibatasi oleh ukuran file dan masa
+  lease. Sejak T29 setiap pemilihan foto langsung mengunggah, sehingga batas lama mudah
+  tercapai saat demo.
+
+## T32 — Tanpa kuota AI per akun
+
+- **Status:** diputuskan product owner, 4 November 2026. Menghapus batas 10/jam dan 30/hari
+  dari T16.
+- **Keputusan:** migration `202611040005` mengganti `reserve_ai_analysis` tanpa pemeriksaan
+  kuota per akun, sehingga akun demo dan akun asli berperilaku sama. Service tidak lagi
+  memetakan `P0429` dari RPC.
+- **Tetap berlaku:** satu analisis aktif per akun (409), membership area, kepemilikan dan
+  lease foto, validasi output, retry provider, purge analisis tak tertaut setelah 1 hari,
+  dan pemetaan batas dari Gemini sendiri (HTTP 429) ke pesan "Batas bantuan AI tercapai".
+- **Risiko yang diterima:** kuota Gemini berlaku per project (free tier: 15 RPM, 500 RPD
+  saat ini), sehingga satu akun dapat menghabiskan kuota untuk semua pengguna. Bila itu
+  terjadi, warga tetap dapat mengisi formulir secara manual.
+
+## T33 — Setiap kader pelaksana wajib mengirim bukti
+
+- **Status:** diputuskan product owner, 4 November 2026. Mengubah sebagian T27.
+- **Keputusan:** task dengan beberapa kader baru `completed` setelah **setiap** kader pelaksana
+  memiliki bukti `approved` pada putaran berjalan. Migration `202611040006`:
+  - `action_tasks.evidence_round` dan `task_evidence.evidence_round`; reopen menaikkan putaran
+    sehingga semua kader mengirim ulang.
+  - Satu bukti `pending` per kader (`idx_task_evidence_one_pending_per_cadre`); kader dengan
+    bukti `pending`/`approved` di putaran ini ditolak (`EVIDENCE_ALREADY_SUBMITTED`, 422) saat
+    memesan lease maupun mengirim bukti.
+  - `review_task_evidence(task, evidence, decision, reason, expectedVersion)` memeriksa satu bukti.
+    Status berikutnya: `completed` bila semua kader disetujui, `awaiting_review` bila masih ada
+    bukti pending, selain itu `in_progress`. Metadata event menyimpan `remaining`.
+  - `list_task_assignees` juga mengembalikan `profile_id` untuk dicocokkan server dengan bukti;
+    ID itu tidak dikirim ke browser.
+- **Tetap berlaku:** satu kader cukup untuk memulai task; revisi hanya untuk kader yang
+  bersangkutan; bukti yang sudah disetujui tidak berubah; AC-42 dan larangan self review.
+- **Risiko yang diterima:** kader yang kehilangan akses area menahan task terbuka; pengelola
+  dapat membatalkan task lalu membuat task baru. Task lama yang sudah `completed` tidak dihitung
+  ulang.

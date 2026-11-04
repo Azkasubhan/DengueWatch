@@ -20,11 +20,38 @@ test.describe("live environmental reports", () => {
   let reportAreaId = "";
 
   async function login(page: Page) {
+    // T29: photo selection starts AI analysis. This suite covers the manual path;
+    // AI autofill is covered by test:e2e:ai with the deterministic adapter.
+    await page.route("**/api/v1/ai/analyze-report", (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: {
+            code: "AI_UNAVAILABLE",
+            message: "Analisis AI tidak tersedia.",
+          },
+        }),
+      }),
+    );
     await page.goto("/login");
     await page.getByLabel("Email *", { exact: true }).fill(email);
     await page.getByLabel("Kata sandi *", { exact: true }).fill(password);
     await page.getByRole("button", { name: "Masuk" }).click();
     await expect(page).toHaveURL(/\/app\/beranda$/);
+  }
+
+  // Waits for the AI step to settle, then fills the T29 fields by hand.
+  async function fillObservations(page: Page) {
+    await expect(
+      page
+        .getByRole("alert")
+        .filter({ hasText: "Silakan isi kolom secara manual" }),
+    ).toBeVisible();
+    await page.locator("#visibleObjects").fill("Wadah terbuka berisi air");
+    await page
+      .locator("#preventionAdvice")
+      .fill("Tutup wadah dan kuras seminggu sekali.");
   }
 
   test.beforeAll(() => {
@@ -48,6 +75,7 @@ test.describe("live environmental reports", () => {
     await page.locator("#category").selectOption("water_container");
     const description = `Wadah air terlihat di area bersama. Uji laporan ${randomUUID()}.`;
     await page.locator("#description").fill(description);
+    await fillObservations(page);
     await page.getByRole("button", { name: "Tinjau laporan" }).click();
     await expect(
       page.getByRole("heading", { name: "Tinjau sebelum kirim" }),
@@ -106,6 +134,7 @@ test.describe("live environmental reports", () => {
     await page
       .locator("#description")
       .fill("Temuan lain pada area bersama yang perlu diperiksa.");
+    await fillObservations(page);
     await page.getByRole("button", { name: "Tinjau laporan" }).click();
     await page.getByRole("button", { name: "Konfirmasi dan kirim" }).click();
     await expect(
@@ -192,12 +221,14 @@ test.describe("live environmental reports", () => {
       .fill(
         `Dua foto lingkungan untuk uji pemulihan unggahan ${randomUUID()}.`,
       );
+    // The AI step already uploaded the first photo privately.
+    await fillObservations(page);
     await page.getByRole("button", { name: "Tinjau laporan" }).click();
     let uploads = 0;
     await page.route("**/api/v1/report-uploads", async (route) => {
       if (route.request().method() !== "POST") return route.continue();
       uploads += 1;
-      if (uploads === 2) {
+      if (uploads === 1) {
         await route.fulfill({
           status: 503,
           contentType: "application/json",
@@ -217,7 +248,7 @@ test.describe("live environmental reports", () => {
     await page.getByRole("button", { name: "Konfirmasi dan kirim" }).click();
     await expect(page).toHaveURL(/\/app\/laporan\/[0-9a-f-]{36}$/);
     await expect(page.getByAltText("Foto laporan 2")).toBeVisible();
-    expect(uploads).toBe(3);
+    expect(uploads).toBe(2);
   });
 
   test("owner can remove an unconsumed upload without leaving an object", async ({
@@ -330,6 +361,8 @@ test.describe("live environmental reports", () => {
       areaId: randomUUID(),
       category: "other",
       description: "Temuan di area bersama perlu pemeriksaan lebih lanjut.",
+      visibleObjects: "Wadah terbuka berisi air",
+      preventionAdvice: "Tutup wadah dan kuras seminggu sekali.",
       imageUploadIds: [randomUUID()],
       location: null,
     };
@@ -394,6 +427,8 @@ test.describe("live environmental reports", () => {
       areaId: reportAreaId,
       category: "water_container",
       description: `Foto simulasi untuk uji idempotensi ${randomUUID()}.`,
+      visibleObjects: "Wadah terbuka berisi air",
+      preventionAdvice: "Tutup wadah dan kuras seminggu sekali.",
       imageUploadIds: [uploadId],
       location: null,
     };

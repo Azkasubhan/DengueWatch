@@ -19,7 +19,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusBadge, reportStatusTone } from "@/components/ui/StatusBadge";
 import { PageHeader } from "@/components/ui/PageHeader";
 
-// Aging signal for reports still waiting on a cadre decision (PRD 13.10); reports that
+// Aging signal for reports still waiting on a manager decision (PRD 13.10); reports that
 // need information are waiting on the resident instead.
 function waitingDays(report: { status: string; submittedAt: string }) {
   if (report.status !== "pending_verification") return 0;
@@ -49,16 +49,16 @@ export default async function VerificationQueuePage({
 }) {
   const access = await getAccessContext();
   if (access.kind === "unauthenticated")
-    redirect("/login?next=/kader/verifikasi");
+    redirect("/login?next=/pengelola/verifikasi");
   if (access.kind !== "authenticated") return <ServiceUnavailable />;
-  const decision = decidePortalAccess(access.context, "cadre");
+  const decision = decidePortalAccess(access.context, "manager");
   if (decision.kind === "forbidden") redirect("/forbidden");
-  const areas = getVerifiedAreas(access.context, "assigned_cadre");
+  const areas = getVerifiedAreas(access.context, "manager");
   const shell = (children: React.ReactNode) => (
     <AppShell
       area={areas[0]}
       displayName={access.context.displayName}
-      role="cadre"
+      role="manager"
     >
       {children}
     </AppShell>
@@ -98,7 +98,7 @@ export default async function VerificationQueuePage({
       status: selectedStatus,
       page: String(target),
     });
-    return `/kader/verifikasi?${search.toString()}`;
+    return `/pengelola/verifikasi?${search.toString()}`;
   };
   const areaName = (id: string) =>
     areas.find((area) => area.id === id)?.name ?? "Wilayah tugas";
@@ -110,7 +110,7 @@ export default async function VerificationQueuePage({
         description="Laporan dari wilayah tugas Anda. Periksa foto dan keterangan sebelum memutuskan."
       />
       <form
-        action="/kader/verifikasi"
+        action="/pengelola/verifikasi"
         method="get"
         aria-label="Filter antrean"
         className="mb-6 grid gap-4 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 sm:grid-cols-2 lg:grid-cols-5 lg:items-end"
@@ -199,7 +199,7 @@ export default async function VerificationQueuePage({
         <div className="flex flex-wrap gap-3 sm:col-span-2 lg:col-span-5">
           <Button type="submit">Terapkan filter</Button>
           <Link
-            href="/kader/verifikasi"
+            href="/pengelola/verifikasi"
             className="inline-flex min-h-11 items-center px-2 text-sm font-semibold text-[var(--primary)] underline underline-offset-2"
           >
             Atur ulang
@@ -258,7 +258,7 @@ export default async function VerificationQueuePage({
             {result.data.map((report) => (
               <li key={report.id}>
                 <Link
-                  href={`/kader/verifikasi/${report.id}`}
+                  href={`/pengelola/verifikasi/${report.id}`}
                   className="block rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-5 hover:border-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
                 >
                   <div className="flex flex-wrap justify-between gap-2">

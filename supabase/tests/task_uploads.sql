@@ -38,12 +38,15 @@ insert into public.reports (id,public_reference,reporter_id,area_id,category,des
 create temp table upload_ids (name text primary key, id uuid, path text);
 grant all on upload_ids to authenticated;
 
-select set_config('request.jwt.claims','{"sub":"65000000-0000-4000-8000-000000000002","role":"authenticated"}',true);
+select set_config('request.jwt.claims','{"sub":"65000000-0000-4000-8000-000000000005","role":"authenticated"}',true);
 set local role authenticated;
 insert into upload_ids select 'task-a', task_id, null from public.create_action_task('67000000-0000-4000-8000-000000000001',
-  'Kuras wadah pos','Kuras dan tutup wadah air di pos warga.','65000000-0000-4000-8000-000000000002', null, true, 'm6u-task-a');
+  'Kuras wadah pos','Kuras dan tutup wadah air di pos warga.',array['65000000-0000-4000-8000-000000000002'::uuid], current_date + 3, 'm6u-task-a');
 insert into upload_ids select 'task-b', task_id, null from public.create_action_task('67000000-0000-4000-8000-000000000001',
-  'Tutup wadah pos','Tutup wadah cadangan air di pos warga.','65000000-0000-4000-8000-000000000002', null, true, 'm6u-task-b');
+  'Tutup wadah pos','Tutup wadah cadangan air di pos warga.',array['65000000-0000-4000-8000-000000000002'::uuid], current_date + 3, 'm6u-task-b');
+reset role;
+select set_config('request.jwt.claims','{"sub":"65000000-0000-4000-8000-000000000002","role":"authenticated"}',true);
+set local role authenticated;
 select throws_ok($$ select * from public.reserve_task_evidence_upload((select id from upload_ids where name='task-a'),128,16,16) $$,
   'P0422','invalid task transition','assigned task cannot receive evidence uploads yet');
 select lives_ok($$ select * from public.start_action_task((select id from upload_ids where name='task-a'),1) $$,'task a started');
@@ -71,7 +74,7 @@ insert into storage.objects (bucket_id,name,owner_id) values
 select set_config('request.jwt.claims','{"sub":"65000000-0000-4000-8000-000000000003","role":"authenticated"}',true);
 set local role authenticated;
 select throws_ok($$ select * from public.reserve_task_evidence_upload((select id from upload_ids where name='task-a'),128,16,16) $$,
-  'P0403','task not assigned to user','non-assignee cannot reserve evidence upload');
+  'P0404','task not found','non-assignee cadre cannot see or reserve the task');
 reset role;
 select set_config('request.jwt.claims','{"sub":"65000000-0000-4000-8000-000000000004","role":"authenticated"}',true);
 set local role authenticated;

@@ -9,14 +9,17 @@ import {
   reasonError,
   type ReportActionResult,
 } from "@/features/reports/components/reportAction";
+import type { EvidenceStatus } from "@/features/tasks/data";
 import type { TaskStatus } from "@/features/tasks/validation";
 
 type Props = {
+  role: "cadre" | "manager";
   taskId: string;
   status: TaskStatus;
   version: number;
-  assignedToMe: boolean;
-  pendingSubmittedByMe: boolean | null;
+  /** The signed-in cadre's progress in the current round; null when not an assignee. */
+  myEvidenceStatus: EvidenceStatus | null;
+  pendingEvidence: { id: string; submitterName: string }[];
 };
 
 const openStatuses: TaskStatus[] = [
@@ -26,9 +29,12 @@ const openStatuses: TaskStatus[] = [
   "reopened",
 ];
 
+// T27/T33: assigned cadres start tasks and each submits their own evidence; managers
+// review each submission and cancel or reopen tasks. Every rule is re-checked by the RPCs.
 export function TaskActions({
-  assignedToMe,
-  pendingSubmittedByMe,
+  role,
+  myEvidenceStatus,
+  pendingEvidence,
   status,
   taskId,
   version,
@@ -48,18 +54,25 @@ export function TaskActions({
     "approve",
   );
   const [reviewReason, setReviewReason] = useState("");
+  const [evidenceId, setEvidenceId] = useState<string | null>(null);
+  const reviewed =
+    pendingEvidence.find((item) => item.id === evidenceId) ??
+    pendingEvidence[0];
   const [closing, setClosing] = useState<"cancel" | "reopen" | null>(null);
   const [closeReason, setCloseReason] = useState("");
 
   const base = `/api/v1/tasks/${taskId}`;
 
-  function settle(result: ReportActionResult, success: string) {
+  type Success = string | ((data: { status?: string } | undefined) => string);
+
+  function settle(result: ReportActionResult, success: Success) {
     if (result.kind === "ok") {
-      setNotice(success);
+      setNotice(typeof success === "string" ? success : success(result.data));
       setErrors({});
       setDescription("");
       setFile(null);
       setReviewReason("");
+      setEvidenceId(null);
       setCloseReason("");
       setClosing(null);
       uploadRef.current = null;
@@ -80,7 +93,7 @@ export function TaskActions({
   async function run(
     key: string,
     action: () => Promise<ReportActionResult>,
-    success: string,
+    success: Success,
   ) {
     setFailure(null);
     setNotice(null);
@@ -140,7 +153,7 @@ export function TaskActions({
           expectedVersion: version,
         });
       },
-      "Bukti terkirim dan menunggu pemeriksaan kader lain.",
+      "Bukti terkirim dan menunggu pemeriksaan pengelola.",
     );
   }
 
@@ -151,21 +164,26 @@ export function TaskActions({
         ? reasonError(reviewReason)
         : null;
     setErrors(invalid ? { reason: invalid } : {});
-    if (invalid) {
+    if (invalid || !reviewed) {
       document.getElementById("review-reason")?.focus();
       return;
     }
+    const name = reviewed.submitterName;
     await run(
       "review",
       () =>
         postReportAction(`${base}/review`, {
+          evidenceId: reviewed.id,
           decision,
           expectedVersion: version,
           ...(reviewReason.trim() ? { reason: reviewReason.trim() } : {}),
         }),
-      decision === "approve"
-        ? "Bukti disetujui. Tugas selesai."
-        : "Permintaan perbaikan bukti terkirim.",
+      (data) =>
+        decision === "request_revision"
+          ? `Permintaan perbaikan terkirim ke ${name}.`
+          : data?.status === "completed"
+            ? "Bukti disetujui. Bukti semua kader lengkap, tugas selesai."
+            : `Bukti ${name} disetujui. Tugas selesai setelah bukti semua kader disetujui.`,
     );
   }
 
@@ -201,16 +219,38 @@ export function TaskActions({
     [help, errors[id] ? `${id}-error` : null].filter(Boolean).join(" ") ||
     undefined;
 
-  const canStart =
-    assignedToMe && (status === "assigned" || status === "reopened");
-  const canSubmit = assignedToMe && status === "in_progress";
-  const canReview =
-    status === "awaiting_review" && pendingSubmittedByMe === false;
-  const othersTask =
-    !assignedToMe &&
-    (status === "assigned" ||
-      status === "reopened" ||
-      status === "in_progress");
+  const cadre = role === "cadre";
+  const canStart = cadre && (status === "assigned" || status === "reopened");
+  const working = status === "in_progress" || status === "awaiting_review";
+  // T33: each cadre submits once per round, again only after a revision request.
+  const canSubmit =
+    cadre &&
+    working &&
+    (myEvidenceStatus === "missing" ||
+      myEvidenceStatus === "revision_required");
+  const canReview = !cadre && status === "awaiting_review" && Boolean(reviewed);
+  const canClose =
+    !cadre && (openStatuses.includes(status) || status === "completed");
+  // Explains whose turn it is when this role has nothing to do right now.
+  const waitingNote = cadre
+    ? working
+      ? {
+          pending: "Bukti Anda menunggu pemeriksaan pengelola.",
+          approved:
+            "Bukti Anda sudah disetujui. Tugas selesai setelah bukti semua kader disetujui.",
+        }[myEvidenceStatus as string]
+      : {
+          completed:
+            "Tugas selesai. Bukti semua kader telah disetujui pengelola.",
+          cancelled: "Tugas dibatalkan pengelola.",
+        }[status as string]
+    : {
+        assigned: "Menunggu kader memulai tugas.",
+        reopened: "Tugas dibuka kembali dan menunggu kader memulainya lagi.",
+        in_progress:
+          "Menunggu kader mengirim bukti. Setiap kader pelaksana wajib mengirim buktinya sendiri.",
+        cancelled: "Tugas dibatalkan.",
+      }[status as string];
 
   return (
     <section
@@ -336,18 +376,9 @@ export function TaskActions({
         </form>
       ) : null}
 
-      {othersTask ? (
+      {waitingNote ? (
         <p className="rounded-[var(--radius-control)] bg-[var(--primary-subtle)] p-4">
-          {status === "in_progress"
-            ? "Tugas sedang dikerjakan kader lain. Anda dapat memeriksa buktinya setelah dikirim."
-            : "Tugas ini ditugaskan kepada kader lain dan belum mulai dikerjakan."}
-        </p>
-      ) : null}
-
-      {status === "awaiting_review" && pendingSubmittedByMe ? (
-        <p className="rounded-[var(--radius-control)] bg-[var(--primary-subtle)] p-4">
-          Bukti Anda menunggu pemeriksaan kader lain. Pengirim bukti tidak dapat
-          menyetujui buktinya sendiri.
+          {waitingNote}
         </p>
       ) : null}
 
@@ -357,15 +388,46 @@ export function TaskActions({
           onSubmit={submitReview}
           className="grid gap-4 rounded-[var(--radius-control)] bg-[var(--background)] p-3 sm:p-4 [&>*]:min-w-0"
         >
+          {pendingEvidence.length > 1 ? (
+            <fieldset className="grid gap-3">
+              <legend className="mb-2 font-semibold">
+                Bukti yang diperiksa
+              </legend>
+              {pendingEvidence.map((item) => (
+                <label
+                  key={item.id}
+                  className="flex min-h-11 cursor-pointer items-center gap-3 rounded-[var(--radius-control)] border border-[var(--border)] px-4 py-2 has-[:checked]:border-[var(--primary)] has-[:checked]:bg-[var(--primary-subtle)] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--primary)]"
+                >
+                  <input
+                    type="radio"
+                    name="evidence-target"
+                    value={item.id}
+                    checked={reviewed?.id === item.id}
+                    onChange={() => setEvidenceId(item.id)}
+                    className="size-4 accent-[var(--primary)]"
+                  />
+                  <span className="min-w-0 break-words">
+                    {item.submitterName}
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+          ) : null}
           <fieldset className="grid gap-3">
-            <legend className="mb-2 font-semibold">Pemeriksaan bukti</legend>
+            <legend className="mb-2 font-semibold">
+              Pemeriksaan bukti {reviewed?.submitterName}
+            </legend>
             {(
               [
-                ["approve", "Setujui bukti", "Tugas dinyatakan selesai."],
+                [
+                  "approve",
+                  "Setujui bukti",
+                  "Tugas selesai setelah bukti semua kader disetujui.",
+                ],
                 [
                   "request_revision",
                   "Minta perbaikan",
-                  "Tugas kembali dikerjakan.",
+                  "Kader ini mengirim ulang buktinya.",
                 ],
               ] as const
             ).map(([value, label, hint]) => (
@@ -426,7 +488,7 @@ export function TaskActions({
         </form>
       ) : null}
 
-      {openStatuses.includes(status) || status === "completed" ? (
+      {canClose ? (
         <div className="grid gap-3 border-t border-[var(--border)] pt-5">
           {closing ? (
             <form noValidate onSubmit={submitClosing} className="grid gap-3">

@@ -34,8 +34,8 @@ export default async function CadreTasksPage({
       ) : (
         <>
           <PageHeader
-            title="Tugas"
-            description="Tindak lanjut dari laporan terverifikasi. Tugas selesai setelah bukti diperiksa kader lain."
+            title="Tugas saya"
+            description="Tugas dari pengelola wilayah. Kerjakan, kirim foto bukti, lalu pengelola memeriksanya."
           />
           <TaskListPage
             areas={areas}

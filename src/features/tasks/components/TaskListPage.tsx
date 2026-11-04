@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/Button";
 import type { AreaSummary } from "@/features/areas/types";
 import { formatJakarta } from "@/features/reports/components/ReportDetailView";
 import { controlClass } from "@/features/reports/components/reportAction";
-import { listTasks } from "@/features/tasks/data";
+import { listTaskAssignees, listTasks } from "@/features/tasks/data";
 import {
   taskListQuerySchema,
   taskStatusLabels,
@@ -19,19 +19,22 @@ export type TaskListParams = Partial<
   Record<"status" | "areaId" | "assignee" | "page", string>
 >;
 
-// Shared server view: cadres get links to act, managers get a read-only list.
+// Shared server view. Cadres only ever see tasks assigned to them (RLS); managers see
+// every task in their areas with the assigned cadres' names (T27).
 export async function TaskListPage({
   areas,
   basePath,
   params,
   userId,
   detailBase,
+  showAssignees = false,
 }: {
   areas: AreaSummary[];
   basePath: string;
   params: TaskListParams;
   userId: string;
-  detailBase: string | null;
+  detailBase: string;
+  showAssignees?: boolean;
 }) {
   const values: Record<string, string> = {};
   for (const key of ["status", "areaId", "assignee", "page"] as const) {
@@ -59,6 +62,10 @@ export async function TaskListPage({
           },
           userId,
         )
+      : null;
+  const assignees =
+    showAssignees && result?.data
+      ? await listTaskAssignees(result.data.map((task) => task.id))
       : null;
   const page = parsed.success ? parsed.data.page : 1;
   const total = result?.count ?? 0;
@@ -114,22 +121,6 @@ export async function TaskListPage({
             </select>
           </div>
         ) : null}
-        {detailBase ? (
-          <div className="grid gap-2">
-            <label htmlFor="assignee" className="text-sm font-semibold">
-              Penanggung jawab
-            </label>
-            <select
-              id="assignee"
-              name="assignee"
-              defaultValue={values.assignee ?? ""}
-              className={controlClass}
-            >
-              <option value="">Semua kader</option>
-              <option value="me">Tugas saya</option>
-            </select>
-          </div>
-        ) : null}
         <div className="flex flex-wrap gap-3 sm:col-span-2 lg:col-span-4">
           <Button type="submit">Terapkan filter</Button>
           <Link
@@ -170,7 +161,7 @@ export async function TaskListPage({
         <EmptyState
           icon={ListChecks}
           title="Tidak ada tugas yang sesuai filter."
-          description="Tugas dibuat dari laporan yang sudah diverifikasi kader."
+          description="Tugas dibuat pengelola dari laporan yang sudah diverifikasi."
         />
       ) : (
         <>
@@ -198,11 +189,13 @@ export async function TaskListPage({
                   </p>
                   <p className="mt-3 text-sm text-[var(--muted-foreground)]">
                     {task.reportReference ?? "Laporan"}
-                    {task.isMandatory ? " · Wajib" : " · Opsional"}
+                    {task.isMandatory ? "" : " · Opsional"}
                     {task.dueAt
                       ? ` · Tenggat ${formatJakarta(task.dueAt, false)}`
                       : ""}
-                    {task.assignedToMe ? " · Tugas saya" : ""}
+                    {assignees?.data.get(task.id)
+                      ? ` · ${assignees.data.get(task.id)!.join(", ")}`
+                      : ""}
                     {areas.length > 1 ? ` · ${areaName(task.areaId)}` : ""}
                     {areas.find((area) => area.id === task.areaId)?.isDemo
                       ? " · Data simulasi"
@@ -214,16 +207,12 @@ export async function TaskListPage({
                 "block rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-5";
               return (
                 <li key={task.id}>
-                  {detailBase ? (
-                    <Link
-                      href={`${detailBase}/${task.id}`}
-                      className={`${card} hover:border-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]`}
-                    >
-                      {body}
-                    </Link>
-                  ) : (
-                    <div className={card}>{body}</div>
-                  )}
+                  <Link
+                    href={`${detailBase}/${task.id}`}
+                    className={`${card} hover:border-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]`}
+                  >
+                    {body}
+                  </Link>
                 </li>
               );
             })}

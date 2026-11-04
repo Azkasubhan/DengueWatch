@@ -75,7 +75,7 @@ const updatedRow = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  signIn(context("cadre", "assigned_cadre"));
+  signIn(context("manager", "manager"));
   mocks.rpc.mockResolvedValue({ data: [updatedRow], error: null });
 });
 
@@ -92,8 +92,8 @@ describe("POST /api/v1/reports/:id/review authorization", () => {
   it.each([
     ["unauthenticated", null, 401],
     ["resident", context("resident", "resident"), 403],
-    ["manager", context("manager", "manager"), 403],
-    ["unverified cadre", context("cadre", "assigned_cadre", false), 403],
+    ["cadre", context("cadre", "assigned_cadre"), 403],
+    ["unverified manager", context("manager", "manager", false), 403],
   ] as const)("denies %s", async (_label, actor, status) => {
     signIn(actor);
     const response = await review(
@@ -291,8 +291,8 @@ describe("POST /api/v1/reports/:id/add-information", () => {
 describe("GET /api/v1/reports/:id/ai-suggestions", () => {
   const request = () => new Request("http://localhost/");
 
-  it("denies managers", async () => {
-    signIn(context("manager", "manager"));
+  it("denies cadres", async () => {
+    signIn(context("cadre", "assigned_cadre"));
     expect((await aiSuggestions(request(), params())).status).toBe(403);
     expect(mocks.getReportAiSuggestions).not.toHaveBeenCalled();
   });

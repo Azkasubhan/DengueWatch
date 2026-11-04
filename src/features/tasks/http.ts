@@ -5,6 +5,7 @@ import { createClient } from "@/integrations/supabase/server";
 import { decidePortalAccess } from "@/features/areas/access";
 import {
   cadreContext,
+  managerContext,
   readJsonBody,
   reportError,
   reportJson,
@@ -60,13 +61,7 @@ export function taskRpcError(error: { code?: string; message?: string }) {
         return reportError(
           403,
           "SELF_REVIEW_FORBIDDEN",
-          "Bukti harus diperiksa kader lain, bukan pengirimnya.",
-        );
-      if (message === "task not assigned to user")
-        return reportError(
-          403,
-          "NOT_ASSIGNEE",
-          "Hanya kader yang ditugaskan dapat melakukan tindakan ini.",
+          "Pengirim bukti tidak dapat memeriksa buktinya sendiri.",
         );
       return reportError(
         403,
@@ -110,7 +105,25 @@ export function taskRpcError(error: { code?: string; message?: string }) {
           422,
           "VALIDATION_ERROR",
           "Petugas tidak valid untuk wilayah ini.",
-          { assignedTo: "Pilih kader terverifikasi di wilayah laporan." },
+          { assignees: "Pilih kader terverifikasi di wilayah laporan." },
+        );
+      if (message === "invalid task assignment")
+        return reportError(
+          422,
+          "VALIDATION_ERROR",
+          "Pilih minimal satu kader.",
+          { assignees: "Pilih kader yang berbeda." },
+        );
+      if (message === "invalid due date")
+        return reportError(422, "VALIDATION_ERROR", "Tenggat tidak valid.", {
+          dueDate:
+            "Pilih hari ini atau tanggal setelahnya, paling lambat satu tahun.",
+        });
+      if (message === "evidence already submitted")
+        return reportError(
+          422,
+          "EVIDENCE_ALREADY_SUBMITTED",
+          "Bukti Anda untuk tugas ini sudah terkirim.",
         );
       if (message === "evidence unavailable")
         return reportError(
@@ -122,12 +135,6 @@ export function taskRpcError(error: { code?: string; message?: string }) {
         422,
         "VALIDATION_ERROR",
         "Periksa kembali data yang diisi.",
-      );
-    case "P0429":
-      return reportError(
-        429,
-        "RATE_LIMIT",
-        "Batas unggahan sementara tercapai. Coba lagi nanti.",
       );
     case "23514":
       return reportError(422, "INVALID_IMAGE", "Foto tidak dapat diproses.");
@@ -169,16 +176,18 @@ export function taskMutationJson(
 }
 
 // Shared POST flow for versioned task actions; the RPC re-checks every rule.
+// Assignees (cadre) start tasks and submit evidence; managers review, cancel, and reopen.
 export async function runTaskAction<T>(
   request: Request,
   params: Promise<{ id: string }>,
   schema: ZodType<T>,
   rpc: string,
   args: (id: string, input: T) => Record<string, unknown>,
+  actor: "cadre" | "manager",
 ) {
   if (!sameOrigin(request))
     return reportError(403, "FORBIDDEN", "Asal permintaan tidak valid.");
-  const auth = await cadreContext();
+  const auth = await (actor === "manager" ? managerContext() : cadreContext());
   if (auth.error) return auth.error;
   const { id } = await params;
   const invalidId = parseTaskId(id);

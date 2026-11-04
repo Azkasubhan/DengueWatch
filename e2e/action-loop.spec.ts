@@ -14,7 +14,14 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 type ActorKey = "resident" | "cadreA1" | "cadreA2" | "cadreB" | "manager";
 type Actor = { email: string; id: string; page: Page; context: BrowserContext };
 
-test.describe("live verified ActionLoop (M6)", () => {
+// T28: due dates are WIB calendar days.
+const jakartaDay = (offsetDays: number) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(
+    Date.now() + offsetDays * 86_400_000,
+  );
+const dueDate = jakartaDay(3);
+
+test.describe("live verified ActionLoop (M6, T27 manager-led)", () => {
   test.skip(
     process.env.RUN_LIVE_M6 !== "true",
     "Run the dedicated local M6 E2E script.",
@@ -84,6 +91,8 @@ test.describe("live verified ActionLoop (M6)", () => {
         areaId: areaA,
         category: "water_container",
         description,
+        visibleObjects: "Wadah terbuka berisi air",
+        preventionAdvice: "Tutup wadah dan kuras seminggu sekali.",
         imageUploadIds: [(await upload.json()).id],
         location: null,
       },
@@ -92,7 +101,7 @@ test.describe("live verified ActionLoop (M6)", () => {
     expect(created.status()).toBe(201);
     const id = (await created.json()).data.id as string;
     const verified = await post(
-      actors.cadreA1.page,
+      actors.manager.page,
       `/api/v1/reports/${id}/review`,
       {
         decision: "verify",
@@ -103,14 +112,16 @@ test.describe("live verified ActionLoop (M6)", () => {
     return id;
   }
 
-  async function createTask(key: ActorKey, reportId: string, title: string) {
+  // T27: the manager creates tasks and assigns one or more cadres.
+  async function createTask(keys: ActorKey[], reportId: string, title: string) {
     const response = await post(
-      actors[key].page,
+      actors.manager.page,
       `/api/v1/reports/${reportId}/tasks`,
       {
         title,
         description: `Tindak lanjut simulasi ${run} untuk ${title}.`,
-        assignedTo: actors[key].id,
+        assignees: keys.map((key) => actors[key].id),
+        dueDate,
       },
       { "Idempotency-Key": randomUUID() },
     );
@@ -135,6 +146,19 @@ test.describe("live verified ActionLoop (M6)", () => {
       expectedVersion: 2,
     });
     expect(submitted.status()).toBe(200);
+  }
+
+  // T33: managers review one cadre's pending evidence at a time.
+  async function pendingEvidence(taskId: string, key?: ActorKey) {
+    let query = admin
+      .from("task_evidence")
+      .select("id")
+      .eq("task_id", taskId)
+      .eq("review_status", "pending");
+    if (key) query = query.eq("submitted_by", actors[key].id);
+    const result = await query.single();
+    expect(result.error).toBeNull();
+    return result.data!.id as string;
   }
 
   async function task(id: string) {
@@ -255,35 +279,70 @@ test.describe("live verified ActionLoop (M6)", () => {
     );
   });
 
-  test("first task from the form moves report to in_action; idempotent second task", async ({}, testInfo) => {
+  test("manager assigns a cadre from the form; idempotent second task", async ({}, testInfo) => {
     ids.main = await createReport(`Wadah terbuka di balai simulasi ${run}.`);
-    const page = actors.cadreA1.page;
-    await page.goto(`/kader/verifikasi/${ids.main}`);
+    const page = actors.manager.page;
+    await page.goto(`/pengelola/verifikasi/${ids.main}`);
     await expect(
       page.getByRole("heading", { name: "Tugas tindak lanjut", exact: true }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Buat tugas" }).click();
     await expect(page.locator("#task-title")).toBeFocused();
     await expect(page.getByText("Judul 5–140 karakter.")).toBeVisible();
+    await expect(page.getByText("Pilih minimal satu kader.")).toBeVisible();
+    await expect(page.getByText("Pilih tanggal tenggat.")).toBeVisible();
     await page.locator("#task-title").fill("Kuras wadah balai");
     await page
       .locator("#task-description")
       .fill("Kuras dan tutup wadah air di balai warga.");
+    // Only verified cadres of the report area are offered.
+    const firstPicker = page.locator("#task-assignee-0");
+    await expect(
+      firstPicker.locator("option", { hasText: `M6 cadreB ${run}` }),
+    ).toHaveCount(0);
+    await firstPicker.selectOption({ label: `M6 cadreA1 ${run}` });
+    // "Tambah kader" adds a picker without the cadres already chosen; rows can be removed.
+    await page.getByRole("button", { name: "Tambah kader" }).click();
+    const secondPicker = page.locator("#task-assignee-1");
+    await expect(secondPicker).toBeFocused();
+    await expect(
+      secondPicker.locator("option", { hasText: `M6 cadreA1 ${run}` }),
+    ).toHaveCount(0);
     await page.getByRole("button", { name: "Buat tugas" }).click();
     await expect(
-      page.getByText("Tugas dibuat dan ditugaskan kepada Anda."),
+      page.getByText(
+        "Pilih kader pada setiap baris atau hapus baris yang kosong.",
+      ),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Hapus baris kader 2" }).click();
+    await expect(secondPicker).toHaveCount(0);
+    const tomorrow = jakartaDay(1);
+    await page.getByRole("button", { name: "Besok" }).click();
+    await expect(page.getByRole("button", { name: "Besok" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(page.locator("#task-dueDate")).toHaveValue(tomorrow);
+    await expect(page.getByText(/· besok$/)).toBeVisible();
+    await page.getByRole("button", { name: "Buat tugas" }).click();
+    await expect(
+      page.getByText("Tugas dibuat dan dikirim ke kader yang dipilih."),
     ).toBeVisible();
     await expect(
       page.getByRole("link", { name: /Kuras wadah balai/ }),
-    ).toBeVisible();
+    ).toContainText(`M6 cadreA1 ${run}`);
     await expect(
       page.getByText("Dalam Penanganan", { exact: true }).first(),
     ).toBeVisible();
     const rows = await admin
       .from("action_tasks")
-      .select("id")
+      .select("id,due_at,is_mandatory")
       .eq("report_id", ids.main);
     ids.task1 = rows.data![0]!.id;
+    expect(rows.data![0]!.is_mandatory).toBe(true);
+    expect(new Date(rows.data![0]!.due_at!).toISOString()).toBe(
+      new Date(`${tomorrow}T23:59:59+07:00`).toISOString(),
+    );
     expect(await report(ids.main)).toMatchObject({
       status: "in_action",
       version: 3,
@@ -301,28 +360,47 @@ test.describe("live verified ActionLoop (M6)", () => {
       });
     }
 
-    // Second task while in_action, created by cadre A2 for themselves.
+    // Second task while in_action, assigned by the manager to cadre A2.
     const key = { "Idempotency-Key": `m6-e2e-${run}-task2` };
     const body = {
       title: "Bersihkan talang balai",
       description: "Bersihkan talang yang menampung air di balai.",
-      assignedTo: actors.cadreA2.id,
+      assignees: [actors.cadreA2.id],
+      dueDate,
     };
     const [first, retry] = await Promise.all([
-      post(actors.cadreA2.page, `/api/v1/reports/${ids.main}/tasks`, body, key),
-      post(actors.cadreA2.page, `/api/v1/reports/${ids.main}/tasks`, body, key),
+      post(actors.manager.page, `/api/v1/reports/${ids.main}/tasks`, body, key),
+      post(actors.manager.page, `/api/v1/reports/${ids.main}/tasks`, body, key),
     ]);
     expect([first.status(), retry.status()]).toEqual([201, 201]);
     ids.task2 = (await first.json()).data.id;
     expect((await retry.json()).data.id).toBe(ids.task2);
     const conflict = await post(
-      actors.cadreA2.page,
+      actors.manager.page,
       `/api/v1/reports/${ids.main}/tasks`,
       { ...body, title: "Judul lain dengan kunci sama" },
       key,
     );
     expect(conflict.status()).toBe(409);
     expect(await errorCode(conflict)).toBe("IDEMPOTENCY_CONFLICT");
+    const crossArea = await post(
+      actors.manager.page,
+      `/api/v1/reports/${ids.main}/tasks`,
+      {
+        ...body,
+        title: "Tugas kader wilayah lain",
+        assignees: [actors.cadreB.id],
+      },
+      { "Idempotency-Key": randomUUID() },
+    );
+    expect(crossArea.status()).toBe(422);
+    const byCadre = await post(
+      actors.cadreA2.page,
+      `/api/v1/reports/${ids.main}/tasks`,
+      { ...body, title: "Tugas buatan kader" },
+      { "Idempotency-Key": randomUUID() },
+    );
+    expect(byCadre.status()).toBe(403);
     const count = await admin
       .from("action_tasks")
       .select("id", { count: "exact", head: true })
@@ -334,13 +412,16 @@ test.describe("live verified ActionLoop (M6)", () => {
     });
   });
 
-  test("assignee starts, uploads private WebP evidence, and cannot self-approve", async ({}, testInfo) => {
+  test("assignee sees only their task with the report, uploads private WebP evidence, and cannot review", async ({}, testInfo) => {
     const page = actors.cadreA1.page;
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/kader/tugas");
     await expect(
-      page.getByRole("heading", { name: "Tugas", exact: true }),
+      page.getByRole("heading", { name: "Tugas saya", exact: true }),
     ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /Bersihkan talang balai/ }),
+    ).toHaveCount(0);
     await expectAccessible(page);
     for (const width of [320, 390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
@@ -352,6 +433,8 @@ test.describe("live verified ActionLoop (M6)", () => {
     }
     await page.getByRole("link", { name: /Kuras wadah balai/ }).click();
     await expect(page).toHaveURL(new RegExp(`/kader/tugas/${ids.task1}$`));
+    // The assigned cadre reads the report photo through the task (T27).
+    await expect(page.getByAltText("Foto laporan 1")).toBeVisible();
     await page.getByRole("button", { name: "Mulai kerjakan" }).click();
     await expect(
       page.getByText("Sedang Dikerjakan", { exact: true }),
@@ -368,7 +451,7 @@ test.describe("live verified ActionLoop (M6)", () => {
     ).toBeVisible();
     await expect(page.getByAltText("Foto bukti 1")).toBeVisible();
     await expect(
-      page.getByText("Bukti Anda menunggu pemeriksaan kader lain."),
+      page.getByText("Bukti Anda menunggu pemeriksaan pengelola."),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Simpan pemeriksaan" }),
@@ -413,12 +496,19 @@ test.describe("live verified ActionLoop (M6)", () => {
       expectedVersion: 3,
     });
     expect(self.status()).toBe(403);
-    expect(await errorCode(self)).toBe("SELF_REVIEW_FORBIDDEN");
+    expect(await errorCode(self)).toBe("FORBIDDEN");
+    const other = actors.cadreA2.page;
+    expect(
+      (await other.request.get(`/api/v1/tasks/${ids.task1}`)).status(),
+    ).toBe(404);
+    expect(
+      (await other.request.get(`/api/v1/reports/${ids.main}`)).status(),
+    ).toBe(200);
   });
 
-  test("different cadre requests revision, assignee resubmits, then approval", async () => {
-    const reviewer = actors.cadreA2.page;
-    await reviewer.goto(`/kader/tugas/${ids.task1}`);
+  test("manager requests revision, assignee resubmits, then approval", async () => {
+    const reviewer = actors.manager.page;
+    await reviewer.goto(`/pengelola/tugas/${ids.task1}`);
     await reviewer.getByRole("radio", { name: /Minta perbaikan/ }).check();
     await reviewer.getByRole("button", { name: "Simpan pemeriksaan" }).click();
     await expect(reviewer.locator("#review-reason")).toBeFocused();
@@ -448,11 +538,13 @@ test.describe("live verified ActionLoop (M6)", () => {
       assignee.getByText("Menunggu Pemeriksaan Bukti", { exact: true }),
     ).toBeVisible();
 
-    await reviewer.goto(`/kader/tugas/${ids.task1}`);
+    await reviewer.goto(`/pengelola/tugas/${ids.task1}`);
     await reviewer.getByRole("radio", { name: /Setujui bukti/ }).check();
     await reviewer.getByRole("button", { name: "Simpan pemeriksaan" }).click();
     await expect(
-      reviewer.getByText("Bukti disetujui. Tugas selesai."),
+      reviewer.getByText(
+        "Bukti disetujui. Bukti semua kader lengkap, tugas selesai.",
+      ),
     ).toBeVisible();
     expect(await task(ids.task1)).toMatchObject({
       status: "completed",
@@ -477,9 +569,10 @@ test.describe("live verified ActionLoop (M6)", () => {
   test("last mandatory approval resolves; resident sees status without private data", async () => {
     await startAndSubmit("cadreA2", ids.task2);
     const approved = await post(
-      actors.cadreA1.page,
+      actors.manager.page,
       `/api/v1/tasks/${ids.task2}/review`,
       {
+        evidenceId: await pendingEvidence(ids.task2),
         decision: "approve",
         reason: "Talang terlihat bersih pada foto.",
         expectedVersion: 3,
@@ -509,7 +602,7 @@ test.describe("live verified ActionLoop (M6)", () => {
     const evidence = await admin.from("task_evidence").select("storage_path");
     for (const row of evidence.data ?? [])
       expect(json).not.toContain(row.storage_path);
-    for (const key of ["cadreA1", "cadreA2"] as const)
+    for (const key of ["cadreA1", "cadreA2", "manager"] as const)
       expect(json).not.toContain(actors[key].id);
     expect(json).not.toMatch(/taskId|evidence|actor/i);
     expect((await resident.request.get("/api/v1/tasks")).status()).toBe(403);
@@ -518,9 +611,20 @@ test.describe("live verified ActionLoop (M6)", () => {
     ).toBe(403);
   });
 
-  test("reopen and cancel follow T19 with audit trail", async () => {
-    const page = actors.cadreA1.page;
-    await page.goto(`/kader/tugas/${ids.task1}`);
+  test("manager reopens and cancels following T19 with audit trail", async () => {
+    for (const [path, data] of [
+      [
+        `/api/v1/tasks/${ids.task1}/reopen`,
+        { reason: "Kader mencoba membuka kembali.", expectedVersion: 6 },
+      ],
+      [
+        `/api/v1/tasks/${ids.task2}/cancel`,
+        { reason: "Kader mencoba membatalkan.", expectedVersion: 4 },
+      ],
+    ] as const)
+      expect((await post(actors.cadreA1.page, path, data)).status()).toBe(403);
+    const page = actors.manager.page;
+    await page.goto(`/pengelola/tugas/${ids.task1}`);
     await page.getByRole("button", { name: "Buka kembali tugas" }).click();
     await page
       .getByRole("button", { name: "Buka kembali", exact: true })
@@ -557,7 +661,7 @@ test.describe("live verified ActionLoop (M6)", () => {
     expect(cancelCompleted.status()).toBe(422);
     expect(await errorCode(cancelCompleted)).toBe("INVALID_TRANSITION");
 
-    await page.goto(`/kader/tugas/${ids.task1}`);
+    await page.goto(`/pengelola/tugas/${ids.task1}`);
     await page.getByRole("button", { name: "Batalkan tugas" }).click();
     await page
       .locator("#close-reason")
@@ -590,7 +694,8 @@ test.describe("live verified ActionLoop (M6)", () => {
       {
         title: "Tugas pada laporan tuntas",
         description: "Tidak boleh dibuat langsung pada laporan tuntas.",
-        assignedTo: actors.cadreA1.id,
+        assignees: [actors.cadreA1.id],
+        dueDate,
       },
       { "Idempotency-Key": randomUUID() },
     );
@@ -602,8 +707,8 @@ test.describe("live verified ActionLoop (M6)", () => {
     const reportId = await createReport(
       `Ban bekas simulasi ${run} untuk uji lease.`,
     );
-    ids.taskX = await createTask("cadreA1", reportId, "Balik ban bekas");
-    ids.taskY = await createTask("cadreA1", reportId, "Angkut ban bekas");
+    ids.taskX = await createTask(["cadreA1"], reportId, "Balik ban bekas");
+    ids.taskY = await createTask(["cadreA1"], reportId, "Angkut ban bekas");
     const a1 = actors.cadreA1.page;
     for (const id of [ids.taskX, ids.taskY])
       expect(
@@ -615,8 +720,9 @@ test.describe("live verified ActionLoop (M6)", () => {
     const fake = await uploadEvidence(a1, ids.taskX, Buffer.from("%PDF-1.7"));
     expect(fake.status()).toBeGreaterThanOrEqual(400);
     expect(await errorCode(fake)).toBe("INVALID_IMAGE");
+    // Cadres outside the assignee list cannot even see the task.
     const notAssignee = await uploadEvidence(actors.cadreA2.page, ids.taskX);
-    expect(notAssignee.status()).toBe(403);
+    expect(notAssignee.status()).toBe(404);
     const crossArea = await uploadEvidence(actors.cadreB.page, ids.taskX);
     expect(crossArea.status()).toBe(404);
     expect(
@@ -677,6 +783,8 @@ test.describe("live verified ActionLoop (M6)", () => {
         areaId: areaA,
         category: "other",
         description: "Mencoba memakai foto bukti kader sebagai laporan.",
+        visibleObjects: "Wadah terbuka berisi air",
+        preventionAdvice: "Tutup wadah dan kuras seminggu sekali.",
         imageUploadIds: [leaseX],
         location: null,
       },
@@ -699,35 +807,104 @@ test.describe("live verified ActionLoop (M6)", () => {
     const notInProgress = await uploadEvidence(a1, ids.taskX);
     expect(notInProgress.status()).toBe(422);
     ids.lease = leaseX;
+
+    // T33: a task shared by two cadres needs approved evidence from each of them.
+    const shared = await createTask(
+      ["cadreA1", "cadreA2"],
+      reportId,
+      "Bersihkan pekarangan bersama",
+    );
+    expect(
+      (
+        await post(actors.cadreA2.page, `/api/v1/tasks/${shared}/start`, {
+          expectedVersion: 1,
+        })
+      ).status(),
+    ).toBe(200);
+    const sharedLease = await uploadEvidence(a1, shared);
+    expect(sharedLease.status()).toBe(201);
+    const sharedEvidence = await post(a1, `/api/v1/tasks/${shared}/evidence`, {
+      uploadId: (await sharedLease.json()).data.id,
+      description: "Pekarangan sudah dibersihkan bersama.",
+      expectedVersion: 2,
+    });
+    expect(sharedEvidence.status()).toBe(200);
+    expect(await task(shared)).toMatchObject({ status: "awaiting_review" });
+    const twice = await uploadEvidence(a1, shared);
+    expect(twice.status()).toBe(422);
+    expect(await errorCode(twice)).toBe("EVIDENCE_ALREADY_SUBMITTED");
+    const firstApproval = await post(
+      actors.manager.page,
+      `/api/v1/tasks/${shared}/review`,
+      {
+        evidenceId: await pendingEvidence(shared, "cadreA1"),
+        decision: "approve",
+        expectedVersion: 3,
+      },
+    );
+    expect(firstApproval.status()).toBe(200);
+    expect(await task(shared)).toMatchObject({
+      status: "in_progress",
+      version: 4,
+      completed_at: null,
+    });
+
+    const a2 = actors.cadreA2.page;
+    await a2.goto(`/kader/tugas/${shared}`);
+    await expect(a2.getByText("1 dari 2 bukti disetujui")).toBeVisible();
+    await a2.locator("#evidence-photo").setInputFiles(samplePath);
+    await a2
+      .locator("#description")
+      .fill("Sisi belakang pekarangan sudah dibersihkan.");
+    await a2.getByRole("button", { name: "Kirim bukti" }).click();
+    await expect(
+      a2.getByText("Bukti Anda menunggu pemeriksaan pengelola."),
+    ).toBeVisible();
+
+    const reviewer = actors.manager.page;
+    await reviewer.goto(`/pengelola/tugas/${shared}`);
+    await expect(
+      reviewer.getByText(`Pemeriksaan bukti M6 cadreA2 ${run}`),
+    ).toBeVisible();
+    await reviewer.getByRole("radio", { name: /Setujui bukti/ }).check();
+    await reviewer.getByRole("button", { name: "Simpan pemeriksaan" }).click();
+    await expect(
+      reviewer.getByText(
+        "Bukti disetujui. Bukti semua kader lengkap, tugas selesai.",
+      ),
+    ).toBeVisible();
+    await expect(reviewer.getByText("2 dari 2 bukti disetujui")).toBeVisible();
+    expect(await task(shared)).toMatchObject({ status: "completed" });
   });
 
-  test("manager, resident, and other-area cadre cannot mutate or read across scope", async () => {
-    const manager = actors.manager.page;
+  test("cadre, resident, and other-area cadre cannot mutate or read across scope", async () => {
+    const cadre = actors.cadreA1.page;
     for (const [path, data] of [
-      [`/api/v1/tasks/${ids.taskY}/start`, { expectedVersion: 2 }],
       [
         `/api/v1/tasks/${ids.taskX}/review`,
         { decision: "approve", expectedVersion: 3 },
       ],
       [
         `/api/v1/tasks/${ids.taskY}/cancel`,
-        { reason: "Dibatalkan manager uji.", expectedVersion: 2 },
+        { reason: "Dibatalkan kader uji.", expectedVersion: 2 },
       ],
     ] as const) {
-      expect((await post(manager, path, data)).status()).toBe(403);
+      expect((await post(cadre, path, data)).status()).toBe(403);
       expect((await post(actors.resident.page, path, data)).status()).toBe(403);
     }
-    const managerCreate = await post(
-      manager,
-      `/api/v1/reports/${ids.main}/tasks`,
-      {
-        title: "Tugas manager",
-        description: "Manager tidak boleh membuat.",
-        assignedTo: actors.manager.id,
-      },
-      { "Idempotency-Key": randomUUID() },
-    );
-    expect(managerCreate.status()).toBe(403);
+    expect(
+      (
+        await post(actors.manager.page, `/api/v1/tasks/${ids.taskY}/start`, {
+          expectedVersion: 2,
+        })
+      ).status(),
+    ).toBe(403);
+    const cadreList = await actors.cadreA2.page.request.get("/api/v1/tasks");
+    expect(
+      (await cadreList.json()).data.map((row: { id: string }) => row.id),
+    ).not.toContain(ids.task1);
+
+    const manager = actors.manager.page;
     const list = await manager.request.get("/api/v1/tasks");
     expect(list.status()).toBe(200);
     expect(
@@ -737,10 +914,9 @@ test.describe("live verified ActionLoop (M6)", () => {
     await expect(
       manager.getByRole("heading", { name: "Tugas wilayah" }),
     ).toBeVisible();
-    await expect(manager.getByText("Kuras wadah balai")).toBeVisible();
     await expect(
       manager.getByRole("link", { name: /Kuras wadah balai/ }),
-    ).toHaveCount(0);
+    ).toContainText(`M6 cadreA1 ${run}`);
     await expectAccessible(manager);
     await manager.goto("/kader/tugas");
     await expect(manager).toHaveURL(/\/forbidden$/);
@@ -788,13 +964,14 @@ test.describe("live verified ActionLoop (M6)", () => {
   });
 
   test("UI conflict on stale task shows a safe refresh path", async () => {
-    const reviewer = actors.cadreA2.page;
-    await reviewer.goto(`/kader/tugas/${ids.taskX}`);
+    const reviewer = actors.manager.page;
+    await reviewer.goto(`/pengelola/tugas/${ids.taskX}`);
     await expect(
       reviewer.getByRole("button", { name: "Simpan pemeriksaan" }),
     ).toBeVisible();
+    // The same manager cancels from another tab; this page still shows the old version.
     const cancelled = await post(
-      actors.cadreA1.page,
+      actors.manager.page,
       `/api/v1/tasks/${ids.taskX}/cancel`,
       {
         reason: "Ban sudah diangkut petugas kebersihan.",
@@ -828,23 +1005,29 @@ test.describe("live verified ActionLoop (M6)", () => {
         `Saluran simulasi ${run} paralel ${round}.`,
       );
       const taskA = await createTask(
-        "cadreA1",
+        ["cadreA1"],
         reportId,
         `Tugas paralel A${round}`,
       );
       const taskB = await createTask(
-        "cadreA2",
+        ["cadreA2"],
         reportId,
         `Tugas paralel B${round}`,
       );
       await startAndSubmit("cadreA1", taskA);
       await startAndSubmit("cadreA2", taskB);
+      const [evidenceA, evidenceB] = [
+        await pendingEvidence(taskA),
+        await pendingEvidence(taskB),
+      ];
       const [first, second] = await Promise.all([
-        post(actors.cadreA2.page, `/api/v1/tasks/${taskA}/review`, {
+        post(actors.manager.page, `/api/v1/tasks/${taskA}/review`, {
+          evidenceId: evidenceA,
           decision: "approve",
           expectedVersion: 3,
         }),
-        post(actors.cadreA1.page, `/api/v1/tasks/${taskB}/review`, {
+        post(actors.manager.page, `/api/v1/tasks/${taskB}/review`, {
+          evidenceId: evidenceB,
           decision: "approve",
           expectedVersion: 3,
         }),
@@ -938,7 +1121,7 @@ test.describe("live verified ActionLoop (M6)", () => {
     }
 
     const reopened = await post(
-      actors.cadreA1.page,
+      actors.manager.page,
       `/api/v1/tasks/${ids.parallelTask}/reopen`,
       {
         reason: "Saluran kembali tersumbat setelah hujan.",
@@ -963,21 +1146,25 @@ test.describe("live verified ActionLoop (M6)", () => {
     browser,
   }) => {
     // Chromium page zoom is not scriptable here; 640 CSS px at DPR 2 matches 1280 px at 200%.
-    const context = await browser.newContext({
-      viewport: { width: 640, height: 400 },
-      deviceScaleFactor: 2,
-      storageState: await actors.cadreA1.context.storageState(),
-    });
-    const page = await context.newPage();
-    for (const path of [
-      "/kader/tugas",
-      `/kader/tugas/${ids.task1}`,
-      `/kader/verifikasi/${ids.main}`,
-    ]) {
-      await page.goto(path);
-      await expect(page.getByText("DATA SIMULASI").first()).toBeVisible();
-      await expectNoOverflow(page);
+    for (const [actor, paths] of [
+      ["cadreA1", ["/kader/tugas", `/kader/tugas/${ids.task1}`]],
+      [
+        "manager",
+        [`/pengelola/verifikasi/${ids.main}`, `/pengelola/tugas/${ids.task1}`],
+      ],
+    ] as const) {
+      const context = await browser.newContext({
+        viewport: { width: 640, height: 400 },
+        deviceScaleFactor: 2,
+        storageState: await actors[actor].context.storageState(),
+      });
+      const page = await context.newPage();
+      for (const path of paths) {
+        await page.goto(path);
+        await expect(page.getByText("DATA SIMULASI").first()).toBeVisible();
+        await expectNoOverflow(page);
+      }
+      await context.close();
     }
-    await context.close();
   });
 });

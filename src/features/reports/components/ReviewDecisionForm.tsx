@@ -103,7 +103,7 @@ export function ReviewDecisionForm({
     );
     setPending(false);
     if (result.kind === "ok") {
-      router.replace(`/kader/verifikasi/${reportId}?keputusan=tersimpan`);
+      router.replace(`/pengelola/verifikasi/${reportId}?keputusan=tersimpan`);
       router.refresh();
       return;
     }

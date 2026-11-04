@@ -44,8 +44,15 @@ export async function POST(request: Request) {
   }
   const parsed = createReportSchema.safeParse(body);
   if (!parsed.success) return validationResponse(parsed.error);
-  const { areaId, category, description, imageUploadIds, location } =
-    parsed.data;
+  const {
+    areaId,
+    category,
+    description,
+    visibleObjects,
+    preventionAdvice,
+    imageUploadIds,
+    location,
+  } = parsed.data;
   if (
     !auth.context!.memberships.some(
       (m) =>
@@ -66,6 +73,8 @@ export async function POST(request: Request) {
     p_area_id: areaId,
     p_category: category,
     p_description: description,
+    p_visible_objects: visibleObjects,
+    p_prevention_advice: preventionAdvice,
     p_latitude: location?.latitude ?? null,
     p_longitude: location?.longitude ?? null,
     p_location_note: location?.note ?? null,
@@ -84,12 +93,6 @@ export async function POST(request: Request) {
         409,
         "CONFLICT",
         "Foto atau kunci permintaan telah digunakan.",
-      );
-    if (result.error.code === "P0429")
-      return reportError(
-        429,
-        "RATE_LIMIT",
-        "Batas laporan sementara tercapai. Coba lagi nanti.",
       );
     if (result.error.code === "P0422")
       return reportError(

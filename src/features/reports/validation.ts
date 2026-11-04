@@ -37,6 +37,15 @@ export const createReportSchema = z
     areaId: z.uuid(),
     category: reportCategorySchema,
     description: safeText(1000).pipe(z.string().min(10)),
+    // T29: prefilled by AI when available, always editable and required.
+    visibleObjects: safeText(500).pipe(
+      z
+        .string()
+        .min(5, "Tulis apa yang tampak pada foto (minimal 5 karakter)."),
+    ),
+    preventionAdvice: safeText(500).pipe(
+      z.string().min(10, "Tulis saran pencegahan (minimal 10 karakter)."),
+    ),
     imageUploadIds: z
       .array(z.uuid())
       .min(1)
@@ -202,10 +211,10 @@ export const reportStatusLabels = {
 
 export const reportEventLabels: Record<string, string> = {
   report_created: "Laporan dikirim",
-  report_verified: "Diverifikasi kader",
-  report_information_requested: "Kader meminta informasi tambahan",
+  report_verified: "Diverifikasi pengelola",
+  report_information_requested: "Pengelola meminta informasi tambahan",
   report_information_added: "Informasi tambahan dikirim",
-  report_rejected: "Tidak disetujui kader",
+  report_rejected: "Tidak disetujui pengelola",
   report_marked_duplicate: "Ditandai sebagai duplikat",
   report_action_started: "Penanganan dimulai",
   report_resolved: "Penanganan selesai diverifikasi",

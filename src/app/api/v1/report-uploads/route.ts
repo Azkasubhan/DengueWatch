@@ -52,12 +52,6 @@ export async function POST(request: Request) {
     width: normalized.width,
     height: normalized.height,
   });
-  if (reservation.error?.code === "P0429")
-    return reportError(
-      429,
-      "RATE_LIMIT",
-      "Batas unggahan sementara tercapai. Coba lagi nanti.",
-    );
   if (reservation.error)
     return reportError(
       503,

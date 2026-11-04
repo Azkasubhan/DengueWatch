@@ -39,7 +39,6 @@ export async function analyzeReportPhoto(input: {
     const code = reserved.error.code;
     if (code === "P0403") throw new AiRequestError(403, "FORBIDDEN");
     if (code === "P0404") throw new AiRequestError(404, "NOT_FOUND");
-    if (code === "P0429") throw new AiRequestError(429, "RATE_LIMIT");
     if (code === "P0409") throw new AiRequestError(409, "CONCURRENT_REQUEST");
     throw new AiRequestError(503, "AI_UNAVAILABLE");
   }

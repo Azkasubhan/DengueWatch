@@ -12,7 +12,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 
 export const dynamic = "force-dynamic";
 
-// Managers monitor tasks read-only; there are no action links here.
+// Managers follow every task in their areas and open one to review evidence (T27).
 export default async function ManagerTasksPage({
   searchParams,
 }: {
@@ -37,12 +37,13 @@ export default async function ManagerTasksPage({
         <>
           <PageHeader
             title="Tugas wilayah"
-            description="Pantau tindak lanjut kader. Halaman ini hanya untuk dibaca."
+            description="Pantau tugas kader, periksa bukti yang masuk, dan buka kembali tugas bila masalah muncul lagi."
           />
           <TaskListPage
             areas={areas}
             basePath="/pengelola/tugas"
-            detailBase={null}
+            detailBase="/pengelola/tugas"
+            showAssignees
             params={await searchParams}
             userId={access.context.userId}
           />

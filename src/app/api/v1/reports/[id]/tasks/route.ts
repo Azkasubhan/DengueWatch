@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createClient } from "@/integrations/supabase/server";
 import {
-  cadreContext,
+  managerContext,
   readJsonBody,
   reportError,
   sameOrigin,
@@ -17,7 +17,7 @@ export async function POST(
 ) {
   if (!sameOrigin(request))
     return reportError(403, "FORBIDDEN", "Asal permintaan tidak valid.");
-  const auth = await cadreContext();
+  const auth = await managerContext();
   if (auth.error) return auth.error;
   const { id } = await params;
   if (!z.uuid().safeParse(id).success)
@@ -39,9 +39,8 @@ export async function POST(
     p_report_id: id,
     p_title: input.title,
     p_description: input.description,
-    p_assigned_to: input.assignedTo,
-    p_due_at: input.dueAt,
-    p_is_mandatory: input.isMandatory,
+    p_assignees: input.assignees,
+    p_due_date: input.dueDate,
     p_idempotency_key: key.data,
   });
   if (result.error) return taskRpcError(result.error);

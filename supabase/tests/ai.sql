@@ -66,7 +66,7 @@ where request_user_id='41000000-0000-4000-8000-000000000001';
 select set_config('request.jwt.claims','{"sub":"41000000-0000-4000-8000-000000000001","role":"authenticated"}',true);
 set local role authenticated;
 select lives_ok($$ select * from public.create_environmental_report(
-  '42000000-0000-4000-8000-000000000001','water_container','Wadah air tampak di area bersama untuk pemeriksaan.',null,null,null,
+  '42000000-0000-4000-8000-000000000001','water_container','Wadah air tampak di area bersama untuk pemeriksaan.','Wadah air terbuka, genangan','Tutup wadah dan kuras seminggu sekali.',null,null,null,
   array['43000000-0000-4000-8000-000000000001'::uuid],'m4-link-report') $$, 'M3 report transaction works after AI');
 select ok((select report_id is not null from public.ai_analyses limit 1), 'analysis linked to final report by image trigger');
 select is((select status::text from public.reports limit 1),'pending_verification','AI did not alter report status');
@@ -77,9 +77,11 @@ select '41000000-0000-4000-8000-000000000001','42000000-0000-4000-8000-000000000
 from generate_series(1,9);
 select set_config('request.jwt.claims','{"sub":"41000000-0000-4000-8000-000000000001","role":"authenticated"}',true);
 set local role authenticated;
-select throws_ok($$ select public.reserve_ai_analysis('42000000-0000-4000-8000-000000000001','43000000-0000-4000-8000-000000000004','gemini-test') $$,
-  'P0429','AI rate limit','hourly quota persists after completed analyses');
+select lives_ok($$ select public.reserve_ai_analysis('42000000-0000-4000-8000-000000000001','43000000-0000-4000-8000-000000000004','gemini-test') $$,
+  'no hourly AI quota per account (T32)');
 reset role;
+update public.ai_analyses set status='error', completed_at=now(), error_code='TEST'
+where request_user_id='41000000-0000-4000-8000-000000000001' and status='processing';
 update public.ai_analyses set created_at=now()-interval '2 hours'
 where request_user_id='41000000-0000-4000-8000-000000000001';
 insert into public.ai_analyses (request_user_id,area_id,model_id,status,completed_at,error_code,created_at)
@@ -87,8 +89,8 @@ select '41000000-0000-4000-8000-000000000001','42000000-0000-4000-8000-000000000
 from generate_series(1,20);
 select set_config('request.jwt.claims','{"sub":"41000000-0000-4000-8000-000000000001","role":"authenticated"}',true);
 set local role authenticated;
-select throws_ok($$ select public.reserve_ai_analysis('42000000-0000-4000-8000-000000000001','43000000-0000-4000-8000-000000000004','gemini-test') $$,
-  'P0429','AI rate limit','daily quota persists across hourly windows');
+select lives_ok($$ select public.reserve_ai_analysis('42000000-0000-4000-8000-000000000001','43000000-0000-4000-8000-000000000004','gemini-test') $$,
+  'no daily AI quota per account (T32)');
 
 reset role;
 select set_config('request.jwt.claims','{"sub":"41000000-0000-4000-8000-000000000002","role":"authenticated"}',true);
@@ -118,7 +120,7 @@ insert into public.ai_analyses (id,request_user_id,area_id,upload_id,model_id,st
 select set_config('request.jwt.claims','{"sub":"41000000-0000-4000-8000-000000000002","role":"authenticated"}',true);
 set local role authenticated;
 select lives_ok($$ select * from public.create_environmental_report(
-  '42000000-0000-4000-8000-000000000002','water_container','Wadah air tampak di halaman belakang rumah warga.',null,null,null,
+  '42000000-0000-4000-8000-000000000002','water_container','Wadah air tampak di halaman belakang rumah warga.','Wadah air terbuka, genangan','Tutup wadah dan kuras seminggu sekali.',null,null,null,
   array['43000000-0000-4000-8000-000000000002'::uuid],'m4-single-suggestion') $$, 'report submits after repeated AI requests');
 reset role;
 select is((select array_agg(id) from public.ai_analyses where report_id is not null and request_user_id='41000000-0000-4000-8000-000000000002'),

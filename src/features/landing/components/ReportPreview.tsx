@@ -5,9 +5,12 @@ import waterContainer from "@/features/landing/images/water-container.webp";
 // A static example of the report timeline used in the app; names and times are illustrative.
 const timeline = [
   { time: "Sen 07.40", text: "Dilaporkan warga dengan satu foto" },
-  { time: "Sen 10.15", text: "Diverifikasi kader Rina" },
+  {
+    time: "Sen 10.15",
+    text: "Diverifikasi pengelola, ditugaskan ke kader Rina",
+  },
   { time: "Sel 16.30", text: "Rina mengirim bukti: ember dikuras dan ditutup" },
-  { time: "Rab 08.05", text: "Bukti disetujui kader Dedi" },
+  { time: "Rab 08.05", text: "Bukti disetujui pengelola" },
 ];
 
 export function ReportPreview() {

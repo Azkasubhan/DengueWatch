@@ -72,10 +72,11 @@ from public.reports as r join (values
   ('73000000-0000-4000-8000-000000000008','report_verified','verified',null,'{}',2),
   ('73000000-0000-4000-8000-000000000010','report_verified','verified',null,'{}',2)
 ) as e(report_id, event_type, new_status, reason, metadata, hours) on r.id = e.report_id::uuid;
-insert into public.action_tasks (report_id,area_id,title,description,assigned_to,created_by,status)
-values ('73000000-0000-4000-8000-000000000004','72000000-0000-4000-8000-000000000001','Kuras wadah uji',
-  'Tugas uji yang menunggu pemeriksaan bukti.','71000000-0000-4000-8000-000000000002',
-  '71000000-0000-4000-8000-000000000002','awaiting_review');
+insert into public.action_tasks (id,report_id,area_id,title,description,created_by,status)
+values ('74000000-0000-4000-8000-000000000001','73000000-0000-4000-8000-000000000004','72000000-0000-4000-8000-000000000001','Kuras wadah uji',
+  'Tugas uji yang menunggu pemeriksaan bukti.','71000000-0000-4000-8000-000000000002','awaiting_review');
+insert into public.action_task_assignees (task_id,profile_id)
+values ('74000000-0000-4000-8000-000000000001','71000000-0000-4000-8000-000000000002');
 
 create temp table summary_ids (name text primary key, id uuid, path text);
 grant all on summary_ids to authenticated;
@@ -138,12 +139,15 @@ select results_eq($$ select reports_total, resolved, completion_rate, is_demo
   $$ values (1, 1, 100.0::numeric, false) $$,
   'manager B sees only area B and a non-demo label');
 
--- AC-70 through the real ActionLoop RPCs on verified report a3.
+-- AC-70 through the real ActionLoop RPCs on verified report a3 (T27: manager assigns and reviews).
+reset role;
+select set_config('request.jwt.claims','{"sub":"71000000-0000-4000-8000-000000000004","role":"authenticated"}',true);
+set local role authenticated;
+insert into summary_ids select 'task', task_id, null from public.create_action_task('73000000-0000-4000-8000-000000000003',
+  'Kuras wadah analitik','Kuras dan tutup wadah untuk uji ringkasan.',array['71000000-0000-4000-8000-000000000002'::uuid], current_date + 3, 'm7-key-task-1');
 reset role;
 select set_config('request.jwt.claims','{"sub":"71000000-0000-4000-8000-000000000002","role":"authenticated"}',true);
 set local role authenticated;
-insert into summary_ids select 'task', task_id, null from public.create_action_task('73000000-0000-4000-8000-000000000003',
-  'Kuras wadah analitik','Kuras dan tutup wadah untuk uji ringkasan.','71000000-0000-4000-8000-000000000002', null, true, 'm7-key-task-1');
 select lives_ok($$ select * from public.start_action_task((select id from summary_ids where name='task'),1) $$,'task started');
 insert into summary_ids select 'lease', upload_id, storage_path
   from public.reserve_task_evidence_upload((select id from summary_ids where name='task'),128,16,16);
@@ -156,10 +160,10 @@ set local role authenticated;
 select lives_ok($$ select * from public.submit_task_evidence((select id from summary_ids where name='task'),
   (select id from summary_ids where name='lease'),'Wadah sudah dikuras dan ditutup.',2) $$,'evidence submitted');
 reset role;
-select set_config('request.jwt.claims','{"sub":"71000000-0000-4000-8000-000000000003","role":"authenticated"}',true);
+select set_config('request.jwt.claims','{"sub":"71000000-0000-4000-8000-000000000004","role":"authenticated"}',true);
 set local role authenticated;
-select is((select report_status::text from public.review_task_evidence((select id from summary_ids where name='task'),'approve',null,3)),
-  'resolved','independent approval resolves report a3');
+select is((select report_status::text from public.review_task_evidence((select id from summary_ids where name='task'),(select id from public.task_evidence where task_id=(select id from summary_ids where name='task')),'approve',null,3)),
+  'resolved','manager approval resolves report a3');
 
 reset role;
 select set_config('request.jwt.claims','{"sub":"71000000-0000-4000-8000-000000000004","role":"authenticated"}',true);
@@ -169,7 +173,7 @@ select results_eq($$ select in_action, resolved, completion_rate, tasks_awaiting
   $$ values (1, 3, 75.0::numeric, 1) $$,'resolution moves the report into the completed bucket');
 
 reset role;
-select set_config('request.jwt.claims','{"sub":"71000000-0000-4000-8000-000000000002","role":"authenticated"}',true);
+select set_config('request.jwt.claims','{"sub":"71000000-0000-4000-8000-000000000004","role":"authenticated"}',true);
 set local role authenticated;
 select is((select report_status::text from public.reopen_action_task((select id from summary_ids where name='task'),
   'Wadah kembali terisi air setelah hujan.',4)),'in_action','reopen returns report a3 to in_action');

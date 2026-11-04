@@ -20,18 +20,18 @@ const items: Record<Role, { href: string; label: string; icon: LucideIcon }[]> =
     ],
     cadre: [
       { href: "/kader/ringkasan", label: "Ringkasan", icon: LayoutDashboard },
-      {
-        href: "/kader/verifikasi",
-        label: "Antrean verifikasi",
-        icon: ClipboardCheck,
-      },
-      { href: "/kader/tugas", label: "Tugas", icon: ListChecks },
+      { href: "/kader/tugas", label: "Tugas saya", icon: ListChecks },
     ],
     manager: [
       {
         href: "/pengelola/ringkasan",
         label: "Ringkasan",
         icon: LayoutDashboard,
+      },
+      {
+        href: "/pengelola/verifikasi",
+        label: "Antrean verifikasi",
+        icon: ClipboardCheck,
       },
       { href: "/pengelola/tugas", label: "Tugas wilayah", icon: ListChecks },
     ],

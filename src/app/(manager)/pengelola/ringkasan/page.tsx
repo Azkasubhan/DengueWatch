@@ -82,8 +82,8 @@ export default async function ManagerSummaryPage({
             </h1>
             <p className="mt-3 text-[var(--muted-foreground)]">
               Angka dihitung langsung dari database laporan dan tugas, bukan
-              oleh AI. Pengelola hanya memantau; verifikasi dan penugasan
-              dilakukan kader.
+              oleh AI. Anda memverifikasi laporan, menugaskan kader, dan
+              memeriksa bukti penanganan.
             </p>
           </div>
 
@@ -208,7 +208,7 @@ export default async function ManagerSummaryPage({
                   [
                     "Menunggu pemeriksaan",
                     number.format(data.awaitingVerification),
-                    "Belum diverifikasi kader atau menunggu informasi tambahan warga.",
+                    "Belum diverifikasi pengelola atau menunggu informasi tambahan warga.",
                   ],
                   [
                     "Dalam penanganan",
@@ -218,7 +218,7 @@ export default async function ManagerSummaryPage({
                   [
                     "Selesai",
                     number.format(data.resolved),
-                    "Semua tugas wajib aktif selesai dengan bukti yang disetujui kader lain.",
+                    "Semua tugas wajib aktif selesai dengan bukti yang disetujui pengelola.",
                   ],
                   [
                     "Tingkat penyelesaian",
@@ -252,7 +252,7 @@ export default async function ManagerSummaryPage({
               <dl className="mt-6 grid gap-3 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-5 sm:grid-cols-3">
                 <div>
                   <dt className="text-sm font-semibold">
-                    Median waktu ke keputusan kader
+                    Median waktu ke keputusan verifikasi
                   </dt>
                   <dd className="mt-1">
                     {hours(data.medianHoursToFirstReview)}

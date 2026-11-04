@@ -60,12 +60,24 @@ export function ReportFactsCard({ report }: { report: ReportDetail }) {
         <dt className="text-sm font-semibold">Dikirim</dt>
         <dd className="mt-1">{formatJakarta(report.submittedAt)} WIB</dd>
       </div>
+      {report.visibleObjects ? (
+        <div className="sm:col-span-2">
+          <dt className="text-sm font-semibold">Yang tampak pada foto</dt>
+          <dd className="mt-1 break-words">{report.visibleObjects}</dd>
+        </div>
+      ) : null}
       <div className="sm:col-span-2">
         <dt className="text-sm font-semibold">Deskripsi</dt>
         <dd className="mt-1 whitespace-pre-wrap break-words">
           {report.description}
         </dd>
       </div>
+      {report.preventionAdvice ? (
+        <div className="sm:col-span-2">
+          <dt className="text-sm font-semibold">Saran pencegahan</dt>
+          <dd className="mt-1 break-words">{report.preventionAdvice}</dd>
+        </div>
+      ) : null}
       <div className="rounded-[var(--radius-control)] bg-[var(--background)] p-4 sm:col-span-2">
         <dt className="text-sm font-semibold">Lokasi</dt>
         <dd className="mt-1 grid gap-3">

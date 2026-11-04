@@ -83,8 +83,8 @@ export async function residentContext() {
   return { context: access.context };
 }
 
-// Reviews require role cadre plus a verified assigned_cadre membership.
-export async function cadreContext() {
+// Portal actions require the role plus a verified area membership; RPCs re-check scope.
+async function portalContext(role: "cadre" | "manager", forbidden: string) {
   const access = await getAccessContext();
   if (access.kind === "unauthenticated")
     return {
@@ -98,16 +98,16 @@ export async function cadreContext() {
         "Layanan laporan belum tersedia.",
       ),
     };
-  if (decidePortalAccess(access.context, "cadre").kind !== "allowed")
-    return {
-      error: reportError(
-        403,
-        "FORBIDDEN",
-        "Akun ini tidak memiliki izin memeriksa laporan.",
-      ),
-    };
+  if (decidePortalAccess(access.context, role).kind !== "allowed")
+    return { error: reportError(403, "FORBIDDEN", forbidden) };
   return { context: access.context };
 }
+
+// T27: cadres work assigned tasks; managers review reports, assign tasks, and check evidence.
+export const cadreContext = () =>
+  portalContext("cadre", "Akun ini tidak memiliki izin mengerjakan tugas.");
+export const managerContext = () =>
+  portalContext("manager", "Akun ini tidak memiliki izin memeriksa laporan.");
 
 // Maps M5 RPC SQLSTATEs without exposing database messages.
 export function reviewRpcError(error: { code?: string; message?: string }) {

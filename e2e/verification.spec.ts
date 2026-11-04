@@ -12,7 +12,7 @@ type Actor = {
   context: BrowserContext;
 };
 
-test.describe("live cadre verification (M5)", () => {
+test.describe("live manager verification (M5, T27)", () => {
   test.skip(
     process.env.RUN_LIVE_M5 !== "true",
     "Run the dedicated local M5 E2E script.",
@@ -27,7 +27,7 @@ test.describe("live cadre verification (M5)", () => {
   let areaA = "";
   let areaB = "";
   const actors = {} as Record<
-    "resident" | "cadreA1" | "cadreA2" | "cadreB" | "manager",
+    "resident" | "managerA1" | "managerA2" | "managerB" | "cadreA",
     Actor
   >;
   const reports = {} as Record<
@@ -69,7 +69,11 @@ test.describe("live cadre verification (M5)", () => {
     await expect(page).toHaveURL(landing);
   }
 
-  async function createReport(description: string, withAi = false) {
+  async function createReport(
+    description: string,
+    withAi = false,
+    useAiText = true,
+  ) {
     const page = actors.resident.page;
     const upload = await page.request.post("/api/v1/report-uploads", {
       multipart: {
@@ -83,12 +87,20 @@ test.describe("live cadre verification (M5)", () => {
     });
     expect(upload.status()).toBe(201);
     const uploadId = (await upload.json()).id as string;
+    // T29: AI output fills the observation fields; the resident wrote the description.
+    let visibleObjects = "Wadah terbuka berisi air";
+    let preventionAdvice = "Tutup wadah dan kuras seminggu sekali.";
     if (withAi) {
       const ai = await page.request.post("/api/v1/ai/analyze-report", {
         headers: { Origin: origin, "Content-Type": "application/json" },
         data: { areaId: areaA, uploadId },
       });
       expect(ai.status()).toBe(200);
+      const suggestion = (await ai.json()).data.suggestion;
+      if (useAiText) {
+        visibleObjects = suggestion.visibleObjects.join(", ");
+        preventionAdvice = suggestion.suggestedPrecaution;
+      }
     }
     const created = await page.request.post("/api/v1/reports", {
       headers: {
@@ -100,6 +112,8 @@ test.describe("live cadre verification (M5)", () => {
         areaId: areaA,
         category: "water_container",
         description,
+        visibleObjects,
+        preventionAdvice,
         imageUploadIds: [uploadId],
         location: {
           latitude: -6.2,
@@ -183,10 +197,10 @@ test.describe("live cadre verification (M5)", () => {
     areaB = areas.data!.find((area) => area.code.includes("-B-"))!.id;
     const plan = [
       ["resident", "resident", areaA, /\/app\/beranda$/],
-      ["cadreA1", "cadre", areaA, /\/kader\/ringkasan$/],
-      ["cadreA2", "cadre", areaA, /\/kader\/ringkasan$/],
-      ["cadreB", "cadre", areaB, /\/kader\/ringkasan$/],
-      ["manager", "manager", areaA, /\/pengelola\/ringkasan$/],
+      ["managerA1", "manager", areaA, /\/pengelola\/ringkasan$/],
+      ["managerA2", "manager", areaA, /\/pengelola\/ringkasan$/],
+      ["managerB", "manager", areaB, /\/pengelola\/ringkasan$/],
+      ["cadreA", "cadre", areaA, /\/kader\/ringkasan$/],
     ] as const;
     for (const [key, role, areaId, landing] of plan) {
       const user = await createActor(key, role, areaId);
@@ -203,12 +217,15 @@ test.describe("live cadre verification (M5)", () => {
     );
   });
 
-  test("resident report appears in the area cadre queue with AI suggestion", async ({}, testInfo) => {
+  test("resident report appears in the area manager queue with AI suggestion", async ({}, testInfo) => {
     const description = `Wadah terbuka berisi air di balai simulasi ${run}.`;
     reports.main = await createReport(description, true);
-    const page = actors.cadreA1.page;
-    await page.goto("/kader/ringkasan");
-    await page.getByRole("link", { name: "Buka antrean verifikasi" }).click();
+    const page = actors.managerA1.page;
+    await page.goto("/pengelola/ringkasan");
+    await page
+      .getByRole("navigation", { name: "Navigasi portal" })
+      .getByRole("link", { name: "Antrean verifikasi" })
+      .click();
     await expect(
       page.getByRole("heading", { name: "Antrean verifikasi" }),
     ).toBeVisible();
@@ -227,15 +244,21 @@ test.describe("live cadre verification (M5)", () => {
 
     await item.click();
     await expect(page).toHaveURL(
-      new RegExp(`/kader/verifikasi/${reports.main}$`),
+      new RegExp(`/pengelola/verifikasi/${reports.main}$`),
     );
+    // T29: no separate AI panel; the report fields carry the AI-assisted values.
+    await expect(page.getByText("Diisi dengan bantuan AI")).toBeVisible();
+    await expect(page.getByText("tidak diubah warga")).toHaveCount(0);
     await expect(
-      page.getByRole("heading", { name: "Saran AI — perlu verifikasi" }),
+      page.getByText("wadah air terbuka, air terlihat di dalam wadah", {
+        exact: true,
+      }),
     ).toBeVisible();
-    // Visible objects render as one chip per object.
-    for (const object of ["wadah air terbuka", "air terlihat di dalam wadah"]) {
-      await expect(page.getByText(object, { exact: true })).toBeVisible();
-    }
+    await expect(
+      page.getByText("Periksa dan kosongkan genangan jika aman dilakukan.", {
+        exact: true,
+      }),
+    ).toBeVisible();
     await expect(page.getByAltText("Foto laporan 1")).toBeVisible();
     await expect(page.getByText("-6.20000, 106.80000")).toBeVisible();
     await expect(
@@ -259,28 +282,28 @@ test.describe("live cadre verification (M5)", () => {
     expect(detailAxe.violations).toEqual([]);
   });
 
-  test("cross-area cadre, resident, and manager cannot review or read private data", async () => {
+  test("cross-area manager, resident, and area cadre cannot review or read private data", async () => {
     const id = reports.main;
-    const cadreB = actors.cadreB.page;
-    expect((await cadreB.request.get(`/api/v1/reports/${id}`)).status()).toBe(
+    const managerB = actors.managerB.page;
+    expect((await managerB.request.get(`/api/v1/reports/${id}`)).status()).toBe(
       404,
     );
     expect(
       (
-        await cadreB.request.get(`/api/v1/reports/${id}/ai-suggestions`)
+        await managerB.request.get(`/api/v1/reports/${id}/ai-suggestions`)
       ).status(),
     ).toBe(404);
     expect(
       (
-        await review(cadreB, id, { decision: "verify", expectedVersion: 1 })
+        await review(managerB, id, { decision: "verify", expectedVersion: 1 })
       ).status(),
     ).toBe(404);
-    const queue = await cadreB.request.get("/api/v1/reports");
+    const queue = await managerB.request.get("/api/v1/reports");
     expect(
       (await queue.json()).data.map((row: { id: string }) => row.id),
     ).not.toContain(id);
-    await cadreB.goto(`/kader/verifikasi/${id}`);
-    await expect(cadreB.getByText("Pemeriksaan laporan")).toHaveCount(0);
+    await managerB.goto(`/pengelola/verifikasi/${id}`);
+    await expect(managerB.getByText("Pemeriksaan laporan")).toHaveCount(0);
 
     const image = await admin
       .from("report_images")
@@ -294,7 +317,7 @@ test.describe("live cadre verification (M5)", () => {
       { auth: { persistSession: false, autoRefreshToken: false } },
     );
     const signIn = await outsider.auth.signInWithPassword({
-      email: actors.cadreB.email,
+      email: actors.managerB.email,
       password,
     });
     expect(signIn.error).toBeNull();
@@ -310,7 +333,7 @@ test.describe("live cadre verification (M5)", () => {
     expect(directAi.data ?? []).toEqual([]);
     await outsider.auth.signOut();
 
-    for (const key of ["resident", "manager"] as const) {
+    for (const key of ["resident", "cadreA"] as const) {
       const response = await review(actors[key].page, id, {
         decision: "verify",
         expectedVersion: 1,
@@ -319,23 +342,27 @@ test.describe("live cadre verification (M5)", () => {
     }
     expect(
       (
-        await actors.manager.page.request.get(
+        await actors.cadreA.page.request.get(
           `/api/v1/reports/${id}/ai-suggestions`,
         )
       ).status(),
     ).toBe(403);
-    await actors.manager.page.goto("/kader/verifikasi");
-    await expect(actors.manager.page).toHaveURL(/\/forbidden$/);
+    // T27: a cadre without a task on this report cannot read it at all.
+    expect(
+      (await actors.cadreA.page.request.get(`/api/v1/reports/${id}`)).status(),
+    ).toBe(404);
+    await actors.cadreA.page.goto("/pengelola/verifikasi");
+    await expect(actors.cadreA.page).toHaveURL(/\/forbidden$/);
     expect(await state(id)).toMatchObject({
       status: "pending_verification",
       version: 1,
     });
   });
 
-  test("keyboard cadre verifies through the form and the audit trail updates", async () => {
-    const page = actors.cadreA1.page;
+  test("keyboard manager verifies through the form and the audit trail updates", async () => {
+    const page = actors.managerA1.page;
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(`/kader/verifikasi/${reports.main}`);
+    await page.goto(`/pengelola/verifikasi/${reports.main}`);
     await page.getByRole("button", { name: "Simpan keputusan" }).click();
     await expect(page.getByText("Pilih salah satu keputusan.")).toBeVisible();
     const verify = page.getByRole("radio", { name: /Verifikasi/ });
@@ -348,7 +375,7 @@ test.describe("live cadre verification (M5)", () => {
     await expect(
       page.getByText("Terverifikasi", { exact: true }).first(),
     ).toBeVisible();
-    await expect(page.getByText("Diverifikasi kader")).toBeVisible();
+    await expect(page.getByText("Diverifikasi pengelola")).toBeVisible();
     expect(await state(reports.main)).toMatchObject({
       status: "verified",
       version: 2,
@@ -359,14 +386,14 @@ test.describe("live cadre verification (M5)", () => {
       "report_verified",
     ]);
     expect(audit[1]).toMatchObject({
-      actor_id: actors.cadreA1.id,
+      actor_id: actors.managerA1.id,
       old_status: "pending_verification",
       new_status: "verified",
     });
   });
 
   test("illegal transition, stale version, and invalid input map to API errors", async () => {
-    const page = actors.cadreA2.page;
+    const page = actors.managerA2.page;
     const stale = await review(page, reports.main, {
       decision: "reject",
       reason: "Foto tidak menunjukkan genangan air.",
@@ -408,17 +435,19 @@ test.describe("live cadre verification (M5)", () => {
     reports.info = await createReport(
       `Ember terbuka di halaman simulasi ${run} perlu dicek.`,
     );
-    const cadre = actors.cadreA1.page;
-    await cadre.goto(`/kader/verifikasi/${reports.info}`);
-    await cadre.getByRole("radio", { name: /Minta informasi/ }).check();
-    await cadre.locator("#reason").fill("pendek");
-    await cadre.getByRole("button", { name: "Simpan keputusan" }).click();
-    await expect(cadre.locator("#reason")).toBeFocused();
-    await expect(cadre.getByText("Tulis minimal 10 karakter.")).toBeVisible();
+    const reviewer = actors.managerA1.page;
+    await reviewer.goto(`/pengelola/verifikasi/${reports.info}`);
+    await reviewer.getByRole("radio", { name: /Minta informasi/ }).check();
+    await reviewer.locator("#reason").fill("pendek");
+    await reviewer.getByRole("button", { name: "Simpan keputusan" }).click();
+    await expect(reviewer.locator("#reason")).toBeFocused();
+    await expect(
+      reviewer.getByText("Tulis minimal 10 karakter."),
+    ).toBeVisible();
     const askReason = "Mohon kirim keterangan apakah wadah masih berisi air.";
-    await cadre.locator("#reason").fill(askReason);
-    await cadre.getByRole("button", { name: "Simpan keputusan" }).click();
-    await expect(cadre.getByText("Keputusan tersimpan")).toBeVisible();
+    await reviewer.locator("#reason").fill(askReason);
+    await reviewer.getByRole("button", { name: "Simpan keputusan" }).click();
+    await expect(reviewer.getByText("Keputusan tersimpan")).toBeVisible();
     expect(await state(reports.info)).toMatchObject({
       status: "needs_information",
       version: 2,
@@ -440,7 +469,7 @@ test.describe("live cadre verification (M5)", () => {
     await resident.goto(`/app/laporan/${reports.info}`);
     await expect(
       resident.getByRole("heading", {
-        name: "Kader meminta informasi tambahan",
+        name: "Pengelola meminta informasi tambahan",
       }),
     ).toBeVisible();
     await expect(resident.getByText(askReason).first()).toBeVisible();
@@ -473,13 +502,13 @@ test.describe("live cadre verification (M5)", () => {
       version: 3,
     });
 
-    await cadre.goto(`/kader/verifikasi/${reports.info}`);
-    await expect(cadre.getByText(note)).toBeVisible();
-    await cadre.getByRole("radio", { name: /Tolak/ }).check();
+    await reviewer.goto(`/pengelola/verifikasi/${reports.info}`);
+    await expect(reviewer.getByText(note)).toBeVisible();
+    await reviewer.getByRole("radio", { name: /Tolak/ }).check();
     const rejectReason = "Wadah berada di dalam rumah, bukan area bersama.";
-    await cadre.locator("#reason").fill(rejectReason);
-    await cadre.getByRole("button", { name: "Simpan keputusan" }).click();
-    await expect(cadre.getByText("Keputusan tersimpan")).toBeVisible();
+    await reviewer.locator("#reason").fill(rejectReason);
+    await reviewer.getByRole("button", { name: "Simpan keputusan" }).click();
+    await expect(reviewer.getByText("Keputusan tersimpan")).toBeVisible();
     expect(await state(reports.info)).toMatchObject({
       status: "rejected",
       version: 4,
@@ -487,9 +516,9 @@ test.describe("live cadre verification (M5)", () => {
     const audit = await events(reports.info);
     expect(audit.map((event) => [event.event_type, event.actor_id])).toEqual([
       ["report_created", actors.resident.id],
-      ["report_information_requested", actors.cadreA1.id],
+      ["report_information_requested", actors.managerA1.id],
       ["report_information_added", actors.resident.id],
-      ["report_rejected", actors.cadreA1.id],
+      ["report_rejected", actors.managerA1.id],
     ]);
     expect(audit[3]?.reason).toBe(rejectReason);
 
@@ -504,17 +533,17 @@ test.describe("live cadre verification (M5)", () => {
     reports.duplicate = await createReport(
       `Wadah yang sama di balai simulasi ${run} terlihat lagi.`,
     );
-    const cadre = actors.cadreA1.page;
-    const rejectedTarget = await review(cadre, reports.duplicate, {
+    const reviewer = actors.managerA1.page;
+    const rejectedTarget = await review(reviewer, reports.duplicate, {
       decision: "duplicate",
       reason: "Objek sama dengan laporan sebelumnya.",
       expectedVersion: 1,
       duplicateOfReportId: reports.info,
     });
     expect(rejectedTarget.status()).toBe(422);
-    await cadre.goto(`/kader/verifikasi/${reports.duplicate}`);
-    await cadre.getByRole("radio", { name: /Tandai duplikat/ }).check();
-    const target = cadre.locator("#duplicateOfReportId");
+    await reviewer.goto(`/pengelola/verifikasi/${reports.duplicate}`);
+    await reviewer.getByRole("radio", { name: /Tandai duplikat/ }).check();
+    const target = reviewer.locator("#duplicateOfReportId");
     await expect(target.locator(`option[value="${reports.main}"]`)).toHaveCount(
       1,
     );
@@ -522,14 +551,14 @@ test.describe("live cadre verification (M5)", () => {
       0,
     );
     await target.selectOption(reports.main);
-    await cadre
+    await reviewer
       .locator("#reason")
       .fill("Objek sama dengan laporan balai sebelumnya.");
-    await cadre.getByRole("button", { name: "Simpan keputusan" }).click();
-    await expect(cadre.getByText("Keputusan tersimpan")).toBeVisible();
+    await reviewer.getByRole("button", { name: "Simpan keputusan" }).click();
+    await expect(reviewer.getByText("Keputusan tersimpan")).toBeVisible();
     await expect(
-      cadre.getByRole("link", { name: "laporan rujukan" }),
-    ).toHaveAttribute("href", `/kader/verifikasi/${reports.main}`);
+      reviewer.getByRole("link", { name: "laporan rujukan" }),
+    ).toHaveAttribute("href", `/pengelola/verifikasi/${reports.main}`);
     expect(await state(reports.duplicate)).toMatchObject({
       status: "duplicate",
       version: 2,
@@ -537,18 +566,18 @@ test.describe("live cadre verification (M5)", () => {
     });
   });
 
-  test("AC-31: two cadre sessions race with the same version", async () => {
+  test("AC-31: two manager sessions race with the same version", async () => {
     // Three rounds: each pair is sent concurrently from separate sessions.
     for (const round of [1, 2, 3]) {
       const id = await createReport(
         `Ban bekas berisi air di simulasi ${run} untuk uji paralel ${round}.`,
       );
       const [first, second] = await Promise.all([
-        review(actors.cadreA1.page, id, {
+        review(actors.managerA1.page, id, {
           decision: "verify",
           expectedVersion: 1,
         }),
-        review(actors.cadreA2.page, id, {
+        review(actors.managerA2.page, id, {
           decision: "reject",
           reason: "Foto tidak menunjukkan genangan air.",
           expectedVersion: 1,
@@ -568,20 +597,20 @@ test.describe("live cadre verification (M5)", () => {
     }
 
     // The losing UI must offer a safe refresh rather than resubmitting.
-    await actors.cadreA2.page.goto(`/kader/verifikasi/${reports.race}`);
+    await actors.managerA2.page.goto(`/pengelola/verifikasi/${reports.race}`);
     await expect(
-      actors.cadreA2.page.getByRole("button", { name: "Simpan keputusan" }),
+      actors.managerA2.page.getByRole("button", { name: "Simpan keputusan" }),
     ).toHaveCount(0);
   });
 
-  test("UI conflict shows a refresh path when another cadre decides first", async () => {
+  test("UI conflict shows a refresh path when another manager decides first", async () => {
     reports.uiRace = await createReport(
       `Saluran tersumbat simulasi ${run} untuk uji konflik UI.`,
     );
-    const page = actors.cadreA2.page;
-    await page.goto(`/kader/verifikasi/${reports.uiRace}`);
+    const page = actors.managerA2.page;
+    await page.goto(`/pengelola/verifikasi/${reports.uiRace}`);
     await page.getByRole("radio", { name: /Verifikasi/ }).check();
-    const won = await review(actors.cadreA1.page, reports.uiRace, {
+    const won = await review(actors.managerA1.page, reports.uiRace, {
       decision: "verify",
       expectedVersion: 1,
     });
@@ -634,9 +663,24 @@ test.describe("live cadre verification (M5)", () => {
       page.getByRole("heading", { name: "Laporan saya" }),
     ).toBeVisible();
     await expect(page.getByText("Tidak Disetujui").first()).toBeVisible();
-    const ownOnly = await actors.cadreB.page.request.get(
+    const ownOnly = await actors.managerB.page.request.get(
       `/api/v1/reports?areaId=${areaA}`,
     );
     expect(ownOnly.status()).toBe(403);
+  });
+
+  test("an analysis the resident did not use shows no AI marker", async () => {
+    const id = await createReport(
+      `Isian warga sendiri tanpa teks AI ${run}.`,
+      true,
+      false,
+    );
+    const page = actors.managerA1.page;
+    await page.goto(`/pengelola/verifikasi/${id}`);
+    await expect(
+      page.getByRole("heading", { name: "Pemeriksaan laporan" }),
+    ).toBeVisible();
+    await expect(page.getByText("Wadah terbuka berisi air")).toBeVisible();
+    await expect(page.getByText("Diisi dengan bantuan AI")).toHaveCount(0);
   });
 });

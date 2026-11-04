@@ -34,6 +34,8 @@ type ReportRow = {
 };
 
 type ReportDetailRow = ReportRow & {
+  visible_objects: string | null;
+  prevention_advice: string | null;
   latitude: number | null;
   longitude: number | null;
   location_note: string | null;
@@ -143,7 +145,7 @@ export async function getReportDetail(id: string) {
   const report = await client
     .from("reports")
     .select(
-      "id,public_reference,area_id,category,description,status,latitude,longitude,location_note,is_demo,duplicate_of_report_id,submitted_at,created_at,version",
+      "id,public_reference,area_id,category,description,visible_objects,prevention_advice,status,latitude,longitude,location_note,is_demo,duplicate_of_report_id,submitted_at,created_at,version",
     )
     .eq("id", id)
     .maybeSingle<ReportDetailRow>();
@@ -188,6 +190,8 @@ export async function getReportDetail(id: string) {
     report: {
       data: {
         ...toReportSummary(row),
+        visibleObjects: row.visible_objects,
+        preventionAdvice: row.prevention_advice,
         latitude: row.latitude,
         longitude: row.longitude,
         locationNote: row.location_note,

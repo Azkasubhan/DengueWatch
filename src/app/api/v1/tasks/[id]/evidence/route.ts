@@ -16,5 +16,6 @@ export async function POST(
       p_description: input.description,
       p_expected_version: input.expectedVersion,
     }),
+    "cadre",
   );
 }

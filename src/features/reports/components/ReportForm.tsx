@@ -7,7 +7,6 @@ import {
   reportCategoryLabels,
 } from "@/features/reports/validation";
 import { Button } from "@/components/ui/Button";
-import { AiSuggestionDetails } from "@/features/ai/components/AiSuggestionDetails";
 import {
   aiReportSuggestionSchema,
   type AiReportSuggestion,
@@ -15,6 +14,8 @@ import {
 
 type Area = { id: string; name: string; isDemo: boolean };
 type LocalPhoto = { file: File; url: string };
+type AiField =
+  "category" | "visibleObjects" | "description" | "preventionAdvice";
 
 export function ReportForm({ areas }: { areas: Area[] }) {
   const router = useRouter();
@@ -24,6 +25,8 @@ export function ReportForm({ areas }: { areas: Area[] }) {
     keyof typeof reportCategoryLabels | ""
   >("");
   const [description, setDescription] = useState("");
+  const [visibleObjects, setVisibleObjects] = useState("");
+  const [preventionAdvice, setPreventionAdvice] = useState("");
   const [locationNote, setLocationNote] = useState("");
   const [coordinates, setCoordinates] = useState<{
     latitude: number;
@@ -41,7 +44,6 @@ export function ReportForm({ areas }: { areas: Area[] }) {
   const [uploadedIds, setUploadedIds] = useState<string[]>([]);
   const [aiStage, setAiStage] = useState<
     | "idle"
-    | "preparing"
     | "loading"
     | "success"
     | "unavailable"
@@ -50,17 +52,27 @@ export function ReportForm({ areas }: { areas: Area[] }) {
     | "cancelled"
   >("idle");
   const [aiMessage, setAiMessage] = useState("");
-  const [suggestion, setSuggestion] = useState<AiReportSuggestion | null>(null);
-  const [confirmApply, setConfirmApply] = useState(false);
-  // Marks fields copied from the AI suggestion until the resident edits them.
-  const [aiFilled, setAiFilled] = useState(false);
-  const [restoreValues, setRestoreValues] = useState<{
-    category: typeof category;
-    description: string;
-  } | null>(null);
+  // T29: fields the AI filled that the resident has not edited yet.
+  const [aiFields, setAiFields] = useState<AiField[]>([]);
   const aiControllerRef = useRef<AbortController | null>(null);
   const aiGenerationRef = useRef(0);
-  const manualRevisionRef = useRef(0);
+  // Latest field values for the async AI callback, which never overwrites resident input.
+  const valuesRef = useRef({
+    category,
+    visibleObjects,
+    description,
+    preventionAdvice,
+    aiFields,
+  });
+  useEffect(() => {
+    valuesRef.current = {
+      category,
+      visibleObjects,
+      description,
+      preventionAdvice,
+      aiFields,
+    };
+  });
 
   useEffect(
     () => () => {
@@ -83,9 +95,6 @@ export function ReportForm({ areas }: { areas: Area[] }) {
     aiControllerRef.current = null;
     setAiStage("idle");
     setAiMessage("");
-    setSuggestion(null);
-    setConfirmApply(false);
-    setRestoreValues(null);
   }
 
   function releaseUploads(ids: string[]) {
@@ -123,6 +132,8 @@ export function ReportForm({ areas }: { areas: Area[] }) {
     setPreview(false);
     setRequestKey(crypto.randomUUID());
     setFieldErrors((old) => ({ ...old, photos: "" }));
+    // T29: a new first photo is analyzed right away.
+    void analyzePhoto(next[0]!);
   }
 
   function removePhoto(index: number) {
@@ -134,118 +145,127 @@ export function ReportForm({ areas }: { areas: Area[] }) {
     setRequestKey(crypto.randomUUID());
   }
 
-  async function preparePrimaryPhoto() {
-    if (!photos[0] || uploadedIds[0] || busy || aiStage === "preparing") return;
-    setAiStage("preparing");
-    setAiMessage("");
-    const generation = aiGenerationRef.current;
-    const body = new FormData();
-    body.append("photo", photos[0].file);
-    try {
-      const response = await fetch("/api/v1/report-uploads", {
-        method: "POST",
-        body,
-      });
-      const payload = await response.json();
-      if (!response.ok || typeof payload.id !== "string")
-        throw new Error(
-          payload.error?.message ?? "Foto belum dapat disiapkan.",
-        );
-      if (generation !== aiGenerationRef.current) {
-        releaseUploads([payload.id]);
-        return;
-      }
-      setUploadedIds((current) => [payload.id, ...current.slice(1)]);
-      setAiStage("idle");
-    } catch (cause) {
-      if (generation !== aiGenerationRef.current) return;
-      setAiStage("unavailable");
-      setAiMessage(
-        cause instanceof Error ? cause.message : "Foto belum dapat disiapkan.",
-      );
-    }
-  }
-
-  async function requestAi() {
-    if (!uploadedIds[0] || !areaId || busy || aiStage === "loading") return;
+  // Uploads the first photo privately (once) and asks the AI to fill the form.
+  async function analyzePhoto(file: File, uploadId?: string) {
+    if (!areaId) return;
+    aiControllerRef.current?.abort();
     const controller = new AbortController();
     aiControllerRef.current = controller;
-    const generation = aiGenerationRef.current;
-    const revision = manualRevisionRef.current;
+    const generation = ++aiGenerationRef.current;
     setAiStage("loading");
     setAiMessage("");
-    setSuggestion(null);
-    setConfirmApply(false);
+    let stage: "unavailable" | "invalid" | "rate" = "unavailable";
+    let message =
+      "Analisis AI tidak tersedia. Silakan isi kolom secara manual.";
     try {
+      let id = uploadId;
+      if (!id) {
+        const body = new FormData();
+        body.append("photo", file);
+        const response = await fetch("/api/v1/report-uploads", {
+          method: "POST",
+          body,
+          signal: controller.signal,
+        });
+        const payload = await response.json();
+        if (!response.ok || typeof payload.id !== "string") {
+          message = `${payload.error?.message ?? "Foto belum dapat disiapkan."} Silakan isi kolom secara manual.`;
+          throw new Error("UPLOAD_FAILED");
+        }
+        if (generation !== aiGenerationRef.current) {
+          releaseUploads([payload.id]);
+          return;
+        }
+        id = payload.id as string;
+        setUploadedIds((current) => [id!, ...current.slice(1)]);
+      }
       const response = await fetch("/api/v1/ai/analyze-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ areaId, uploadId: uploadedIds[0] }),
+        body: JSON.stringify({ areaId, uploadId: id }),
         signal: controller.signal,
       });
       const payload = await response.json();
       if (generation !== aiGenerationRef.current) return;
       if (!response.ok) {
         const code = payload.error?.code;
-        setAiStage(
+        stage =
           code === "RATE_LIMIT"
             ? "rate"
             : code === "AI_INVALID_OUTPUT"
               ? "invalid"
-              : "unavailable",
-        );
-        setAiMessage(
-          payload.error?.message ??
-            "Analisis AI tidak tersedia. Anda tetap dapat melanjutkan laporan secara manual.",
-        );
-        return;
+              : "unavailable";
+        if (payload.error?.message)
+          message = `${payload.error.message} Silakan isi kolom secara manual.`;
+        throw new Error("AI_FAILED");
       }
       const parsed = aiReportSuggestionSchema.safeParse(
         payload.data?.suggestion,
       );
-      if (!parsed.success || revision !== manualRevisionRef.current) {
-        setAiStage("invalid");
-        setAiMessage(
-          revision !== manualRevisionRef.current
-            ? "Isian berubah saat analisis berjalan. Minta saran baru bila diperlukan."
-            : "Saran AI tidak valid. Anda tetap dapat melanjutkan laporan secara manual.",
-        );
-        return;
+      if (!parsed.success) {
+        stage = "invalid";
+        message =
+          "Hasil AI tidak dapat dipakai. Silakan isi kolom secara manual.";
+        throw new Error("AI_INVALID");
       }
-      setSuggestion(parsed.data);
-      setAiStage("success");
+      fillFromAi(parsed.data);
     } catch {
       if (generation !== aiGenerationRef.current) return;
-      setAiStage(controller.signal.aborted ? "cancelled" : "unavailable");
-      setAiMessage(
-        controller.signal.aborted
-          ? "Analisis dibatalkan. Isian Anda tetap tersedia."
-          : "Analisis AI tidak tersedia. Anda tetap dapat melanjutkan laporan secara manual.",
-      );
+      if (controller.signal.aborted) {
+        setAiStage("cancelled");
+        setAiMessage("Analisis dibatalkan. Isian Anda tetap tersedia.");
+        return;
+      }
+      setAiStage(stage);
+      setAiMessage(message);
     } finally {
       if (aiControllerRef.current === controller)
         aiControllerRef.current = null;
     }
   }
 
-  function applySuggestion() {
-    if (!suggestion) return;
-    if (!confirmApply && (category || description)) {
-      setConfirmApply(true);
-      return;
+  // Fills empty fields and fields still holding an unedited AI fill (e.g. from a replaced
+  // photo), so the resident's own text is never overwritten.
+  function fillFromAi(suggestion: AiReportSuggestion) {
+    const current = valuesRef.current;
+    const open = (field: AiField, value: string) =>
+      !value.trim() || current.aiFields.includes(field);
+    const filled: AiField[] = [];
+    if (open("category", current.category)) {
+      setCategory(suggestion.suggestedCategory);
+      filled.push("category");
     }
-    setRestoreValues({ category, description });
-    setCategory(suggestion.suggestedCategory);
-    setDescription(suggestion.draftDescription);
+    if (open("visibleObjects", current.visibleObjects)) {
+      setVisibleObjects(suggestion.visibleObjects.join(", "));
+      filled.push("visibleObjects");
+    }
+    if (open("description", current.description)) {
+      setDescription(suggestion.draftDescription);
+      filled.push("description");
+    }
+    if (open("preventionAdvice", current.preventionAdvice)) {
+      setPreventionAdvice(suggestion.suggestedPrecaution);
+      filled.push("preventionAdvice");
+    }
+    setAiFields(filled);
     setRequestKey(crypto.randomUUID());
-    setConfirmApply(false);
-    setAiFilled(true);
+    setAiStage("success");
     setAiMessage(
-      "Saran disalin ke formulir. Periksa dan ubah sebelum mengirim.",
+      filled.length === 4
+        ? "AI mengisi formulir dari foto pertama. Periksa dan ubah bila ada yang tidak sesuai."
+        : filled.length
+          ? "AI mengisi kolom yang belum Anda isi. Kolom yang sudah Anda isi tidak diubah."
+          : "Semua kolom sudah Anda isi, jadi hasil AI tidak dipakai.",
     );
-    requestAnimationFrame(() =>
-      document.getElementById("description")?.focus(),
-    );
+  }
+
+  function editField(field: AiField, value: string) {
+    if (field === "category") setCategory(value as typeof category);
+    if (field === "visibleObjects") setVisibleObjects(value);
+    if (field === "description") setDescription(value);
+    if (field === "preventionAdvice") setPreventionAdvice(value);
+    setAiFields((current) => current.filter((name) => name !== field));
+    setRequestKey(crypto.randomUUID());
   }
 
   function validate() {
@@ -253,6 +273,8 @@ export function ReportForm({ areas }: { areas: Area[] }) {
       areaId,
       category,
       description,
+      visibleObjects,
+      preventionAdvice,
       imageUploadIds: photos.map(() => crypto.randomUUID()),
       location:
         coordinates || locationNote
@@ -300,8 +322,9 @@ export function ReportForm({ areas }: { areas: Area[] }) {
   }
 
   async function submit() {
-    if (busy || aiStage === "preparing" || aiStage === "loading" || !validate())
-      return;
+    if (busy || !validate()) return;
+    // A slow or hanging analysis never blocks manual reporting.
+    if (aiStage === "loading") invalidateAi();
     setBusy(true);
     setError("");
     const ids = [...uploadedIds];
@@ -335,6 +358,8 @@ export function ReportForm({ areas }: { areas: Area[] }) {
           areaId,
           category,
           description,
+          visibleObjects,
+          preventionAdvice,
           imageUploadIds: ids,
           location:
             coordinates || locationNote
@@ -386,6 +411,12 @@ export function ReportForm({ areas }: { areas: Area[] }) {
         {fieldErrors[name]}
       </p>
     ) : null;
+  const aiBadge = (field: AiField) =>
+    aiFields.includes(field) ? (
+      <span className="ml-2 rounded-full bg-[var(--info-subtle)] px-2 py-0.5 text-xs font-semibold text-[var(--info)]">
+        Diisi AI · periksa
+      </span>
+    ) : null;
   const activeErrors = Object.entries(fieldErrors).filter(([, message]) =>
     Boolean(message),
   );
@@ -394,7 +425,9 @@ export function ReportForm({ areas }: { areas: Area[] }) {
     imageUploadIds: "photos",
     areaId: "areaId",
     category: "category",
+    visibleObjects: "visibleObjects",
     description: "description",
+    preventionAdvice: "preventionAdvice",
     location: "locationNote",
   };
 
@@ -476,7 +509,9 @@ export function ReportForm({ areas }: { areas: Area[] }) {
               >
                 Pilih 1–3 foto JPG, PNG, atau WebP, masing-masing maksimal 5
                 MiB. Pilihan baru mengganti foto sebelumnya. Hindari wajah, plat
-                kendaraan, dan alamat rumah.
+                kendaraan, dan alamat rumah. Foto pertama langsung dianalisis AI
+                (Gemini) untuk mengisi formulir; lokasi dan data akun tidak
+                dikirim.
               </p>
               {fieldError("photos")}
               <div className="grid grid-cols-3 gap-3">
@@ -506,42 +541,28 @@ export function ReportForm({ areas }: { areas: Area[] }) {
             {photos.length ? (
               <section
                 aria-labelledby="ai-heading"
-                className="grid gap-4 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5"
+                className="grid gap-3 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4"
               >
-                <div className="grid gap-1">
-                  <h2 id="ai-heading" className="text-lg font-semibold">
-                    Bantuan Gemini (opsional)
-                  </h2>
-                  <p className="text-sm text-[var(--muted-foreground)]">
-                    Foto pertama dianalisis layanan AI eksternal untuk menyusun
-                    draf. Lokasi dan data akun tidak dikirim ke Gemini. Hasilnya
-                    saran yang perlu Anda periksa.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  {!uploadedIds[0] ? (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={busy || aiStage === "preparing"}
-                      onClick={preparePrimaryPhoto}
-                    >
-                      {aiStage === "preparing"
-                        ? "Menyiapkan foto…"
-                        : "Siapkan foto untuk AI"}
-                    </Button>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={busy || aiStage === "loading"}
-                      onClick={requestAi}
-                    >
-                      {aiStage === "loading"
-                        ? "Menganalisis…"
-                        : "Bantu dengan Gemini"}
-                    </Button>
-                  )}
+                <h2 id="ai-heading" className="font-semibold">
+                  Isi otomatis dengan AI
+                </h2>
+                <p
+                  role={
+                    aiStage === "unavailable" ||
+                    aiStage === "invalid" ||
+                    aiStage === "rate"
+                      ? "alert"
+                      : "status"
+                  }
+                  className="text-sm text-[var(--muted-foreground)]"
+                >
+                  {aiStage === "loading"
+                    ? "AI sedang membaca foto pertama dan mengisi formulir. Anda tetap dapat mengisi sendiri."
+                    : aiStage === "idle"
+                      ? "Minta AI mengisi kolom yang masih kosong dari foto pertama, atau isi sendiri."
+                      : aiMessage}
+                </p>
+                <div className="flex flex-wrap gap-2">
                   {aiStage === "loading" ? (
                     <Button
                       type="button"
@@ -557,109 +578,19 @@ export function ReportForm({ areas }: { areas: Area[] }) {
                     >
                       Batalkan analisis
                     </Button>
+                  ) : aiStage !== "success" && aiStage !== "rate" ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={busy}
+                      onClick={() =>
+                        analyzePhoto(photos[0]!.file, uploadedIds[0])
+                      }
+                    >
+                      Analisis ulang
+                    </Button>
                   ) : null}
                 </div>
-                {aiStage === "preparing" || aiStage === "loading" ? (
-                  <p role="status" aria-live="polite" className="text-sm">
-                    {aiStage === "preparing"
-                      ? "Foto sedang divalidasi dan disimpan privat…"
-                      : "Gemini sedang menyiapkan saran. Anda tetap dapat mengisi laporan."}
-                  </p>
-                ) : null}
-                {aiMessage ? (
-                  <p
-                    role={
-                      aiStage === "unavailable" ||
-                      aiStage === "invalid" ||
-                      aiStage === "rate"
-                        ? "alert"
-                        : "status"
-                    }
-                    className="text-sm text-[var(--muted-foreground)]"
-                  >
-                    {aiMessage}
-                  </p>
-                ) : null}
-                {suggestion && aiStage === "success" ? (
-                  <div
-                    className="grid gap-3 border-t border-[var(--border)] pt-4"
-                    aria-labelledby="ai-result-heading"
-                  >
-                    <h3 id="ai-result-heading" className="font-semibold">
-                      Saran AI — perlu verifikasi
-                    </h3>
-                    <AiSuggestionDetails
-                      category={suggestion.suggestedCategory}
-                      visibleObjects={suggestion.visibleObjects}
-                      draftDescription={suggestion.draftDescription}
-                      precaution={suggestion.suggestedPrecaution}
-                      limitations={suggestion.limitations}
-                    />
-                    {confirmApply ? (
-                      <div
-                        role="alert"
-                        className="grid gap-2 rounded-[var(--radius-control)] border border-[var(--border)] p-3"
-                      >
-                        <p className="text-sm">
-                          Kategori atau deskripsi saat ini sudah terisi. Ganti
-                          dengan saran AI? Isian lama dapat dipulihkan segera
-                          setelahnya.
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          <Button type="button" onClick={applySuggestion}>
-                            Ya, ganti isian
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={() => setConfirmApply(false)}
-                          >
-                            Batal
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
-                        <Button type="button" onClick={applySuggestion}>
-                          Terapkan saran ke formulir
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() => {
-                            setSuggestion(null);
-                            setAiStage("idle");
-                            setAiMessage(
-                              "Saran diabaikan. Isian manual tetap tersedia.",
-                            );
-                          }}
-                        >
-                          Abaikan saran
-                        </Button>
-                      </div>
-                    )}
-                    <p className="text-xs text-[var(--muted-foreground)]">
-                      Anda dapat mengubah kategori dan deskripsi setelah
-                      menerapkan saran. Laporan tidak dikirim otomatis.
-                    </p>
-                  </div>
-                ) : null}
-                {restoreValues ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => {
-                      setCategory(restoreValues.category);
-                      setDescription(restoreValues.description);
-                      setRestoreValues(null);
-                      setAiFilled(false);
-                      setRequestKey(crypto.randomUUID());
-                      setAiMessage("Isian sebelumnya dipulihkan.");
-                    }}
-                  >
-                    Pulihkan isian sebelumnya
-                  </Button>
-                ) : null}
               </section>
             ) : null}
           </div>
@@ -698,11 +629,7 @@ export function ReportForm({ areas }: { areas: Area[] }) {
               <div className="grid gap-2">
                 <label htmlFor="category" className="text-sm font-semibold">
                   Kategori temuan <span aria-hidden="true">*</span>
-                  {aiFilled ? (
-                    <span className="ml-2 rounded-full bg-[var(--info-subtle)] px-2 py-0.5 text-xs font-semibold text-[var(--info)]">
-                      Diisi dari saran AI · bisa diubah
-                    </span>
-                  ) : null}
+                  {aiBadge("category")}
                 </label>
                 <select
                   id="category"
@@ -712,13 +639,9 @@ export function ReportForm({ areas }: { areas: Area[] }) {
                   aria-describedby={
                     fieldErrors.category ? "category-error" : undefined
                   }
-                  onChange={(event) => {
-                    setCategory(event.target.value as typeof category);
-                    manualRevisionRef.current += 1;
-                    setRestoreValues(null);
-                    setAiFilled(false);
-                    setRequestKey(crypto.randomUUID());
-                  }}
+                  onChange={(event) =>
+                    editField("category", event.target.value)
+                  }
                   className={control}
                 >
                   <option value="">Pilih kategori</option>
@@ -734,25 +657,44 @@ export function ReportForm({ areas }: { areas: Area[] }) {
               </div>
             </div>
             <div className="grid gap-2">
+              <label htmlFor="visibleObjects" className="text-sm font-semibold">
+                Yang tampak pada foto <span aria-hidden="true">*</span>
+                {aiBadge("visibleObjects")}
+              </label>
+              <textarea
+                id="visibleObjects"
+                value={visibleObjects}
+                aria-required="true"
+                onChange={(event) =>
+                  editField("visibleObjects", event.target.value)
+                }
+                maxLength={500}
+                rows={2}
+                aria-invalid={Boolean(fieldErrors.visibleObjects)}
+                aria-describedby="visibleObjects-help visibleObjects-error"
+                className={control}
+                placeholder="Contoh: ember terbuka, air tergenang, ban bekas"
+              />
+              <p
+                id="visibleObjects-help"
+                className="text-sm text-[var(--muted-foreground)]"
+              >
+                5–500 karakter. Sebutkan benda atau kondisi yang terlihat.
+              </p>
+              {fieldError("visibleObjects")}
+            </div>
+            <div className="grid gap-2">
               <label htmlFor="description" className="text-sm font-semibold">
                 Deskripsi lingkungan <span aria-hidden="true">*</span>
-                {aiFilled ? (
-                  <span className="ml-2 rounded-full bg-[var(--info-subtle)] px-2 py-0.5 text-xs font-semibold text-[var(--info)]">
-                    Diisi dari saran AI · bisa diubah
-                  </span>
-                ) : null}
+                {aiBadge("description")}
               </label>
               <textarea
                 id="description"
                 value={description}
                 aria-required="true"
-                onChange={(event) => {
-                  setDescription(event.target.value);
-                  manualRevisionRef.current += 1;
-                  setRestoreValues(null);
-                  setAiFilled(false);
-                  setRequestKey(crypto.randomUUID());
-                }}
+                onChange={(event) =>
+                  editField("description", event.target.value)
+                }
                 maxLength={1000}
                 rows={3}
                 aria-invalid={Boolean(fieldErrors.description)}
@@ -767,6 +709,36 @@ export function ReportForm({ areas }: { areas: Area[] }) {
                 10–1000 karakter. Deskripsikan yang terlihat, tanpa diagnosis.
               </p>
               {fieldError("description")}
+            </div>
+            <div className="grid gap-2">
+              <label
+                htmlFor="preventionAdvice"
+                className="text-sm font-semibold"
+              >
+                Saran pencegahan <span aria-hidden="true">*</span>
+                {aiBadge("preventionAdvice")}
+              </label>
+              <textarea
+                id="preventionAdvice"
+                value={preventionAdvice}
+                aria-required="true"
+                onChange={(event) =>
+                  editField("preventionAdvice", event.target.value)
+                }
+                maxLength={500}
+                rows={2}
+                aria-invalid={Boolean(fieldErrors.preventionAdvice)}
+                aria-describedby="preventionAdvice-help preventionAdvice-error"
+                className={control}
+                placeholder="Contoh: tutup wadah dan kuras seminggu sekali."
+              />
+              <p
+                id="preventionAdvice-help"
+                className="text-sm text-[var(--muted-foreground)]"
+              >
+                10–500 karakter. Langkah sederhana yang bisa segera dilakukan.
+              </p>
+              {fieldError("preventionAdvice")}
             </div>
             <div className="grid gap-3 rounded-[var(--radius-control)] bg-[var(--background)] p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -855,7 +827,15 @@ export function ReportForm({ areas }: { areas: Area[] }) {
             {category ? reportCategoryLabels[category] : ""}
           </p>
           <p className="whitespace-pre-wrap break-words">
+            <span className="font-semibold">Yang tampak pada foto:</span>{" "}
+            {visibleObjects}
+          </p>
+          <p className="whitespace-pre-wrap break-words">
             <span className="font-semibold">Deskripsi:</span> {description}
+          </p>
+          <p className="whitespace-pre-wrap break-words">
+            <span className="font-semibold">Saran pencegahan:</span>{" "}
+            {preventionAdvice}
           </p>
           <p>
             <span className="font-semibold">Lokasi:</span>{" "}

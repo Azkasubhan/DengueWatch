@@ -101,13 +101,15 @@ RPC `review_report` dan `add_report_information` (lihat T18 dan `docs/M5_VERIFIC
    tidak memanggil Gemini.
 2. `POST /api/v1/ai/analyze-report` memvalidasi session resident dan area. RPC
    `reserve_ai_analysis` memeriksa lagi membership, pemilik/masa lease foto, keberadaan
-   objek, batas 10/jam dan 30/hari, serta satu analisis aktif per pengguna.
+   objek, serta satu analisis aktif per pengguna (tanpa kuota per akun, T32).
 3. Service server mengunduh objek lewat path yang diambil dari row server, memeriksa
    ukuran/signature/decode/dimensi/metadata, lalu memberi hanya satu gambar WebP kepada
    adapter `@google/genai`. Tidak ada nama, email, lokasi, GPS, atau data medis pada input.
 4. JSON dari Gemini dianggap tidak tepercaya. Zod strict dan guard klaim eksplisit
-   memvalidasi sebelum saran disimpan dan dikirim ke browser. Warga menerapkan atau
-   mengabaikan saran; submit tetap menggunakan RPC M3.
+   memvalidasi sebelum saran disimpan dan dikirim ke browser. Analisis berjalan otomatis
+   saat foto dipilih dan hanya mengisi kolom formulir yang masih kosong (kategori, yang
+   tampak, deskripsi, saran pencegahan); semua kolom wajib dan dapat diedit, dan submit
+   tetap melalui RPC M3 (T29).
 5. `ai_analyses` terpisah dari `reports`. Trigger pada `report_images` menautkan satu
    analisis sukses terbaru ke report ketika upload yang sama difinalisasi; analisis tidak
    tertaut dihapus setelah 24 jam (T25). Status report/event tidak berubah.
@@ -115,14 +117,18 @@ RPC `review_report` dan `add_report_information` (lihat T18 dan `docs/M5_VERIFIC
 
 ## Alur ActionLoop M6
 
-1. Kader membuat task dari laporan `verified`/`in_action` melalui
-   `POST /api/v1/reports/:id/tasks` dengan `Idempotency-Key`. Task pertama memindahkan laporan
+1. Manager area memverifikasi laporan, lalu membuat task dari laporan `verified`/`in_action`
+   melalui `POST /api/v1/reports/:id/tasks` dengan `Idempotency-Key`, memilih satu atau lebih kader
+   terverifikasi area itu (`action_task_assignees`, T27), dan tenggat tanggal wajib (T28). Task pertama memindahkan laporan
    ke `in_action` dalam transaksi yang sama.
-2. Assignee memulai task, memesan lease bukti melalui
+2. Salah satu kader yang ditugaskan memulai task, memesan lease bukti melalui
    `POST /api/v1/tasks/:id/evidence-uploads` (pipeline foto M3, lease terikat task), lalu
-   mengirim bukti. Task menjadi `awaiting_review`.
-3. Kader lain di area yang sama menyetujui atau meminta revisi. Persetujuan task wajib
-   terakhir menutup laporan (`resolved`); membuka kembali task wajib mengembalikan laporan
-   ke `in_action` dengan alasan.
+   mengirim bukti. Setiap kader pelaksana mengirim buktinya sendiri; task menjadi
+   `awaiting_review` (T33).
+3. Manager menyetujui atau meminta revisi bukti per kader. Task `completed` setelah bukti
+   semua kader disetujui pada putaran berjalan; reopen memulai putaran baru. Persetujuan task wajib terakhir menutup
+   laporan (`resolved`); manager dapat membatalkan task atau membuka kembali task wajib, yang
+   mengembalikan laporan ke `in_action` dengan alasan.
 4. Setiap RPC mengunci laporan lalu task, memeriksa versi, dan menulis `task_events` /
-   `report_events` append-only. Manager hanya membaca melalui RLS.
+   `report_events` append-only. Kader hanya membaca task yang ditugaskan kepadanya beserta
+   laporan terkait melalui RLS.

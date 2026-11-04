@@ -5,7 +5,7 @@ import {
   reviewReportSchema,
 } from "@/features/reports/validation";
 import {
-  cadreContext,
+  managerContext,
   readJsonBody,
   reportError,
   reportJson,
@@ -20,7 +20,7 @@ export async function POST(
 ) {
   if (!sameOrigin(request))
     return reportError(403, "FORBIDDEN", "Asal permintaan tidak valid.");
-  const auth = await cadreContext();
+  const auth = await managerContext();
   if (auth.error) return auth.error;
   const { id } = await params;
   if (!z.uuid().safeParse(id).success)

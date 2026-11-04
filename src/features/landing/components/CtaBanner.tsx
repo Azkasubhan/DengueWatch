@@ -24,8 +24,8 @@ export function CtaBanner() {
         </h2>
         <div className="lg:col-span-5">
           <p className="text-white/85">
-            Daftar sebagai warga dalam satu menit. Kader di wilayah Anda akan
-            menerima laporan dan menindaklanjutinya.
+            Daftar sebagai warga dalam satu menit. Pengelola dan kader di
+            wilayah Anda akan menerima laporan dan menindaklanjutinya.
           </p>
           <LinkButton
             className="mt-6 min-h-12 border-white bg-white pr-2 pl-5 text-[var(--foreground)] hover:bg-[var(--sand)]"

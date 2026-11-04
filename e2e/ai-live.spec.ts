@@ -28,31 +28,16 @@ test("real Gemini analyzes one synthetic private photo and resident submits thro
   await page.getByRole("button", { name: "Masuk" }).click();
   await expect(page).toHaveURL(/\/app\/beranda$/);
   await page.goto("/app/laporan/buat");
-  await page
-    .locator("#photos")
-    .setInputFiles(resolve("assets/demo-reports/water-container.png"));
-  const prepared = page.waitForResponse(
-    (response) =>
-      response.url().endsWith("/api/v1/report-uploads") &&
-      response.request().method() === "POST",
-  );
-  await page.getByRole("button", { name: "Siapkan foto untuk AI" }).click();
-  expect((await prepared).status()).toBe(201);
-  await expect(
-    page.getByRole("button", { name: "Bantu dengan Gemini" }),
-  ).toBeVisible();
-
-  const originalDescription =
-    "Foto simulasi lingkungan perlu pemeriksaan manual oleh warga.";
-  await page.locator("#category").selectOption("other");
-  await page.locator("#description").fill(originalDescription);
+  // T29: selecting the photo uploads it and asks Gemini to fill the form.
   const analyzed = page.waitForResponse(
     (response) =>
       response.url().endsWith("/api/v1/ai/analyze-report") &&
       response.request().method() === "POST",
     { timeout: 70_000 },
   );
-  await page.getByRole("button", { name: "Bantu dengan Gemini" }).click();
+  await page
+    .locator("#photos")
+    .setInputFiles(resolve("assets/demo-reports/water-container.png"));
   const response = await analyzed;
   const payload = await response.json();
   if (response.status() !== 200)
@@ -65,13 +50,15 @@ test("real Gemini analyzes one synthetic private photo and resident submits thro
   const analysisId = payload.data?.analysisId as string;
   expect(analysisId).toMatch(/^[0-9a-f-]{36}$/);
   expect(suggestion.requiresHumanVerification).toBe(true);
-  await expect(
-    page.getByRole("heading", { name: "Saran AI — perlu verifikasi" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Abaikan saran" }),
-  ).toBeVisible();
-  await expect(page.locator("#description")).toHaveValue(originalDescription);
+  await expect(page.locator("#category")).toHaveValue(
+    suggestion.suggestedCategory,
+  );
+  await expect(page.locator("#description")).toHaveValue(
+    suggestion.draftDescription,
+  );
+  await expect(page.locator("#visibleObjects")).toHaveValue(
+    suggestion.visibleObjects.join(", "),
+  );
   await page.screenshot({
     path: testInfo.outputPath("live-gemini-suggestion.png"),
     fullPage: true,
@@ -103,19 +90,6 @@ test("real Gemini analyzes one synthetic private photo and resident submits thro
   expect(owner.error).toBeNull();
   expect(owner.data.user?.email).toBe(email);
 
-  await page
-    .getByRole("button", { name: "Terapkan saran ke formulir" })
-    .click();
-  await expect(
-    page.getByText("Ganti dengan saran AI?", { exact: false }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Ya, ganti isian" }).click();
-  await expect(page.locator("#category")).toHaveValue(
-    suggestion.suggestedCategory,
-  );
-  await expect(page.locator("#description")).toHaveValue(
-    suggestion.draftDescription,
-  );
   const edited = `Foto simulasi lingkungan perlu pemeriksaan lanjutan. Catatan warga ${randomUUID().slice(0, 8)}.`;
   await page.locator("#description").fill(edited);
   await page.getByRole("button", { name: "Tinjau laporan" }).click();

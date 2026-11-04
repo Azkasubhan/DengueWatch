@@ -2,7 +2,7 @@ export const controlClass =
   "min-h-11 w-full rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] px-3.5 py-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] aria-[invalid=true]:border-[var(--danger)]";
 
 export type ReportActionResult =
-  | { kind: "ok"; data?: { id?: string } }
+  | { kind: "ok"; data?: { id?: string; status?: string } }
   | { kind: "conflict"; message: string }
   | { kind: "invalid"; message: string; fieldErrors: Record<string, string> }
   | { kind: "error"; message: string };

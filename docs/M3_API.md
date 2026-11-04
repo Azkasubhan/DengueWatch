@@ -22,7 +22,7 @@ Resident harus memiliki area terverifikasi. Respons `201`:
 
 `id` adalah referensi lease upload milik user yang berlaku satu jam, bukan storage path.
 `DELETE /api/v1/report-uploads/:id` menghapus lease yang belum digunakan oleh pemilik.
-Ledger server tetap menghitung reservasi yang sudah dihapus untuk batas 30 upload per jam.
+Batas 30 upload per jam dan ledger-nya dihapus pada T31.
 
 ## POST `/api/v1/reports`
 

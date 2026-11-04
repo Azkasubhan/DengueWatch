@@ -10,13 +10,14 @@ export type TaskRow = {
   area_id: string;
   title: string;
   description: string;
-  assigned_to: string;
+  action_task_assignees: { profile_id: string }[];
   created_by: string;
   status: TaskStatus;
   is_mandatory: boolean;
   due_at: string | null;
   completed_at: string | null;
   version: number;
+  evidence_round: number;
   created_at: string;
   updated_at: string;
   reports: { public_reference: string } | null;
@@ -32,9 +33,19 @@ type EvidenceRow = {
   description: string;
   review_status: "pending" | "approved" | "revision_required";
   review_reason: string | null;
+  evidence_round: number;
   created_at: string;
   reviewed_at: string | null;
 };
+
+type AssigneeRow = {
+  task_id: string;
+  profile_id: string;
+  display_name: string;
+  is_me: boolean;
+};
+
+export type EvidenceStatus = EvidenceRow["review_status"] | "missing";
 
 type TaskEventRow = {
   id: string;
@@ -45,8 +56,8 @@ type TaskEventRow = {
   created_at: string;
 };
 
-const taskColumns =
-  "id,report_id,area_id,title,description,assigned_to,created_by,status,is_mandatory,due_at,completed_at,version,created_at,updated_at,reports(public_reference)";
+const taskColumns = (assignees: string) =>
+  `id,report_id,area_id,title,description,${assignees}(profile_id),created_by,status,is_mandatory,due_at,completed_at,version,evidence_round,created_at,updated_at,reports(public_reference)`;
 
 // Profile ids of other cadres stay server-side; the client only learns its own role in a task.
 export function toTask(row: TaskRow, userId: string) {
@@ -64,14 +75,16 @@ export function toTask(row: TaskRow, userId: string) {
     version: row.version,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    assignedToMe: row.assigned_to === userId,
+    assignedToMe: row.action_task_assignees.some(
+      (assignee) => assignee.profile_id === userId,
+    ),
     createdByMe: row.created_by === userId,
   };
 }
 
 export type TaskSummary = ReturnType<typeof toTask>;
 
-// RLS limits rows to verified cadre or manager areas.
+// RLS limits rows to the manager's areas or to tasks assigned to the cadre.
 export async function listTasks(
   page: number,
   limit: number,
@@ -81,14 +94,22 @@ export async function listTasks(
   const client = await createUserClient();
   let query = client
     .from("action_tasks")
-    .select(taskColumns, { count: "exact" })
+    .select(
+      taskColumns(
+        filters.assignee === "me"
+          ? "action_task_assignees!inner"
+          : "action_task_assignees",
+      ),
+      { count: "exact" },
+    )
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .range((page - 1) * limit, page * limit - 1);
   if (filters.status) query = query.in("status", filters.status);
   if (filters.reportId) query = query.eq("report_id", filters.reportId);
   if (filters.areaId) query = query.eq("area_id", filters.areaId);
-  if (filters.assignee === "me") query = query.eq("assigned_to", userId);
+  if (filters.assignee === "me")
+    query = query.eq("action_task_assignees.profile_id", userId);
   const result = await query.overrideTypes<TaskRow[], { merge: false }>();
   return {
     data: result.data?.map((row) => toTask(row, userId)) ?? null,
@@ -101,12 +122,12 @@ export async function getTaskDetail(id: string, userId: string) {
   const client = await createUserClient();
   const task = await client
     .from("action_tasks")
-    .select(taskColumns)
+    .select(taskColumns("action_task_assignees"))
     .eq("id", id)
     .maybeSingle<TaskRow>();
   if (task.error) throw new Error("TASK_DETAIL_UNAVAILABLE");
   if (!task.data) return null;
-  const [events, evidence] = await Promise.all([
+  const [events, evidence, assignees] = await Promise.all([
     client
       .from("task_events")
       .select("id,event_type,old_status,new_status,reason,created_at")
@@ -116,14 +137,24 @@ export async function getTaskDetail(id: string, userId: string) {
     client
       .from("task_evidence")
       .select(
-        "id,submitted_by,reviewed_by,storage_path,width,height,description,review_status,review_reason,created_at,reviewed_at",
+        "id,submitted_by,reviewed_by,storage_path,width,height,description,review_status,review_reason,evidence_round,created_at,reviewed_at",
       )
       .eq("task_id", id)
       .order("created_at")
       .overrideTypes<EvidenceRow[], { merge: false }>(),
+    client.rpc("list_task_assignees", { p_task_ids: [id] }),
   ]);
-  if (events.error || evidence.error)
+  if (events.error || evidence.error || assignees.error)
     throw new Error("TASK_DETAIL_UNAVAILABLE");
+  const assigneeRows = (assignees.data ?? []) as AssigneeRow[];
+  const names = new Map(
+    assigneeRows.map((row) => [row.profile_id, row.display_name]),
+  );
+  // T33: each cadre's latest evidence in the current round decides their progress.
+  const round = task.data.evidence_round;
+  const latest = new Map<string, EvidenceRow>();
+  for (const row of evidence.data ?? [])
+    if (row.evidence_round === round) latest.set(row.submitted_by, row);
   const evidenceWithUrls = await Promise.all(
     (evidence.data ?? []).map(async (row) => {
       const signed = await client.storage
@@ -141,6 +172,8 @@ export async function getTaskDetail(id: string, userId: string) {
         width: row.width,
         height: row.height,
         url: signed.data.signedUrl,
+        submitterName: names.get(row.submitted_by) ?? "Kader",
+        currentRound: row.evidence_round === round,
         submittedByMe: row.submitted_by === userId,
         reviewedByMe: row.reviewed_by === userId,
       };
@@ -157,7 +190,44 @@ export async function getTaskDetail(id: string, userId: string) {
       createdAt: row.created_at,
     })),
     evidence: evidenceWithUrls,
+    assignees: assigneeRows.map((row) => ({
+      name: row.display_name,
+      isMe: row.is_me,
+      evidenceStatus: (latest.get(row.profile_id)?.review_status ??
+        "missing") as EvidenceStatus,
+    })),
   };
 }
 
 export type TaskDetail = NonNullable<Awaited<ReturnType<typeof getTaskDetail>>>;
+
+// Assignee names per task (T27); profile ids never leave the server.
+export async function listTaskAssignees(taskIds: string[]) {
+  const names = new Map<string, string[]>();
+  if (!taskIds.length) return { data: names, error: null };
+  const client = await createUserClient();
+  const result = await client.rpc("list_task_assignees", {
+    p_task_ids: taskIds,
+  });
+  for (const row of (result.data ?? []) as {
+    task_id: string;
+    display_name: string;
+  }[])
+    names.set(row.task_id, [
+      ...(names.get(row.task_id) ?? []),
+      row.display_name,
+    ]);
+  return { data: names, error: result.error };
+}
+
+// Verified cadres of a managed area, for the task assignment picker.
+export async function listAreaCadres(areaId: string) {
+  const client = await createUserClient();
+  const result = await client.rpc("list_area_cadres", { p_area_id: areaId });
+  return {
+    data: (
+      (result.data ?? []) as { profile_id: string; display_name: string }[]
+    ).map((row) => ({ id: row.profile_id, name: row.display_name })),
+    error: result.error,
+  };
+}

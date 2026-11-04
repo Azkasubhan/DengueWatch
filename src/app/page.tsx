@@ -31,47 +31,47 @@ const steps = [
   {
     icon: Camera,
     title: "Temukan",
-    text: "Foto, lokasi, dan catatan singkat. Saran AI membantu mengisi kategori, Anda yang memutuskan.",
+    text: "Foto, lokasi, dan catatan singkat. AI mengisi draf formulir dari foto, Anda yang memeriksa.",
   },
   {
     icon: ClipboardList,
     title: "Tindak",
-    text: "Kader di wilayah Anda memverifikasi laporan dan membuat tugas dengan penanggung jawab yang jelas.",
+    text: "Pengelola wilayah memverifikasi laporan lalu menugaskan kader tertentu untuk menanganinya.",
   },
   {
     icon: CheckCircle2,
     title: "Tuntaskan",
-    text: "Laporan selesai setelah bukti penanganan disetujui kader lain, bukan pelaksananya.",
+    text: "Kader mengirim foto bukti. Laporan selesai setelah pengelola menyetujui buktinya.",
   },
   {
     icon: BarChart3,
     title: "Pantau",
-    text: "Pengelola melihat laporan yang menunggu, sedang ditangani, dan sudah selesai.",
+    text: "Pengelola melihat laporan yang menunggu, sedang ditangani, dan sudah selesai di wilayahnya.",
   },
 ];
 
 const roles = [
   {
     name: "Warga",
-    does: "Memotret temuan, menambah keterangan bila kader meminta.",
+    does: "Memotret temuan, menambah keterangan bila pengelola meminta.",
     sees: "Status dan riwayat laporannya sendiri.",
   },
   {
     name: "Kader",
-    does: "Memverifikasi laporan, membuat tugas, mengirim bukti, dan memeriksa bukti kader lain.",
-    sees: "Laporan di wilayah tugasnya saja.",
+    does: "Mengerjakan tugas dari pengelola dan mengirim foto bukti penanganan.",
+    sees: "Tugas yang ditugaskan kepadanya beserta laporan terkait.",
   },
   {
     name: "Pengelola",
-    does: "Memantau backlog dan penyelesaian. Tidak memverifikasi atau menugaskan.",
-    sees: "Ringkasan, laporan, dan tugas di wilayah kelolanya, hanya untuk dibaca.",
+    does: "Memverifikasi laporan, menugaskan kader, dan memeriksa bukti penanganan.",
+    sees: "Ringkasan, laporan, dan tugas di wilayah kelolanya.",
   },
 ];
 
 const boundaries = [
   "Tidak mendiagnosis penyakit atau memprediksi wabah.",
   "Tidak menyimpan data pasien.",
-  "Saran AI hanya draf; keputusan tetap di tangan warga dan kader.",
+  "Isian AI hanya draf; keputusan tetap di tangan warga dan pengelola.",
   "Foto disimpan privat, dan metadata lokasinya dihapus otomatis.",
   "Akses data dibatasi sesuai peran dan wilayah tugas.",
 ];
@@ -126,8 +126,9 @@ export default function HomePage() {
             </div>
             <div className="mt-10 flex flex-col gap-6 sm:mt-14 lg:flex-row lg:items-end lg:justify-between">
               <p className="max-w-md text-base text-white/85 sm:text-lg">
-                Laporkan tempat yang bisa menjadi sarang nyamuk. Kader RW
-                memeriksa, menugaskan, dan memastikan penanganannya selesai.
+                Laporkan tempat yang bisa menjadi sarang nyamuk. Pengelola RW
+                memeriksa, menugaskan kader, dan memastikan penanganannya
+                selesai.
               </p>
               <div className="flex flex-wrap items-center gap-3">
                 <LinkButton className="min-h-12 pr-2 pl-5" href="/daftar">

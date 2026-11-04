@@ -31,11 +31,14 @@ import {
   type ReportStatus,
 } from "@/features/reports/validation";
 import { CreateTaskForm } from "@/features/tasks/components/CreateTaskForm";
-import { listTasks } from "@/features/tasks/data";
+import {
+  listAreaCadres,
+  listTaskAssignees,
+  listTasks,
+} from "@/features/tasks/data";
 import { taskStatusLabels } from "@/features/tasks/validation";
 import { getAccessContext } from "@/lib/auth/context";
 import { cardClass } from "@/components/ui/Card";
-import { AiSuggestionDetails } from "@/features/ai/components/AiSuggestionDetails";
 
 export const dynamic = "force-dynamic";
 
@@ -71,14 +74,18 @@ export default async function VerificationDetailPage({
   const { reportId } = await params;
   const access = await getAccessContext();
   if (access.kind === "unauthenticated")
-    redirect(`/login?next=/kader/verifikasi`);
+    redirect(`/login?next=/pengelola/verifikasi`);
   if (access.kind !== "authenticated") return <ServiceUnavailable />;
-  const decision = decidePortalAccess(access.context, "cadre");
+  const decision = decidePortalAccess(access.context, "manager");
   if (decision.kind === "forbidden") redirect("/forbidden");
-  const areas = getVerifiedAreas(access.context, "assigned_cadre");
+  const areas = getVerifiedAreas(access.context, "manager");
   // Detail pages show the bar (and its SIMULASI flag) for the item's own area.
   const shell = (children: React.ReactNode, area = areas[0]) => (
-    <AppShell area={area} displayName={access.context.displayName} role="cadre">
+    <AppShell
+      area={area}
+      displayName={access.context.displayName}
+      role="manager"
+    >
       {children}
     </AppShell>
   );
@@ -95,7 +102,7 @@ export default async function VerificationDetailPage({
   if (!detail.report.data || !detail.images || !detail.events)
     return <ServiceUnavailable />;
   const report = detail.report.data;
-  // RLS already scopes reads; this keeps manager-style reads out of the cadre page.
+  // RLS already scopes reads; this keeps reports outside the managed areas out of this page.
   if (!areas.some((area) => area.id === report.areaId)) notFound();
 
   const pending = report.status === "pending_verification";
@@ -110,6 +117,20 @@ export default async function VerificationDetailPage({
   const suggestion = parsedSuggestions?.success
     ? parsedSuggestions.data[0]
     : undefined;
+  // T29: the AI fills the form directly. The marker shows only when a stored text field
+  // still matches the AI draft (a category can match by chance), and flags reports
+  // submitted exactly as drafted.
+  const aiTextMatches = suggestion
+    ? [
+        suggestion.visible_objects.join(", ") === report.visibleObjects,
+        suggestion.draft_description === report.description,
+        suggestion.suggested_precaution === report.preventionAdvice,
+      ]
+    : [];
+  const aiUsed = aiTextMatches.some(Boolean);
+  const aiUnchanged =
+    aiTextMatches.every(Boolean) &&
+    suggestion?.suggested_category === report.category;
   const saved = (await searchParams).keputusan === "tersimpan" && !pending;
   const actionable = ["verified", "in_action", "resolved"].includes(
     report.status,
@@ -117,11 +138,17 @@ export default async function VerificationDetailPage({
   const tasks = actionable
     ? await listTasks(1, 50, { reportId: report.id }, access.context.userId)
     : null;
+  const canAssign =
+    report.status === "verified" || report.status === "in_action";
+  const [cadres, assignees] = await Promise.all([
+    canAssign ? listAreaCadres(report.areaId) : null,
+    listTaskAssignees(tasks?.data?.map((task) => task.id) ?? []),
+  ]);
 
   return shell(
     <>
       <PageHeader
-        back={{ href: "/kader/verifikasi", label: "Antrean verifikasi" }}
+        back={{ href: "/pengelola/verifikasi", label: "Antrean verifikasi" }}
         title="Pemeriksaan laporan"
         meta={
           <>
@@ -135,35 +162,6 @@ export default async function VerificationDetailPage({
       <div className="grid gap-7 lg:grid-cols-12 lg:items-start">
         <div className="grid min-w-0 gap-6 lg:col-span-5">
           <ReportPhotos images={detail.images.data} />
-          <section aria-labelledby="ai-title" className={cardClass}>
-            <h2 id="ai-title" className="text-lg font-bold">
-              Saran AI — perlu verifikasi
-            </h2>
-            <p className="mt-2 text-sm text-[var(--muted-foreground)]">
-              Dibuat otomatis dari foto. Bukan diagnosis dan bukan keputusan;
-              periksa foto dan keterangan warga.
-            </p>
-            {!parsedSuggestions?.success ? (
-              <p className="mt-4 text-sm">Saran AI belum dapat dimuat.</p>
-            ) : !suggestion ? (
-              <p className="mt-4 text-sm">
-                Tidak ada saran AI untuk laporan ini.
-              </p>
-            ) : (
-              <div className="mt-4 grid gap-4">
-                <AiSuggestionDetails
-                  category={suggestion.suggested_category}
-                  visibleObjects={suggestion.visible_objects}
-                  draftDescription={suggestion.draft_description}
-                  precaution={suggestion.suggested_precaution}
-                  limitations={suggestion.limitations}
-                />
-                <p className="text-xs text-[var(--muted-foreground)]">
-                  Dianalisis {formatJakarta(suggestion.analyzed_at)} WIB
-                </p>
-              </div>
-            )}
-          </section>
         </div>
         <div className="grid min-w-0 gap-6 lg:col-span-7">
           {saved ? (
@@ -173,12 +171,24 @@ export default async function VerificationDetailPage({
               </Alert>
             </div>
           ) : null}
+          {suggestion && aiUsed ? (
+            <p className="rounded-[var(--radius-control)] bg-[var(--info-subtle)] p-4 text-sm">
+              <span className="font-semibold">
+                Diisi dengan bantuan AI
+                {aiUnchanged ? " · tidak diubah warga" : ""}
+              </span>
+              <span className="block text-[var(--muted-foreground)]">
+                Analisis {formatJakarta(suggestion.analyzed_at)} WIB. Isian AI
+                bukan diagnosis; cocokkan dengan foto sebelum memutuskan.
+              </span>
+            </p>
+          ) : null}
           <ReportFactsCard report={report} />
           {report.duplicateOfReportId ? (
             <p>
               Duplikat dari{" "}
               <Link
-                href={`/kader/verifikasi/${report.duplicateOfReportId}`}
+                href={`/pengelola/verifikasi/${report.duplicateOfReportId}`}
                 className="font-semibold text-[var(--primary)] underline underline-offset-2"
               >
                 laporan rujukan
@@ -225,12 +235,18 @@ export default async function VerificationDetailPage({
                   {tasks.data.map((task) => (
                     <li key={task.id}>
                       <Link
-                        href={`/kader/tugas/${task.id}`}
+                        href={`/pengelola/tugas/${task.id}`}
                         className="flex flex-wrap justify-between gap-2 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 hover:border-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
                       >
-                        <span className="font-semibold break-words">
-                          {task.title}
-                          {task.isMandatory ? "" : " (opsional)"}
+                        <span className="min-w-0">
+                          <span className="block font-semibold break-words">
+                            {task.title}
+                            {task.isMandatory ? "" : " (opsional)"}
+                          </span>
+                          <span className="block text-sm break-words text-[var(--muted-foreground)]">
+                            {assignees.data.get(task.id)?.join(", ") ??
+                              "Kader belum dapat dimuat"}
+                          </span>
                         </span>
                         <StatusBadge tone={taskStatusTone[task.status]}>
                           {taskStatusLabels[task.status]}
@@ -240,16 +256,20 @@ export default async function VerificationDetailPage({
                   ))}
                 </ul>
               )}
-              {report.status === "verified" || report.status === "in_action" ? (
-                <CreateTaskForm
-                  reportId={report.id}
-                  assigneeId={access.context.userId}
-                />
-              ) : (
+              {!canAssign ? (
                 <p className="mt-4 rounded-[var(--radius-control)] bg-[var(--primary-subtle)] p-4">
                   Laporan sudah tuntas. Buka kembali tugas yang selesai bila
                   masalah muncul lagi.
                 </p>
+              ) : cadres?.error ? (
+                <p role="alert" className="mt-4 text-[var(--danger)]">
+                  Daftar kader belum dapat dimuat. Muat ulang halaman.
+                </p>
+              ) : (
+                <CreateTaskForm
+                  reportId={report.id}
+                  cadres={cadres?.data ?? []}
+                />
               )}
             </section>
           ) : null}

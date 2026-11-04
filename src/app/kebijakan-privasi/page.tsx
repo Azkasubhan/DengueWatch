@@ -34,9 +34,10 @@ export default function PrivacyPage() {
         </p>
         <p>
           Lokasi bersifat opsional. Titik lokasi tidak ditampilkan publik dan
-          hanya dapat dilihat oleh Anda serta kader dan pengelola yang bertugas
-          di wilayah laporan. Jika mereka memilih membuka titik tersebut di
-          Google Maps, koordinatnya dikirim ke Google untuk menampilkan peta.
+          hanya dapat dilihat oleh Anda, pengelola wilayah laporan, dan kader
+          yang ditugaskan menanganinya. Jika mereka memilih membuka titik
+          tersebut di Google Maps, koordinatnya dikirim ke Google untuk
+          menampilkan peta.
         </p>
       </section>
       <section>
@@ -44,12 +45,12 @@ export default function PrivacyPage() {
         <ul>
           <li>Anda dapat melihat laporan dan riwayat laporan Anda sendiri.</li>
           <li>
-            Kader dapat melihat laporan di wilayah tugasnya untuk memverifikasi
-            dan menindaklanjutinya.
+            Pengelola dapat melihat laporan, tugas, dan ringkasan di wilayah
+            kelolanya untuk memverifikasi laporan dan menugaskan kader.
           </li>
           <li>
-            Pengelola dapat membaca laporan, tugas, dan ringkasan di wilayah
-            kelolanya, tanpa mengubahnya.
+            Kader hanya dapat melihat laporan yang terkait dengan tugas yang
+            ditugaskan kepadanya.
           </li>
         </ul>
         <p>
@@ -60,13 +61,15 @@ export default function PrivacyPage() {
       <section>
         <h2>Saran AI</h2>
         <p>
-          Jika Anda meminta saran AI, satu foto laporan yang sudah dibersihkan
+          Saat Anda memilih foto laporan, foto pertama yang sudah dibersihkan
           dari metadata dikirim ke layanan AI pihak ketiga (Google Gemini) untuk
-          menghasilkan draf kategori dan deskripsi. Koordinat lokasi tidak
-          dikirim. Hanya saran AI terakhir yang ikut tersimpan bersama laporan
-          dan dihapus otomatis setelah 30 hari; saran lain yang tidak terpakai
-          dihapus setelah 24 jam. Saran AI bukan diagnosis dan tidak pernah
-          mengirim laporan tanpa persetujuan Anda.
+          mengisi kategori, benda yang tampak, deskripsi, dan saran pencegahan
+          pada formulir. Anda dapat membatalkan analisis dan mengisi sendiri.
+          Koordinat lokasi dan data akun tidak dikirim. Hanya saran AI terakhir
+          yang ikut tersimpan bersama laporan dan dihapus otomatis setelah 30
+          hari; saran lain yang tidak terpakai dihapus setelah 24 jam. Saran AI
+          bukan diagnosis dan tidak pernah mengirim laporan tanpa persetujuan
+          Anda.
         </p>
       </section>
       <section>

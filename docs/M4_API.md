@@ -52,8 +52,8 @@ memberi izin mengubah status report atau isi final.
 
 Respons error mengikuti envelope M3 (`error.code`, `error.message`, `error.requestId`),
 tanpa detail provider atau secret. `Cache-Control: private, no-store` berlaku untuk semua
-respons. Kuota 10 permintaan/jam, 30/hari, satu aktif per resident, terpisah dari kuota
-laporan dan upload. Satu provider call boleh mencoba ulang maksimal sekali untuk 429/5xx.
+respons. Satu permintaan aktif per resident; tidak ada kuota per akun (T32), dan 429 hanya
+berasal dari batas provider Gemini. Satu provider call boleh mencoba ulang maksimal sekali untuk 429/5xx.
 Timeout default 15 detik berlaku per percobaan (maksimal 30 detik plus backoff singkat).
 Pembatalan browser diteruskan sebagai `AbortSignal` ke SDK bila request server masih aktif;
 menurut SDK, pembatalan client tidak menjamin provider menghentikan pemrosesan atau biaya.
