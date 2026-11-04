@@ -269,3 +269,14 @@
   keputusan dan sejalan dengan retensi metadata terbatas (FR-24).
 - **Tetap berlaku:** kuota 10/jam dan 30/hari tidak dapat diakali karena hanya catatan di luar
   jendela 24 jam yang dihapus; saran yang tertaut mengikuti cleanup 30 hari.
+
+## T26 — Navbar publik liquid glass yang melayang
+
+- **Keputusan:** `SiteHeader` menjadi satu varian: pill `fixed` di atas semua section landing
+  dan halaman legal, dengan `.glass-nav` (latar surface 76%, blur 20px, saturasi 160%,
+  sorot tepi putih, bayangan lembut). Teks gelap dipakai di atas foto maupun section terang.
+  `scroll-padding-top` menjaga judul section tidak tertutup. Di bawah 380px hanya simbol brand
+  yang tampil; nama tetap terbaca pembaca layar. Halaman aplikasi tidak memakai kaca.
+- **Fallback:** latar padat bila `prefers-reduced-transparency: reduce` atau browser tidak
+  mendukung `backdrop-filter`.
+- **Alasan:** permintaan product owner; satu-satunya pengecualian aturan tanpa glassmorphism.

@@ -47,6 +47,41 @@ body {
   background: var(--primary-subtle);
 }
 
+/* Public pages have a fixed navbar; keep section headings clear of it when jumping. */
+html:has([data-site-header]) {
+  scroll-padding-top: 6rem;
+}
+
+/* Liquid-glass navbar, public pages only (T26). The tint stays opaque enough that
+   foreground text keeps AA contrast even over the dark hero photo. */
+@layer components {
+  .glass-nav {
+    border: 1px solid color-mix(in srgb, white 60%, transparent);
+    background-color: color-mix(in srgb, var(--surface) 76%, transparent);
+    box-shadow:
+      0 12px 32px -16px color-mix(in srgb, var(--forest-deep) 45%, transparent),
+      inset 0 1px 0 color-mix(in srgb, white 75%, transparent);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    backdrop-filter: blur(20px) saturate(160%);
+  }
+
+  @supports not (
+    (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+  ) {
+    .glass-nav {
+      background-color: var(--surface);
+    }
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .glass-nav {
+      background-color: var(--surface);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

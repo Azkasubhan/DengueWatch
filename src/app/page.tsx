@@ -98,6 +98,7 @@ function CornerArrow({ light = false }: { light?: boolean }) {
 export default function HomePage() {
   return (
     <div className="landing flex min-h-screen flex-col bg-[var(--background)] text-[var(--foreground)]">
+      <SiteHeader />
       <main className="flex-1">
         <section className="relative isolate flex min-h-[92svh] flex-col overflow-hidden text-white sm:min-h-svh lg:max-h-[60rem]">
           <Image
@@ -114,7 +115,6 @@ export default function HomePage() {
             aria-hidden="true"
             className="absolute inset-0 -z-10 bg-[linear-gradient(to_bottom,rgb(12_24_19/0.5)_0%,rgb(12_24_19/0.15)_22%,rgb(12_24_19/0.45)_50%,rgb(12_24_19/0.88)_100%)]"
           />
-          <SiteHeader variant="overlay" />
           <div className="mx-auto mt-auto w-full max-w-[var(--page-max)] px-5 pb-10 sm:px-8 sm:pb-14 lg:px-12">
             <div className="mx-auto max-w-5xl text-center">
               <p className="text-sm font-semibold text-[var(--mint)]">

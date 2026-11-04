@@ -15,7 +15,7 @@ export function LegalPage({
   return (
     <div className="landing flex min-h-screen flex-col bg-[var(--background)] text-[var(--foreground)]">
       <SiteHeader />
-      <main className="flex-1 py-14 sm:py-20">
+      <main className="flex-1 pt-28 pb-14 sm:pt-36 sm:pb-20">
         <Container size="form">
           <h1 className="text-4xl font-bold tracking-[-0.035em] sm:text-5xl">
             {title}

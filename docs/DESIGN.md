@@ -15,6 +15,8 @@ Satu brand, dua kepadatan:
 Palet natural hangat dengan satu warna aksi teal. Tanpa glow, glassmorphism, neumorphism,
 kartu KPI warna-warni, emoji sebagai ikon, label kecil di atas setiap judul, atau animasi
 dekoratif. Gradien hanya dipakai sebagai lapisan gelap di atas foto untuk menjaga kontras.
+Satu pengecualian kaca: navbar publik melayang (`SiteHeader`, kelas `.glass-nav`) dengan
+latar tembus pandang dan blur; jatuh ke latar padat bila transparansi dikurangi (T26).
 
 ## Token
 
