@@ -9,7 +9,7 @@ export default function ForbiddenPage() {
     <main className="flex min-h-screen flex-col justify-center py-16">
       <Container size="form">
         <div className="mb-8 flex justify-center">
-          <Brand />
+          <Brand size="lg" />
         </div>
         <div className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-6 text-center sm:p-10">
           <span className="mx-auto grid size-12 place-items-center rounded-full bg-[var(--danger-subtle)]">
