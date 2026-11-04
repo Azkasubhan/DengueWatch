@@ -50,16 +50,20 @@ export function SiteFooter() {
                 {group.title}
               </h2>
               <ul className="mt-3 grid">
-                {group.links.map((link) => (
-                  <li key={link.href}>
-                    <Link
-                      className="inline-flex min-h-10 items-center text-sm hover:text-white"
-                      href={link.href}
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
+                {group.links.map((link) => {
+                  // Same-page section links need a plain <a> to scroll on every click.
+                  const Anchor = link.href.startsWith("/#") ? "a" : Link;
+                  return (
+                    <li key={link.href}>
+                      <Anchor
+                        className="inline-flex min-h-10 items-center text-sm hover:text-white"
+                        href={link.href}
+                      >
+                        {link.label}
+                      </Anchor>
+                    </li>
+                  );
+                })}
               </ul>
             </nav>
           ))}

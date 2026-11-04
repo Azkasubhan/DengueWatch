@@ -8,6 +8,9 @@ const sections = [
   { href: "/#faq", label: "FAQ" },
 ];
 
+// Section links use a plain <a>: next/link skips scrolling when the URL already has the
+// same hash, so a second click on "Cara kerja" would do nothing.
+
 // `overlay` sits on top of the landing hero photo; `plain` is used on content pages.
 export function SiteHeader({
   variant = "plain",
@@ -22,13 +25,13 @@ export function SiteHeader({
       <Brand inverse={overlay} />
       <nav aria-label="Navigasi utama" className="flex items-center gap-1">
         {sections.map((section) => (
-          <Link
+          <a
             className={`hidden rounded-full px-3 py-2 text-sm font-medium md:inline-flex ${overlay ? "text-white/85 hover:text-white" : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"}`}
             href={section.href}
             key={section.href}
           >
             {section.label}
-          </Link>
+          </a>
         ))}
         <Link
           className={`inline-flex min-h-11 items-center rounded-full px-3 text-sm font-semibold md:ml-3 ${overlay ? "hover:text-[var(--mint)]" : "hover:text-[var(--primary)]"}`}
