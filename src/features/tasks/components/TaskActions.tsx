@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { toast } from "@/components/ui/Toast";
 import {
   controlClass,
   postReportAction,
@@ -67,7 +68,9 @@ export function TaskActions({
 
   function settle(result: ReportActionResult, success: Success) {
     if (result.kind === "ok") {
-      setNotice(typeof success === "string" ? success : success(result.data));
+      const msg = typeof success === "string" ? success : success(result.data);
+      setNotice(msg);
+      toast.success(msg);
       setErrors({});
       setDescription("");
       setFile(null);

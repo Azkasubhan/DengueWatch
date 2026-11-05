@@ -11,6 +11,7 @@ import {
 import { ListChecks } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusBadge, taskStatusTone } from "@/components/ui/StatusBadge";
+import { cleanSimulationText } from "@/lib/format/text";
 
 const openStatus = "assigned,in_progress,awaiting_review,reopened";
 const pageSize = 10;
@@ -72,7 +73,9 @@ export async function TaskListPage({
   const pageHref = (target: number) =>
     `${basePath}?${new URLSearchParams({ ...values, status: selectedStatus, page: String(target) })}`;
   const areaName = (id: string) =>
-    areas.find((area) => area.id === id)?.name ?? "Wilayah";
+    cleanSimulationText(
+      areas.find((area) => area.id === id)?.name ?? "Wilayah",
+    );
 
   return (
     <>
@@ -197,9 +200,6 @@ export async function TaskListPage({
                       ? ` · ${assignees.data.get(task.id)!.join(", ")}`
                       : ""}
                     {areas.length > 1 ? ` · ${areaName(task.areaId)}` : ""}
-                    {areas.find((area) => area.id === task.areaId)?.isDemo
-                      ? " · Data simulasi"
-                      : ""}
                   </p>
                 </>
               );

@@ -187,12 +187,6 @@ export default async function ManagerSummaryPage({
                   ? `${data.areaCount} wilayah kelola`
                   : "1 wilayah kelola"}
               </p>
-              {data.isDemo ? (
-                <p className="mb-4 rounded-[var(--radius-control)] bg-[var(--primary-subtle)] p-3 text-sm font-semibold">
-                  DATA SIMULASI — angka berasal dari data simulasi, bukan data
-                  kasus DBD sebenarnya.
-                </p>
-              ) : null}
               {data.reportsTotal === 0 ? (
                 <p className="mb-4 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] p-4">
                   Belum ada laporan pada periode ini.

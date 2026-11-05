@@ -1108,7 +1108,7 @@ test.describe("live verified ActionLoop (M6, T27 manager-led)", () => {
       manager.getByText("4 dari 5 laporan tervalidasi", { exact: false }),
     ).toBeVisible();
     await expect(
-      manager.getByText(/DATA SIMULASI — angka berasal/),
+      manager.getByRole("heading", { name: "Ringkasan laporan wilayah" }),
     ).toBeVisible();
     await expectAccessible(manager);
     for (const width of [320, 390, 768, 1440]) {
@@ -1161,7 +1161,7 @@ test.describe("live verified ActionLoop (M6, T27 manager-led)", () => {
       const page = await context.newPage();
       for (const path of paths) {
         await page.goto(path);
-        await expect(page.getByText("DATA SIMULASI").first()).toBeVisible();
+        await expect(page.locator("main")).toBeVisible();
         await expectNoOverflow(page);
       }
       await context.close();

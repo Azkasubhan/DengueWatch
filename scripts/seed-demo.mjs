@@ -50,25 +50,25 @@ const supabase = createClient(
 const accounts = [
   {
     email: "warga.simulasi@denguewatch.test",
-    displayName: "Warga Simulasi",
+    displayName: "Warga",
     role: "resident",
     membershipType: "resident",
   },
   {
     email: "kader.satu@denguewatch.test",
-    displayName: "Kader Satu Simulasi",
+    displayName: "Kader Satu",
     role: "cadre",
     membershipType: "assigned_cadre",
   },
   {
     email: "kader.dua@denguewatch.test",
-    displayName: "Kader Dua Simulasi",
+    displayName: "Kader Dua",
     role: "cadre",
     membershipType: "assigned_cadre",
   },
   {
     email: "pengelola.simulasi@denguewatch.test",
-    displayName: "Pengelola Simulasi",
+    displayName: "Pengelola",
     role: "manager",
     membershipType: "manager",
   },
@@ -119,7 +119,7 @@ const { data: area, error: areaError } = await supabase
     {
       code: "DEMO-RW-01",
       is_demo: true,
-      name: "Wilayah Harmoni (Simulasi)",
+      name: "Wilayah Harmoni",
     },
     { onConflict: "code" },
   )

@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { toast } from "@/components/ui/Toast";
 import {
   controlClass,
   postReportAction,
@@ -161,6 +162,7 @@ export function CreateTaskForm({
       setFields(empty);
       setRequestKey(crypto.randomUUID());
       setNotice("Tugas dibuat dan dikirim ke kader yang dipilih.");
+      toast.success("Tugas lapangan berhasil dibuat!");
       router.refresh();
       return;
     }

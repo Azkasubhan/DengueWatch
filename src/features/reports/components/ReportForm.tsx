@@ -11,6 +11,7 @@ import {
   aiReportSuggestionSchema,
   type AiReportSuggestion,
 } from "@/features/ai/schema";
+import { cleanSimulationText } from "@/lib/format/text";
 
 type Area = { id: string; name: string; isDemo: boolean };
 type LocalPhoto = { file: File; url: string };
@@ -390,7 +391,9 @@ export function ReportForm({ areas }: { areas: Area[] }) {
           payload.error?.message ?? "Laporan belum dapat disimpan.",
         );
       }
-      router.push(`/app/laporan/${payload.data.id}`);
+      router.push(
+        `/app/laporan/${payload.data.id}?toast=${encodeURIComponent("Laporan berhasil dikirim!")}`,
+      );
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -617,10 +620,7 @@ export function ReportForm({ areas }: { areas: Area[] }) {
                 >
                   {areas.map((area) => (
                     <option key={area.id} value={area.id}>
-                      {area.name}
-                      {area.isDemo && !area.name.includes("(Simulasi)")
-                        ? " (Simulasi)"
-                        : ""}
+                      {cleanSimulationText(area.name)}
                     </option>
                   ))}
                 </select>

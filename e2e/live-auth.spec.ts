@@ -113,6 +113,10 @@ test.describe("live Supabase authentication", () => {
     await expect(page).toHaveURL(/\/forbidden$/);
     await page.goto("/app/beranda");
     await page.getByRole("button", { name: "Keluar" }).click();
+    const confirmLogout = page.getByRole("button", { name: "Ya, Keluar" });
+    if (await confirmLogout.isVisible()) {
+      await confirmLogout.click();
+    }
     await expect(page).toHaveURL(/\/$/);
     await page.goto("/app/beranda");
     await expect(page).toHaveURL(

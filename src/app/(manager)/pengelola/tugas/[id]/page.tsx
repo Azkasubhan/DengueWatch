@@ -23,7 +23,7 @@ export default async function ManagerTaskDetailPage({
   const decision = decidePortalAccess(access.context, "manager");
   if (decision.kind === "forbidden") redirect("/forbidden");
   const areas = getVerifiedAreas(access.context, "manager");
-  // Detail pages show the bar (and its SIMULASI flag) for the item's own area.
+  // Detail pages show the bar for the item's own area.
   const shell = (children: React.ReactNode, area = areas[0]) => (
     <AppShell
       area={area}

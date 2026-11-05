@@ -18,6 +18,7 @@ import { Clock3, Inbox } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusBadge, reportStatusTone } from "@/components/ui/StatusBadge";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { cleanSimulationText } from "@/lib/format/text";
 
 // Aging signal for reports still waiting on a manager decision (PRD 13.10); reports that
 // need information are waiting on the resident instead.
@@ -101,7 +102,9 @@ export default async function VerificationQueuePage({
     return `/pengelola/verifikasi?${search.toString()}`;
   };
   const areaName = (id: string) =>
-    areas.find((area) => area.id === id)?.name ?? "Wilayah tugas";
+    cleanSimulationText(
+      areas.find((area) => area.id === id)?.name ?? "Wilayah tugas",
+    );
 
   return shell(
     <>
@@ -278,7 +281,6 @@ export default async function VerificationQueuePage({
                   <p className="mt-3 text-sm text-[var(--muted-foreground)]">
                     {formatJakarta(report.submittedAt, false)}
                     {areas.length > 1 ? ` · ${areaName(report.areaId)}` : ""}
-                    {report.isDemo ? " · Data simulasi" : ""}
                   </p>
                   {waitingDays(report) ? (
                     <p className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--warning)]">

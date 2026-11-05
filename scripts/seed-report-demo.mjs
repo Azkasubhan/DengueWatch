@@ -60,21 +60,21 @@ const samples = [
     file: "water-container.png",
     key: "demo-report-water-v1",
     description:
-      "Wadah air terbuka terlihat di area bersama setelah hujan. Foto simulasi untuk alur pemeriksaan.",
+      "Wadah air terbuka terlihat di area bersama setelah hujan. Berpotensi menjadi sarang jentik nyamuk.",
   },
   {
     category: "discarded_tire",
     file: "discarded-tire.png",
     key: "demo-report-tire-v1",
     description:
-      "Ban bekas berada di area bersama dan tampak menampung air hujan. Foto simulasi untuk laporan lingkungan.",
+      "Ban bekas berada di area bersama dan tampak menampung air hujan.",
   },
   {
     category: "clogged_drain",
     file: "clogged-drain.png",
     key: "demo-report-drain-v1",
     description:
-      "Saluran umum terlihat tersumbat daun dan barang kecil setelah hujan. Foto simulasi untuk pemeriksaan.",
+      "Saluran umum terlihat tersumbat daun dan sampah kecil setelah hujan. Air menggenang dan tidak mengalir.",
   },
 ];
 

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "@fontsource-variable/plus-jakarta-sans";
 import "@/styles/globals.css";
+import { ToastProvider } from "@/components/ui/Toast";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.APP_BASE_URL || "http://localhost:3000"),
@@ -39,7 +40,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html data-scroll-behavior="smooth" lang="id">
-      <body>{children}</body>
+      <body>
+        {children}
+        <ToastProvider />
+      </body>
     </html>
   );
 }

@@ -41,7 +41,6 @@ export function ReportListItem({
         </p>
         <p className="mt-3 text-sm text-[var(--muted-foreground)]">
           {dateFormat.format(new Date(report.submittedAt))}
-          {report.isDemo ? " · Data simulasi" : ""}
         </p>
       </div>
       <ChevronRight

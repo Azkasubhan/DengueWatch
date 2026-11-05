@@ -28,7 +28,7 @@ export default async function CadreTaskDetailPage({
   const decision = decidePortalAccess(access.context, "cadre");
   if (decision.kind === "forbidden") redirect("/forbidden");
   const areas = getVerifiedAreas(access.context, "assigned_cadre");
-  // Detail pages show the bar (and its SIMULASI flag) for the item's own area.
+  // Detail pages show the bar for the item's own area.
   const shell = (children: React.ReactNode, area = areas[0]) => (
     <AppShell area={area} displayName={access.context.displayName} role="cadre">
       {children}

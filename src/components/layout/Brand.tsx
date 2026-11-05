@@ -23,11 +23,13 @@ export function Brand({
   compact = false,
   size = "md",
   className = "",
+  href = "/",
 }: {
   inverse?: boolean;
   compact?: boolean;
   size?: "sm" | "md" | "lg";
   className?: string;
+  href?: string;
 }) {
   const currentLogo = inverse ? logoInverse : logo;
 
@@ -35,7 +37,7 @@ export function Brand({
     <Link
       aria-label="DengueWatch"
       className={`inline-flex items-center gap-2 rounded-lg font-bold tracking-[-0.025em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] ${className}`}
-      href="/"
+      href={href}
     >
       {compact ? (
         <>
@@ -48,10 +50,7 @@ export function Brand({
             />
           </span>
           <span className="inline-flex min-[380px]:hidden items-center">
-            <BrandMark
-              className={markSizeClasses[size]}
-              inverse={inverse}
-            />
+            <BrandMark className={markSizeClasses[size]} inverse={inverse} />
             <span className="sr-only">DengueWatch</span>
           </span>
         </>

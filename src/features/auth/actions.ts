@@ -63,7 +63,12 @@ export async function loginAction(
     };
   }
 
-  redirect(getSafeRedirect(next));
+  const target = getSafeRedirect(next);
+  const redirectUrl = target.includes("?")
+    ? `${target}&auth=login_success`
+    : `${target}?auth=login_success`;
+
+  redirect(redirectUrl);
 }
 
 export async function registerAction(
@@ -110,7 +115,7 @@ export async function registerAction(
   }
 
   if (data.session) {
-    redirect("/app/beranda");
+    redirect("/app/beranda?auth=registered");
   }
 
   return {
