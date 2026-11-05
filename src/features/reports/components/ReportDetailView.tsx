@@ -68,22 +68,29 @@ export function ReportFactsCard({ report }: { report: ReportDetail }) {
         <dt className="text-sm font-semibold">Dikirim</dt>
         <dd className="mt-1">{formatJakarta(report.submittedAt)} WIB</dd>
       </div>
-      {report.visibleObjects ? (
-        <div className="sm:col-span-2">
-          <dt className="text-sm font-semibold">Yang tampak pada foto</dt>
-          <dd className="mt-1 break-words">{report.visibleObjects}</dd>
-        </div>
-      ) : null}
       <div className="sm:col-span-2">
-        <dt className="text-sm font-semibold">Deskripsi</dt>
+        <dt className="text-sm font-semibold">Keterangan temuan</dt>
         <dd className="mt-1 whitespace-pre-wrap break-words">
           {report.description}
         </dd>
       </div>
-      {report.preventionAdvice ? (
+      {report.visibleObjects ? (
         <div className="sm:col-span-2">
-          <dt className="text-sm font-semibold">Saran pencegahan</dt>
-          <dd className="mt-1 break-words">{report.preventionAdvice}</dd>
+          <dt className="text-sm font-semibold">Ringkasan objek pada foto</dt>
+          <dd className="mt-1 break-words text-sm text-[var(--muted-foreground)]">
+            {report.visibleObjects}
+          </dd>
+        </div>
+      ) : null}
+      {report.preventionAdvice ? (
+        <div className="rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--background)] p-3.5 sm:col-span-2">
+          <dt className="text-xs font-semibold text-[var(--muted-foreground)]">
+            Panduan pencegahan awal (informasi sistem/AI · bukan pengganti
+            verifikasi petugas)
+          </dt>
+          <dd className="mt-1 break-words text-sm text-[var(--foreground)]">
+            {report.preventionAdvice}
+          </dd>
         </div>
       ) : null}
       <div className="rounded-[var(--radius-control)] bg-[var(--background)] p-4 sm:col-span-2">

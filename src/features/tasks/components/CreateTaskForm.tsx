@@ -4,6 +4,8 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { CustomDatePicker } from "@/components/ui/CustomDatePicker";
+import { CustomSelect } from "@/components/ui/CustomSelect";
 import { toast } from "@/components/ui/Toast";
 import {
   controlClass,
@@ -99,7 +101,7 @@ export function CreateTaskForm({
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [today] = useState(jakartaToday);
-  const pickers = useRef<(HTMLSelectElement | null)[]>([]);
+  const pickers = useRef<(HTMLElement | null)[]>([]);
 
   function update<K extends keyof Fields>(key: K, value: Fields[K]) {
     setFields((current) => ({ ...current, [key]: value }));
@@ -257,32 +259,36 @@ export function CreateTaskForm({
                 )?.name;
                 return (
                   <li key={index} className="flex items-center gap-2">
-                    <select
-                      id={`task-assignee-${index}`}
+                    <div
+                      className="min-w-0 flex-1"
                       ref={(node) => {
                         pickers.current[index] = node;
                       }}
-                      value={selected}
-                      aria-label={`Kader pelaksana ${index + 1}`}
-                      aria-invalid={Boolean(errors.assignees) && !selected}
-                      onChange={(event) =>
-                        setAssignee(index, event.target.value)
-                      }
-                      className={`${controlClass} min-w-0 flex-1`}
                     >
-                      <option value="">Pilih kader…</option>
-                      {cadres
-                        .filter(
-                          (cadre) =>
-                            cadre.id === selected ||
-                            !fields.assignees.includes(cadre.id),
-                        )
-                        .map((cadre) => (
-                          <option key={cadre.id} value={cadre.id}>
-                            {cadre.name}
-                          </option>
-                        ))}
-                    </select>
+                      <CustomSelect
+                        id={`task-assignee-${index}`}
+                        value={selected}
+                        placeholder="Pilih kader…"
+                        ariaLabel={`Kader pelaksana ${index + 1}`}
+                        aria-invalid={Boolean(errors.assignees) && !selected}
+                        aria-describedby={describedBy("assignees")}
+                        size="md"
+                        onChange={(val) => setAssignee(index, val)}
+                        options={[
+                          { value: "", label: "Pilih kader…" },
+                          ...cadres
+                            .filter(
+                              (cadre) =>
+                                cadre.id === selected ||
+                                !fields.assignees.includes(cadre.id),
+                            )
+                            .map((cadre) => ({
+                              value: cadre.id,
+                              label: cadre.name,
+                            })),
+                        ]}
+                      />
+                    </div>
                     {fields.assignees.length > 1 ? (
                       <Button
                         variant="ghost"
@@ -342,18 +348,20 @@ export function CreateTaskForm({
         <label htmlFor="task-dueDate" className="text-sm">
           Atau pilih tanggal
         </label>
-        <input
-          id="task-dueDate"
-          type="date"
-          value={fields.dueDate}
-          min={today}
-          max={addDays(today, 366)}
-          aria-required="true"
-          aria-invalid={Boolean(errors.dueDate)}
-          aria-describedby={describedBy("dueDate")}
-          onChange={(event) => update("dueDate", event.target.value)}
-          className={`${controlClass} sm:max-w-xs`}
-        />
+        <div className="sm:max-w-xs">
+          <CustomDatePicker
+            id="task-dueDate"
+            value={fields.dueDate}
+            min={today}
+            max={addDays(today, 366)}
+            placeholder="Pilih batas tanggal"
+            ariaLabel="Batas tanggal penyelesaian"
+            aria-invalid={Boolean(errors.dueDate)}
+            aria-describedby={describedBy("dueDate")}
+            onChange={(val) => update("dueDate", val)}
+            size="md"
+          />
+        </div>
         <p aria-live="polite" className="min-h-6 font-semibold">
           {fields.dueDate && fields.dueDate >= today
             ? `${longDate(fields.dueDate)} · ${relativeDay(daysBetween(today, fields.dueDate))}`

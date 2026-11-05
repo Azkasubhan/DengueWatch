@@ -10,11 +10,7 @@ type AppShellProps = {
   role: Role;
 };
 
-export function AppShell({
-  children,
-  displayName,
-  role,
-}: AppShellProps) {
+export function AppShell({ children, displayName, role }: AppShellProps) {
   const portalPath =
     role === "resident"
       ? "/app/beranda"

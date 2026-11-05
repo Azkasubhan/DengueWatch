@@ -1,36 +1,53 @@
-import { redirect } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import {
   AlertTriangle,
   ArrowRight,
+  Camera,
+  CheckCircle2,
+  ChevronRight,
   Clock,
-  Droplets,
-  FileText,
+  FilePlus2,
   Plus,
-  Trash2,
+  Sparkles,
 } from "lucide-react";
 import { Alert } from "@/components/feedback/Alert";
 import { AppShell } from "@/components/layout/AppShell";
 import { PendingArea } from "@/components/feedback/PendingArea";
 import { ServiceUnavailable } from "@/components/feedback/ServiceUnavailable";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { LinkButton } from "@/components/ui/LinkButton";
-import { PageHeader } from "@/components/ui/PageHeader";
 import {
   decidePortalAccess,
   getDefaultPortal,
   getVerifiedAreas,
 } from "@/features/areas/access";
-import { ReportListItem } from "@/features/reports/components/ReportListItem";
+import { formatJakarta } from "@/features/reports/components/ReportDetailView";
+import { getResidentReportSummary } from "@/features/reports/data";
 import {
-  getResidentReportSummary,
-  listReportRows,
-} from "@/features/reports/data";
-import { reportCategoryLabels } from "@/features/reports/validation";
+  reportCategoryLabels,
+  reportEventLabels,
+} from "@/features/reports/validation";
+import memotretTemuanImage from "@/features/landing/images/memotret-temuan.webp";
+import waterContainerImage from "@/features/landing/images/water-container.webp";
+import discardedTireImage from "@/features/landing/images/discarded-tire.webp";
+import cloggedDrainImage from "@/features/landing/images/clogged-drain.webp";
 import { getAccessContext } from "@/lib/auth/context";
 import { cleanSimulationText } from "@/lib/format/text";
 
 export const dynamic = "force-dynamic";
+
+const residentEventTitle: Record<string, string> = {
+  report_created: "Laporan dikirim dan menunggu pemeriksaan",
+  report_verified: "Laporan diverifikasi pengelola wilayah",
+  report_information_requested: "Pengelola meminta keterangan tambahan",
+  report_information_added: "Keterangan tambahan telah dikirim",
+  report_action_started: "Penanganan lapangan dimulai kader",
+  report_resolved: "Penanganan selesai dan bukti disetujui",
+  report_reopened: "Penanganan dibuka kembali oleh pengelola",
+  report_rejected: "Laporan ditutup saat pemeriksaan",
+  report_marked_duplicate: "Laporan digabungkan dengan temuan sebelumnya",
+};
 
 export default async function ResidentHomePage({
   searchParams,
@@ -56,16 +73,15 @@ export default async function ResidentHomePage({
 
   const decision = decidePortalAccess(result.context, "resident");
   const area = getVerifiedAreas(result.context, "resident")[0];
-  const [recent, summaryResult] =
+  const summaryResult =
     decision.kind === "allowed"
-      ? await Promise.all([listReportRows(1, 6), getResidentReportSummary()])
-      : [
-          { data: null, error: null, count: 0 },
-          { data: null, error: null },
-        ];
+      ? await getResidentReportSummary()
+      : { data: null, error: null };
 
   const displayName = cleanSimulationText(result.context.displayName);
   const summary = summaryResult.data;
+  const needsInfoList = summary?.needsInformationReports ?? [];
+  const hasReports = (summary?.total ?? 0) > 0;
 
   return (
     <AppShell
@@ -74,130 +90,89 @@ export default async function ResidentHomePage({
       role="resident"
     >
       {query.logout === "failed" ? (
-        <div className="mb-5 max-w-2xl">
+        <div className="mb-4 max-w-2xl">
           <Alert variant="error">
             Sesi belum dapat diakhiri. Coba keluar kembali.
           </Alert>
         </div>
       ) : null}
+
       {decision.kind === "pending" ? (
         <PendingArea />
       ) : (
-        <div className="grid gap-6">
-          <PageHeader
-            title={`Halo, ${displayName}`}
-            description="Pantau tindak lanjut laporan Anda atau laporkan potensi tempat perkembangbiakan nyamuk di sekitar rumah."
-            actions={
-              <LinkButton href="/app/laporan/buat">
-                <Plus aria-hidden="true" className="size-4" />
-                Buat laporan
-              </LinkButton>
-            }
-          />
+        <div className="grid gap-5">
+          {/* A. Header ringkas */}
+          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] pb-3.5">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h1 className="text-xl font-bold tracking-tight text-[var(--foreground)] sm:text-2xl">
+                Halo, {displayName}
+              </h1>
+            </div>
+            <Link
+              href="/app/laporan"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--primary)] hover:underline"
+            >
+              Arsip laporan saya ({summary?.total ?? 0})
+              <ArrowRight aria-hidden="true" className="size-3.5" />
+            </Link>
+          </header>
 
-          {/* 2. Ringkasan laporan pribadi dari seluruh laporan */}
-          {summary ? (
-            <section aria-label="Ringkasan laporan pribadi">
-              <div className="grid gap-3 sm:grid-cols-3">
-                <Link
-                  href="/app/laporan?status=pending_verification"
-                  className="group block rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-5 transition hover:border-[var(--primary)]"
-                >
-                  <p className="text-xs sm:text-sm font-semibold text-[var(--muted-foreground)]">
-                    Menunggu pemeriksaan
-                  </p>
-                  <p className="mt-2 text-3xl sm:text-4xl font-bold tracking-tight tabular-nums text-[var(--foreground)]">
-                    {summary.awaitingReview}
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                    Sedang ditinjau pengelola wilayah
-                  </p>
-                </Link>
-
-                <Link
-                  href="/app/laporan?status=in_action"
-                  className="group block rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-5 transition hover:border-[var(--primary)]"
-                >
-                  <p className="text-xs sm:text-sm font-semibold text-[var(--muted-foreground)]">
-                    Sedang ditangani
-                  </p>
-                  <p className="mt-2 text-3xl sm:text-4xl font-bold tracking-tight tabular-nums text-[var(--foreground)]">
-                    {summary.inAction}
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                    Terverifikasi & ditindaklanjuti kader
-                  </p>
-                </Link>
-
-                <Link
-                  href="/app/laporan?status=resolved"
-                  className="group block rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-5 transition hover:border-[var(--primary)]"
-                >
-                  <p className="text-xs sm:text-sm font-semibold text-[var(--muted-foreground)]">
-                    Selesai ditangani
-                  </p>
-                  <p className="mt-2 text-3xl sm:text-4xl font-bold tracking-tight tabular-nums text-[var(--foreground)]">
-                    {summary.resolved}
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                    Bukti penanganan telah disetujui
-                  </p>
-                </Link>
-              </div>
-            </section>
-          ) : null}
-
-          {/* 3. Pemberitahuan laporan yang perlu dilengkapi, hanya jika ada */}
-          {summary && summary.needsInformationCount > 0 ? (
+          {/* B. Perlu tanggapan Anda (Hanya tampil jika ada needs_information) */}
+          {needsInfoList.length > 0 ? (
             <section
               aria-labelledby="needs-info-banner"
-              className="rounded-[var(--radius-card)] border border-[var(--warning)] bg-[var(--warning-subtle)] p-4 sm:p-5"
+              className="rounded-[var(--radius-card)] border border-[var(--warning)] bg-[var(--surface)] p-4 shadow-2xs"
             >
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle
-                    aria-hidden="true"
-                    className="mt-0.5 size-5 shrink-0 text-[var(--warning)]"
-                  />
-                  <div>
-                    <h2
-                      id="needs-info-banner"
-                      className="text-sm font-bold text-[var(--foreground)]"
-                    >
-                      {summary.needsInformationCount} laporan membutuhkan
-                      informasi tambahan dari Anda
-                    </h2>
-                    <p className="mt-1 text-xs text-[var(--foreground)] opacity-90">
-                      Pengelola wilayah memerlukan keterangan lanjutan sebelum
-                      menugaskan kader ke lokasi.
-                    </p>
-                  </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--warning-subtle)] text-[var(--warning)]">
+                    <AlertTriangle aria-hidden="true" className="size-3.5" />
+                  </span>
+                  <h2
+                    id="needs-info-banner"
+                    className="text-sm font-bold text-[var(--foreground)]"
+                  >
+                    Perlu tanggapan Anda ({needsInfoList.length})
+                  </h2>
                 </div>
-                <Link
-                  href="/app/laporan?status=needs_information"
-                  className="inline-flex min-h-9 items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--foreground)] shadow-xs transition hover:bg-[var(--background)]"
-                >
-                  Lihat semua
-                  <ArrowRight aria-hidden="true" className="size-3.5" />
-                </Link>
+                {needsInfoList.length > 1 ? (
+                  <Link
+                    href="/app/laporan?status=needs_information"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--primary)] hover:underline"
+                  >
+                    Lihat semua ({needsInfoList.length})
+                    <ArrowRight aria-hidden="true" className="size-3.5" />
+                  </Link>
+                ) : null}
               </div>
-              <ul className="mt-3 grid gap-2">
-                {summary.needsInformationReports.map((item) => (
-                  <li key={item.id}>
+
+              <ul className="mt-3 grid gap-2.5">
+                {needsInfoList.slice(0, 2).map((item) => (
+                  <li
+                    key={item.id}
+                    className="flex flex-col justify-between gap-3 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--warning-subtle)]/40 p-3 sm:flex-row sm:items-center"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-bold text-[var(--foreground)]">
+                          {reportCategoryLabels[item.category]}
+                        </span>
+                        <span className="font-mono text-xs font-semibold text-[var(--muted-foreground)]">
+                          {item.publicReference}
+                        </span>
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-xs text-[var(--foreground)]">
+                        {item.requestReason
+                          ? `Permintaan pengelola: "${item.requestReason}"`
+                          : "Pengelola wilayah meminta keterangan tambahan untuk memverifikasi lokasi temuan ini."}
+                      </p>
+                    </div>
                     <Link
                       href={`/app/laporan/${item.id}`}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] px-3.5 py-2.5 text-sm transition hover:border-[var(--primary)]"
+                      className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--primary)] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--primary-hover)]"
                     >
-                      <span className="font-semibold text-[var(--foreground)]">
-                        {reportCategoryLabels[item.category]}{" "}
-                        <span className="font-mono text-xs font-normal text-[var(--muted-foreground)]">
-                          ({item.publicReference})
-                        </span>
-                      </span>
-                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--primary)]">
-                        Lengkapi keterangan
-                        <ArrowRight aria-hidden="true" className="size-3.5" />
-                      </span>
+                      Lengkapi informasi
+                      <ArrowRight aria-hidden="true" className="size-3.5" />
                     </Link>
                   </li>
                 ))}
@@ -205,115 +180,322 @@ export default async function ResidentHomePage({
             </section>
           ) : null}
 
-          {/* 4. Daftar laporan terbaru */}
-          <section aria-labelledby="recent-title">
-            <div className="mb-3 flex items-center justify-between gap-4">
-              <div>
-                <h2 id="recent-title" className="text-lg font-bold">
-                  Laporan terbaru
-                </h2>
-                <p className="text-xs text-[var(--muted-foreground)]">
-                  Ringkasan status temuan lingkungan yang baru Anda kirimkan.
-                </p>
-              </div>
-              {recent.data?.length ? (
-                <Link
-                  href="/app/laporan"
-                  className="inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-[var(--primary)] hover:underline"
+          {/* C. Panel utama pelaporan */}
+          <section
+            aria-labelledby="primary-report-cta"
+            className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--primary)]/25 bg-[var(--surface)] shadow-xs"
+          >
+            <div className="grid items-center gap-4 p-4 sm:grid-cols-12 sm:p-5">
+              <div className="sm:col-span-8 lg:col-span-9">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--primary-subtle)] px-2.5 py-0.5 text-xs font-semibold text-[var(--primary)]">
+                  <Camera aria-hidden="true" className="size-3.5" />
+                  Pelaporan Lingkungan Warga
+                </span>
+                <h2
+                  id="primary-report-cta"
+                  className="mt-2 text-lg font-bold tracking-tight text-[var(--foreground)] sm:text-xl"
                 >
-                  Lihat semua laporan
-                  <ArrowRight aria-hidden="true" className="size-4" />
-                </Link>
-              ) : null}
+                  Temukan kondisi lingkungan yang perlu diperiksa?
+                </h2>
+                <p className="mt-1 max-w-xl text-sm text-[var(--muted-foreground)]">
+                  Kirim foto dan keterangan singkat. Pengelola wilayah akan
+                  memeriksa laporan Anda.
+                </p>
+                <div className="mt-3.5 flex flex-wrap items-center gap-3">
+                  <LinkButton href="/app/laporan/buat">
+                    <Plus aria-hidden="true" className="size-4" />
+                    Buat laporan
+                  </LinkButton>
+                  <span className="text-xs text-[var(--muted-foreground)]">
+                    Cukup 1–3 foto temuan · AI bantu isi draf otomatis
+                  </span>
+                </div>
+              </div>
+
+              <div className="hidden sm:col-span-4 sm:flex sm:justify-end lg:col-span-3">
+                <div className="relative h-28 w-full max-w-[190px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background)]">
+                  <Image
+                    src={memotretTemuanImage}
+                    alt="Warga memotret kondisi lingkungan yang berpotensi menampung air"
+                    fill
+                    sizes="190px"
+                    className="object-cover"
+                  />
+                </div>
+              </div>
             </div>
-            {recent.error ? (
-              <Alert variant="error">
-                Laporan terbaru belum dapat dimuat. Muat ulang halaman ini.
-              </Alert>
-            ) : recent.data?.length ? (
-              <ul className="grid gap-2.5">
-                {recent.data.map((report) => (
-                  <li key={report.id}>
-                    <ReportListItem
-                      href={`/app/laporan/${report.id}`}
-                      report={report}
-                    />
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <EmptyState
-                icon={FileText}
-                title="Belum ada laporan"
-                description="Temuan pertama Anda akan muncul di sini beserta status penanganannya."
-              />
-            )}
           </section>
 
-          {/* 5. Panduan singkat kapan harus melapor */}
-          <section
-            aria-labelledby="guide-title"
-            className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2">
+          {/* Desktop 2 kolom: D. Kabar terbaru laporan Anda (lebar) & E. Panduan singkat (kanan) */}
+          <div className="grid gap-5 lg:grid-cols-12 lg:items-start">
+            {/* D. Kabar terbaru laporan Anda */}
+            <section
+              aria-labelledby="updates-title"
+              className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5 lg:col-span-7"
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] pb-3">
+                <div>
+                  <h2
+                    id="updates-title"
+                    className="text-base font-bold text-[var(--foreground)]"
+                  >
+                    Kabar terbaru laporan Anda
+                  </h2>
+                  <p className="text-xs text-[var(--muted-foreground)]">
+                    Pembaruan terkini dari pemeriksaan dan tindak lanjut
+                    lapangan.
+                  </p>
+                </div>
+                {hasReports ? (
+                  <Link
+                    href="/app/laporan"
+                    className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-[var(--primary)] hover:underline"
+                  >
+                    Semua laporan
+                    <ArrowRight aria-hidden="true" className="size-3.5" />
+                  </Link>
+                ) : null}
+              </div>
+
+              {summaryResult.error ? (
+                <div className="mt-4">
+                  <Alert variant="error">
+                    Pembaruan laporan belum dapat dimuat. Muat ulang halaman
+                    ini.
+                  </Alert>
+                </div>
+              ) : !hasReports ? (
+                <div className="mt-4 rounded-[var(--radius-control)] border border-dashed border-[var(--border)] bg-[var(--background)] p-5">
+                  <div className="flex items-start gap-3">
+                    <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--primary-subtle)] text-[var(--primary)]">
+                      <FilePlus2 aria-hidden="true" className="size-5" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-bold text-[var(--foreground)]">
+                        Mulai dari laporan lingkungan pertama Anda
+                      </p>
+                      <p className="mt-1 text-xs leading-relaxed text-[var(--muted-foreground)]">
+                        Anda belum pernah mengirim laporan. Jika melihat wadah
+                        terbuka berisi air, ban bekas, atau saluran mampet di
+                        lingkungan sekitar, ambil foto dan kirimkan agar dapat
+                        diperiksa pengelola wilayah.
+                      </p>
+                      <div className="mt-3">
+                        <Link
+                          href="/app/laporan/buat"
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--primary)] hover:underline"
+                        >
+                          Buat laporan pertama
+                          <ArrowRight aria-hidden="true" className="size-3.5" />
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : summary?.recentEvents.length ? (
+                <ul className="mt-3 divide-y divide-[var(--border)]">
+                  {summary.recentEvents.map((ev) => {
+                    const eventLabel =
+                      residentEventTitle[ev.eventType] ??
+                      reportEventLabels[ev.eventType] ??
+                      "Pembaruan laporan";
+                    const isResolved = ev.eventType === "report_resolved";
+                    const isStarted =
+                      ev.eventType === "report_action_started" ||
+                      ev.eventType === "report_verified";
+
+                    return (
+                      <li key={ev.id} className="py-3 first:pt-1 last:pb-0">
+                        <Link
+                          href={`/app/laporan/${ev.reportId}`}
+                          className="group flex items-start justify-between gap-3 rounded-[var(--radius-control)] p-1.5 -mx-1.5 transition hover:bg-[var(--background)]"
+                        >
+                          <div className="flex min-w-0 items-start gap-3">
+                            <span
+                              className={`mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full ${
+                                isResolved
+                                  ? "bg-[var(--primary-subtle)] text-[var(--primary)]"
+                                  : isStarted
+                                    ? "bg-[var(--info-subtle)] text-[var(--info)]"
+                                    : "bg-[var(--background)] text-[var(--muted-foreground)]"
+                              }`}
+                            >
+                              {isResolved ? (
+                                <CheckCircle2
+                                  aria-hidden="true"
+                                  className="size-4"
+                                />
+                              ) : (
+                                <Clock aria-hidden="true" className="size-4" />
+                              )}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-[var(--foreground)] group-hover:text-[var(--primary)]">
+                                {eventLabel}
+                              </p>
+                              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--muted-foreground)]">
+                                <span className="font-medium text-[var(--foreground)]">
+                                  {reportCategoryLabels[ev.category]}
+                                </span>
+                                <span>·</span>
+                                <span className="font-mono">
+                                  {ev.publicReference}
+                                </span>
+                                <span>·</span>
+                                <span>{formatJakarta(ev.createdAt)} WIB</span>
+                              </div>
+                              {ev.reason ? (
+                                <p className="mt-1 line-clamp-1 text-xs text-[var(--muted-foreground)]">
+                                  Catatan: {ev.reason}
+                                </p>
+                              ) : null}
+                            </div>
+                          </div>
+                          <ChevronRight
+                            aria-hidden="true"
+                            className="mt-1 size-4 shrink-0 text-[var(--muted-foreground)] transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--primary)]"
+                          />
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="mt-4 text-xs text-[var(--muted-foreground)]">
+                  Semua laporan yang memerlukan tindakan Anda sudah ditampilkan
+                  di atas. Buka{" "}
+                  <Link
+                    href="/app/laporan"
+                    className="font-semibold text-[var(--primary)] hover:underline"
+                  >
+                    Laporan saya
+                  </Link>{" "}
+                  untuk melihat arsip lengkap.
+                </p>
+              )}
+            </section>
+
+            {/* E. Panduan singkat (Maksimal 2 bagian ringkas) */}
+            <aside
+              aria-labelledby="guide-title"
+              className="grid gap-3 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5 lg:col-span-5"
+            >
               <div>
-                <h2 id="guide-title" className="text-sm font-bold">
-                  Panduan singkat: Kapan perlu membuat laporan?
+                <h2
+                  id="guide-title"
+                  className="text-base font-bold text-[var(--foreground)]"
+                >
+                  Panduan singkat
                 </h2>
                 <p className="text-xs text-[var(--muted-foreground)]">
-                  Laporkan kondisi lingkungan yang berpotensi menjadi tempat
-                  perkembangbiakan nyamuk di area bersama.
+                  Kenali objek yang perlu dilaporkan dan cara memotretnya.
                 </p>
               </div>
-            </div>
-            <div className="mt-3.5 grid gap-3 sm:grid-cols-3">
-              <div className="flex items-start gap-2.5 rounded-[var(--radius-control)] bg-[var(--background)] p-3">
-                <Droplets
-                  aria-hidden="true"
-                  className="mt-0.5 size-4 shrink-0 text-[var(--primary)]"
-                />
-                <div className="text-xs">
-                  <p className="font-semibold text-[var(--foreground)]">
-                    Wadah & penampungan terbuka
+
+              {/* Bagian 1: Apa yang bisa dilaporkan? */}
+              <details
+                open
+                className="group rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--background)] p-3.5"
+              >
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-bold text-[var(--foreground)]">
+                  <span>1. Apa yang bisa dilaporkan?</span>
+                  <span className="text-xs font-normal text-[var(--muted-foreground)] group-open:hidden">
+                    Buka
+                  </span>
+                </summary>
+                <div className="mt-3 grid gap-2.5 text-xs text-[var(--muted-foreground)]">
+                  <p className="rounded-md bg-[var(--primary-subtle)]/70 px-2.5 py-2 font-medium text-[var(--foreground)]">
+                    Anda <strong>tidak harus melihat jentik</strong> terlebih
+                    dahulu untuk melapor kondisi lingkungan yang berpotensi
+                    menampung air.
                   </p>
-                  <p className="mt-0.5 text-[var(--muted-foreground)]">
-                    Ember, drum, bak, atau ban bekas berisi air yang tidak
-                    tertutup di fasilitas umum.
-                  </p>
+                  <div className="grid grid-cols-3 gap-2 pt-0.5">
+                    <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
+                      <Image
+                        src={waterContainerImage}
+                        alt="Contoh wadah terbuka berisi air"
+                        className="aspect-[4/3] w-full object-cover"
+                      />
+                      <p className="p-1.5 text-[11px] font-semibold leading-tight text-[var(--foreground)]">
+                        Wadah terbuka berisi air
+                      </p>
+                    </div>
+                    <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
+                      <Image
+                        src={discardedTireImage}
+                        alt="Contoh ban atau barang bekas menampung air"
+                        className="aspect-[4/3] w-full object-cover"
+                      />
+                      <p className="p-1.5 text-[11px] font-semibold leading-tight text-[var(--foreground)]">
+                        Ban & barang bekas
+                      </p>
+                    </div>
+                    <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
+                      <Image
+                        src={cloggedDrainImage}
+                        alt="Contoh saluran tersumbat atau genangan"
+                        className="aspect-[4/3] w-full object-cover"
+                      />
+                      <p className="p-1.5 text-[11px] font-semibold leading-tight text-[var(--foreground)]">
+                        Saluran mampet / genangan
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-start gap-2.5 rounded-[var(--radius-control)] bg-[var(--background)] p-3">
-                <Clock
-                  aria-hidden="true"
-                  className="mt-0.5 size-4 shrink-0 text-[var(--primary)]"
-                />
-                <div className="text-xs">
-                  <p className="font-semibold text-[var(--foreground)]">
-                    Genangan & saluran tersumbat
-                  </p>
-                  <p className="mt-0.5 text-[var(--muted-foreground)]">
-                    Selokan mampet atau cekungan air yang tidak surut lebih dari
-                    3 hari setelah hujan.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-2.5 rounded-[var(--radius-control)] bg-[var(--background)] p-3">
-                <Trash2
-                  aria-hidden="true"
-                  className="mt-0.5 size-4 shrink-0 text-[var(--primary)]"
-                />
-                <div className="text-xs">
-                  <p className="font-semibold text-[var(--foreground)]">
-                    Tumpukan barang menampung air
-                  </p>
-                  <p className="mt-0.5 text-[var(--muted-foreground)]">
-                    Botol, kaleng, atau sampah wadah di lahan kosong yang dapat
-                    menampung air hujan.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
+              </details>
+
+              {/* Bagian 2: Tips foto agar mudah diperiksa */}
+              <details className="group rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--background)] p-3.5">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-bold text-[var(--foreground)]">
+                  <span>2. Tips foto agar mudah diperiksa</span>
+                  <span className="text-xs font-semibold text-[var(--primary)] group-open:hidden">
+                    Lihat tips
+                  </span>
+                </summary>
+                <ul className="mt-2.5 grid gap-1.5 text-xs text-[var(--muted-foreground)]">
+                  <li className="flex items-start gap-2">
+                    <Sparkles
+                      aria-hidden="true"
+                      className="mt-0.5 size-3.5 shrink-0 text-[var(--primary)]"
+                    />
+                    <span>
+                      <strong className="text-[var(--foreground)]">
+                        Objek terlihat jelas:
+                      </strong>{" "}
+                      Pastikan wadah, ban, atau titik genangan tampak terang dan
+                      tidak buram.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Sparkles
+                      aria-hidden="true"
+                      className="mt-0.5 size-3.5 shrink-0 text-[var(--primary)]"
+                    />
+                    <span>
+                      <strong className="text-[var(--foreground)]">
+                        Sertakan konteks sekitar:
+                      </strong>{" "}
+                      Foto ke-2 dapat menampilkan patokan lokasi (pagar, gang,
+                      atau fasilitas umum) agar mudah ditemukan petugas.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Sparkles
+                      aria-hidden="true"
+                      className="mt-0.5 size-3.5 shrink-0 text-[var(--primary)]"
+                    />
+                    <span>
+                      <strong className="text-[var(--foreground)]">
+                        Jaga privasi warga:
+                      </strong>{" "}
+                      Hindari memotret wajah orang atau dokumen/identitas
+                      pribadi.
+                    </span>
+                  </li>
+                </ul>
+              </details>
+            </aside>
+          </div>
         </div>
       )}
     </AppShell>

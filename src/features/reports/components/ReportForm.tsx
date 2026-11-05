@@ -1,458 +1,567 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
-  createReportSchema,
-  reportCategoryLabels,
-} from "@/features/reports/validation";
-import { Button } from "@/components/ui/Button";
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
 import {
-  aiReportSuggestionSchema,
-  type AiReportSuggestion,
-} from "@/features/ai/schema";
-import { cleanSimulationText } from "@/lib/format/text";
+  Camera,
+  CheckCircle2,
+  Disc,
+  Droplets,
+  HelpCircle,
+  ImagePlus,
+  Loader2,
+  Navigation,
+  PackageOpen,
+  Sparkles,
+  Trash2,
+  Waves,
+  XCircle,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import type { AreaSummary } from "@/features/areas/types";
+import { CustomSelect } from "@/components/ui/CustomSelect";
+import { toast } from "@/components/ui/Toast";
+import { controlClass } from "@/features/reports/components/reportAction";
+import {
+  reportCategories,
+  reportCategoryLabels,
+  type ReportCategory,
+} from "@/features/reports/validation";
 
-type Area = { id: string; name: string; isDemo: boolean };
-type LocalPhoto = { file: File; url: string };
-type AiField =
-  "category" | "visibleObjects" | "description" | "preventionAdvice";
+type Coordinates = {
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+};
 
-export function ReportForm({ areas }: { areas: Area[] }) {
+type PhotoItem = {
+  file: File;
+  previewUrl: string;
+};
+
+type UploadedPhoto = {
+  id: string;
+  storagePath: string;
+};
+
+type AiStatus =
+  "idle" | "uploading" | "analyzing" | "succeeded" | "unavailable";
+
+type AiMetadata = {
+  visibleObjects: string | null;
+  preventionAdvice: string | null;
+};
+
+const categoryMeta: Record<ReportCategory, { icon: LucideIcon; hint: string }> =
+  {
+    water_container: {
+      icon: Droplets,
+      hint: "Ember, drum, bak, tandon, atau wadah terbuka",
+    },
+    discarded_tire: {
+      icon: Disc,
+      hint: "Ban bekas kendaraan yang dapat menampung air",
+    },
+    clogged_drain: {
+      icon: Waves,
+      hint: "Selokan mampet atau genangan air tidak mengalir",
+    },
+    discarded_item: {
+      icon: PackageOpen,
+      hint: "Kaleng, botol, pot, atau barang bekas di luar",
+    },
+    other: {
+      icon: HelpCircle,
+      hint: "Pilih ini jika ragu menentukan jenis temuan",
+    },
+  };
+
+function makeKey() {
+  return `dw_${crypto.randomUUID().replace(/-/g, "")}`;
+}
+
+function singleLine(value: string) {
+  return value.replace(/[\r\n\t]+/g, " ");
+}
+
+function clientFileError(file: File) {
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+    return "Gunakan foto JPG, PNG, atau WebP.";
+  }
+  if (file.size < 16 || file.size > 5 * 1024 * 1024) {
+    return "Ukuran setiap foto maksimal 5 MiB.";
+  }
+  return null;
+}
+
+export function ReportForm({ areas }: { areas: AreaSummary[] }) {
   const router = useRouter();
-  const [photos, setPhotos] = useState<LocalPhoto[]>([]);
   const [areaId, setAreaId] = useState(areas[0]?.id ?? "");
-  const [category, setCategory] = useState<
-    keyof typeof reportCategoryLabels | ""
-  >("");
+  const [category, setCategory] = useState<ReportCategory | "">("");
   const [description, setDescription] = useState("");
-  const [visibleObjects, setVisibleObjects] = useState("");
-  const [preventionAdvice, setPreventionAdvice] = useState("");
   const [locationNote, setLocationNote] = useState("");
-  const [coordinates, setCoordinates] = useState<{
-    latitude: number;
-    longitude: number;
-    accuracy: number;
-  } | null>(null);
-  const [preview, setPreview] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState("");
-  const [error, setError] = useState("");
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const focusErrorsRef = useRef(false);
-  const errorSummaryRef = useRef<HTMLDivElement>(null);
-  const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
-  const [uploadedIds, setUploadedIds] = useState<string[]>([]);
-  const [aiStage, setAiStage] = useState<
-    | "idle"
-    | "loading"
-    | "success"
-    | "unavailable"
-    | "invalid"
-    | "rate"
-    | "cancelled"
+  const [coordinates, setCoordinates] = useState<Coordinates | null>(null);
+  const [geoState, setGeoState] = useState<
+    "idle" | "loading" | "ready" | "denied" | "unavailable"
   >("idle");
-  const [aiMessage, setAiMessage] = useState("");
-  // T29: fields the AI filled that the resident has not edited yet.
-  const [aiFields, setAiFields] = useState<AiField[]>([]);
-  const aiControllerRef = useRef<AbortController | null>(null);
-  const aiGenerationRef = useRef(0);
-  // Latest field values for the async AI callback, which never overwrites resident input.
-  const valuesRef = useRef({
-    category,
-    visibleObjects,
-    description,
-    preventionAdvice,
-    aiFields,
+  const [photoItems, setPhotoItems] = useState<PhotoItem[]>([]);
+  const photos = photoItems.map((item) => item.file);
+  const previews = photoItems.map((item) => item.previewUrl);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [uploadStep, setUploadStep] = useState<string | null>(null);
+  const [aiStatus, setAiStatus] = useState<AiStatus>("idle");
+  const [aiNotice, setAiNotice] = useState<string | null>(null);
+  const [aiFilledFields, setAiFilledFields] = useState<{
+    category?: boolean;
+    description?: boolean;
+  }>({});
+  const [aiMetadata, setAiMetadata] = useState<AiMetadata>({
+    visibleObjects: null,
+    preventionAdvice: null,
   });
+
+  const idempotencyKey = useRef<string | null>(null);
+  const uploadedByFileRef = useRef<Map<File, UploadedPhoto>>(new Map());
+  const analysisRunRef = useRef(0);
+  const analysisAbortRef = useRef<AbortController | null>(null);
+  const valuesRef = useRef({ category, description });
+  const aiFilledRef = useRef(aiFilledFields);
+  const errorSummaryRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    valuesRef.current = {
-      category,
-      visibleObjects,
-      description,
-      preventionAdvice,
-      aiFields,
-    };
-  });
+    valuesRef.current = { category, description };
+  }, [category, description]);
+
+  useEffect(() => {
+    aiFilledRef.current = aiFilledFields;
+  }, [aiFilledFields]);
+
+  const photoItemsRef = useRef<PhotoItem[]>([]);
+
+  useEffect(() => {
+    photoItemsRef.current = photoItems;
+  }, [photoItems]);
+
+  useEffect(() => {
+    if (Object.keys(errors).length > 0) {
+      errorSummaryRef.current?.focus();
+    }
+  }, [errors]);
 
   useEffect(
     () => () => {
-      for (const photo of photos) URL.revokeObjectURL(photo.url);
+      analysisAbortRef.current?.abort();
+      photoItemsRef.current.forEach((item) =>
+        URL.revokeObjectURL(item.previewUrl),
+      );
     },
-    [photos],
+    [],
   );
 
-  useEffect(() => {
-    if (!focusErrorsRef.current || !errorSummaryRef.current) return;
-    errorSummaryRef.current.focus();
-    focusErrorsRef.current = false;
-  }, [fieldErrors, preview]);
-
-  useEffect(() => () => aiControllerRef.current?.abort(), []);
-
-  function invalidateAi() {
-    aiGenerationRef.current += 1;
-    aiControllerRef.current?.abort();
-    aiControllerRef.current = null;
-    setAiStage("idle");
-    setAiMessage("");
+  function resetAttemptKey() {
+    idempotencyKey.current = null;
   }
 
-  function releaseUploads(ids: string[]) {
-    void Promise.allSettled(
-      ids.map((id) =>
-        fetch(`/api/v1/report-uploads/${id}`, { method: "DELETE" }),
-      ),
-    );
+  function releaseUpload(upload: UploadedPhoto | undefined) {
+    if (!upload) return;
+    void fetch(`/api/v1/report-uploads/${upload.id}`, {
+      method: "DELETE",
+    }).catch(() => undefined);
   }
 
-  function changePhotos(files: FileList | null) {
-    if (!files) return;
-    const next = Array.from(files);
-    if (next.length < 1 || next.length > 3) {
-      setFieldErrors((old) => ({ ...old, photos: "Pilih 1–3 foto." }));
-      return;
+  async function uploadPhoto(file: File, signal?: AbortSignal) {
+    const body = new FormData();
+    body.set("file", file);
+    const response = await fetch("/api/v1/report-uploads", {
+      method: "POST",
+      body,
+      signal,
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.data?.id) {
+      throw new Error(
+        payload?.error?.message ?? "Foto belum dapat diunggah. Coba lagi.",
+      );
     }
-    if (
-      next.some(
-        (file) =>
-          file.size > 5 * 1024 * 1024 ||
-          !["image/jpeg", "image/png", "image/webp"].includes(file.type),
-      )
-    ) {
-      setFieldErrors((old) => ({
-        ...old,
-        photos: "Setiap foto harus JPG, PNG, atau WebP, maksimal 5 MiB.",
-      }));
-      return;
-    }
-    releaseUploads(uploadedIds);
-    invalidateAi();
-    setPhotos(next.map((file) => ({ file, url: URL.createObjectURL(file) })));
-    setUploadedIds([]);
-    setPreview(false);
-    setRequestKey(crypto.randomUUID());
-    setFieldErrors((old) => ({ ...old, photos: "" }));
-    // T29: a new first photo is analyzed right away.
-    void analyzePhoto(next[0]!);
+    return payload.data as UploadedPhoto;
   }
 
-  function removePhoto(index: number) {
-    invalidateAi();
-    if (uploadedIds[index]) releaseUploads([uploadedIds[index]]);
-    setPhotos((old) => old.filter((_, i) => i !== index));
-    setUploadedIds((old) => old.filter((_, i) => i !== index));
-    setPreview(false);
-    setRequestKey(crypto.randomUUID());
-  }
-
-  // Uploads the first photo privately (once) and asks the AI to fill the form.
-  async function analyzePhoto(file: File, uploadId?: string) {
-    if (!areaId) return;
-    aiControllerRef.current?.abort();
+  async function analyzeFirstPhoto(file: File, existingUpload?: UploadedPhoto) {
+    analysisAbortRef.current?.abort();
     const controller = new AbortController();
-    aiControllerRef.current = controller;
-    const generation = ++aiGenerationRef.current;
-    setAiStage("loading");
-    setAiMessage("");
-    let stage: "unavailable" | "invalid" | "rate" = "unavailable";
-    let message =
-      "Analisis AI tidak tersedia. Silakan isi kolom secara manual.";
+    analysisAbortRef.current = controller;
+    const run = ++analysisRunRef.current;
+    setAiNotice(null);
+
+    let upload = existingUpload ?? uploadedByFileRef.current.get(file);
     try {
-      let id = uploadId;
-      if (!id) {
-        const body = new FormData();
-        body.append("photo", file);
-        const response = await fetch("/api/v1/report-uploads", {
-          method: "POST",
-          body,
-          signal: controller.signal,
-        });
-        const payload = await response.json();
-        if (!response.ok || typeof payload.id !== "string") {
-          message = `${payload.error?.message ?? "Foto belum dapat disiapkan."} Silakan isi kolom secara manual.`;
-          throw new Error("UPLOAD_FAILED");
-        }
-        if (generation !== aiGenerationRef.current) {
-          releaseUploads([payload.id]);
+      if (!upload) {
+        setAiStatus("uploading");
+        upload = await uploadPhoto(file, controller.signal);
+        if (analysisRunRef.current !== run) {
+          releaseUpload(upload);
           return;
         }
-        id = payload.id as string;
-        setUploadedIds((current) => [id!, ...current.slice(1)]);
+        uploadedByFileRef.current.set(file, upload);
       }
+      setAiStatus("analyzing");
       const response = await fetch("/api/v1/ai/analyze-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ areaId, uploadId: id }),
         signal: controller.signal,
+        body: JSON.stringify({
+          uploadId: upload.id,
+          categoryHint: valuesRef.current.category || undefined,
+          locationSection: locationNote.trim()
+            ? singleLine(locationNote.trim())
+            : undefined,
+        }),
       });
-      const payload = await response.json();
-      if (generation !== aiGenerationRef.current) return;
-      if (!response.ok) {
-        const code = payload.error?.code;
-        stage =
-          code === "RATE_LIMIT"
-            ? "rate"
-            : code === "AI_INVALID_OUTPUT"
-              ? "invalid"
-              : "unavailable";
-        if (payload.error?.message)
-          message = `${payload.error.message} Silakan isi kolom secara manual.`;
-        throw new Error("AI_FAILED");
-      }
-      const parsed = aiReportSuggestionSchema.safeParse(
-        payload.data?.suggestion,
-      );
-      if (!parsed.success) {
-        stage = "invalid";
-        message =
-          "Hasil AI tidak dapat dipakai. Silakan isi kolom secara manual.";
-        throw new Error("AI_INVALID");
-      }
-      fillFromAi(parsed.data);
-    } catch {
-      if (generation !== aiGenerationRef.current) return;
-      if (controller.signal.aborted) {
-        setAiStage("cancelled");
-        setAiMessage("Analisis dibatalkan. Isian Anda tetap tersedia.");
+      const payload = await response.json().catch(() => null);
+      if (analysisRunRef.current !== run) return;
+      const suggestion = payload?.data?.suggestion;
+      if (!response.ok || !suggestion) {
+        setAiStatus("unavailable");
+        setAiNotice(
+          "Analisis AI belum tersedia. Silakan pilih kategori dan tulis keterangan secara manual.",
+        );
         return;
       }
-      setAiStage(stage);
-      setAiMessage(message);
-    } finally {
-      if (aiControllerRef.current === controller)
-        aiControllerRef.current = null;
+
+      const current = valuesRef.current;
+      const currentAi = aiFilledRef.current;
+      const nextAi: { category?: boolean; description?: boolean } = {};
+      let preservedUserEdits = false;
+
+      if (!current.category || currentAi.category) {
+        setCategory(suggestion.suggestedCategory);
+        nextAi.category = true;
+      } else {
+        preservedUserEdits = true;
+      }
+
+      const draftText = singleLine(
+        String(suggestion.draftDescription ?? ""),
+      ).trim();
+      if ((!current.description.trim() || currentAi.description) && draftText) {
+        setDescription(draftText);
+        nextAi.description = true;
+      } else if (current.description.trim()) {
+        preservedUserEdits = true;
+      }
+
+      const visibleStr = Array.isArray(suggestion.visibleObjects)
+        ? singleLine(suggestion.visibleObjects.join(", ")).trim()
+        : "";
+      const adviceStr = singleLine(
+        String(suggestion.suggestedPrecaution ?? ""),
+      ).trim();
+
+      setAiMetadata({
+        visibleObjects:
+          visibleStr.length >= 5 ? visibleStr.slice(0, 500) : null,
+        preventionAdvice:
+          adviceStr.length >= 10 ? adviceStr.slice(0, 500) : null,
+      });
+
+      setAiFilledFields(nextAi);
+      setErrors((currentErrors) => {
+        const next = { ...currentErrors };
+        if (nextAi.category) delete next.category;
+        if (nextAi.description) delete next.description;
+        return next;
+      });
+      setAiStatus("succeeded");
+      setAiNotice(
+        preservedUserEdits
+          ? "AI mengisi bagian yang masih kosong. Kolom yang sudah Anda isi tidak diubah."
+          : "AI mengisi draf kategori dan keterangan dari foto pertama. Silakan periksa sebelum mengirim.",
+      );
+    } catch {
+      if (analysisRunRef.current !== run) return;
+      if (controller.signal.aborted) {
+        setAiStatus("unavailable");
+        setAiNotice(
+          "Analisis AI dibatalkan. Anda dapat mengisi form secara manual.",
+        );
+        return;
+      }
+      setAiStatus("unavailable");
+      setAiNotice(
+        "Analisis AI belum tersedia. Silakan pilih kategori dan tulis keterangan secara manual.",
+      );
     }
   }
 
-  // Fills empty fields and fields still holding an unedited AI fill (e.g. from a replaced
-  // photo), so the resident's own text is never overwritten.
-  function fillFromAi(suggestion: AiReportSuggestion) {
-    const current = valuesRef.current;
-    const open = (field: AiField, value: string) =>
-      !value.trim() || current.aiFields.includes(field);
-    const filled: AiField[] = [];
-    if (open("category", current.category)) {
-      setCategory(suggestion.suggestedCategory);
-      filled.push("category");
-    }
-    if (open("visibleObjects", current.visibleObjects)) {
-      setVisibleObjects(suggestion.visibleObjects.join(", "));
-      filled.push("visibleObjects");
-    }
-    if (open("description", current.description)) {
-      setDescription(suggestion.draftDescription);
-      filled.push("description");
-    }
-    if (open("preventionAdvice", current.preventionAdvice)) {
-      setPreventionAdvice(suggestion.suggestedPrecaution);
-      filled.push("preventionAdvice");
-    }
-    setAiFields(filled);
-    setRequestKey(crypto.randomUUID());
-    setAiStage("success");
-    setAiMessage(
-      filled.length === 4
-        ? "AI mengisi formulir dari foto pertama. Periksa dan ubah bila ada yang tidak sesuai."
-        : filled.length
-          ? "AI mengisi kolom yang belum Anda isi. Kolom yang sudah Anda isi tidak diubah."
-          : "Semua kolom sudah Anda isi, jadi hasil AI tidak dipakai.",
+  function cancelAnalysis() {
+    analysisRunRef.current += 1;
+    analysisAbortRef.current?.abort();
+    setAiStatus("unavailable");
+    setAiNotice(
+      "Analisis AI dibatalkan. Anda dapat mengisi form secara manual.",
     );
   }
 
-  function editField(field: AiField, value: string) {
-    if (field === "category") setCategory(value as typeof category);
-    if (field === "visibleObjects") setVisibleObjects(value);
-    if (field === "description") setDescription(value);
-    if (field === "preventionAdvice") setPreventionAdvice(value);
-    setAiFields((current) => current.filter((name) => name !== field));
-    setRequestKey(crypto.randomUUID());
-  }
-
-  function validate() {
-    const result = createReportSchema.safeParse({
-      areaId,
-      category,
-      description,
-      visibleObjects,
-      preventionAdvice,
-      imageUploadIds: photos.map(() => crypto.randomUUID()),
-      location:
-        coordinates || locationNote
-          ? {
-              latitude: coordinates?.latitude ?? null,
-              longitude: coordinates?.longitude ?? null,
-              note: locationNote,
-            }
-          : null,
-    });
-    const errors: Record<string, string> = {};
-    if (!photos.length) errors.photos = "Tambahkan minimal satu foto.";
-    if (!result.success)
-      for (const issue of result.error.issues)
-        errors[issue.path[0]?.toString() ?? "form"] ??= issue.message;
-    setFieldErrors(errors);
-    if (Object.values(errors).some(Boolean)) {
-      setPreview(false);
-      focusErrorsRef.current = true;
-    }
-    return Object.keys(errors).length === 0;
-  }
-
-  function useLocation() {
-    if (!navigator.geolocation) {
-      setError("Perangkat ini tidak menyediakan lokasi.");
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        setCoordinates({
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-          accuracy: Math.round(coords.accuracy),
-        });
-        setRequestKey(crypto.randomUUID());
-        setError("");
-      },
-      () =>
-        setError(
-          "Lokasi tidak digunakan. Anda tetap dapat mengirim laporan tanpa titik lokasi.",
-        ),
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 },
-    );
-  }
-
-  async function submit() {
-    if (busy || !validate()) return;
-    // A slow or hanging analysis never blocks manual reporting.
-    if (aiStage === "loading") invalidateAi();
-    setBusy(true);
-    setError("");
-    const ids = [...uploadedIds];
-    try {
-      if (ids.length < photos.length) {
-        for (let i = ids.length; i < photos.length; i++) {
-          setProgress(`Mengunggah foto ${i + 1} dari ${photos.length}…`);
-          const body = new FormData();
-          body.append("photo", photos[i]!.file);
-          const response = await fetch("/api/v1/report-uploads", {
-            method: "POST",
-            body,
-          });
-          const payload = await response.json();
-          if (!response.ok)
-            throw new Error(
-              payload.error?.message ?? "Foto belum dapat diunggah.",
-            );
-          ids.push(payload.id);
-          setUploadedIds([...ids]);
+  function validateClient() {
+    const next: Record<string, string> = {};
+    if (!areaId) next.areaId = "Pilih wilayah pelaporan.";
+    if (photos.length < 1) {
+      next.photos = "Tambahkan minimal satu foto.";
+    } else if (photos.length > 3) {
+      next.photos = "Maksimal 3 foto per laporan.";
+    } else {
+      for (const photo of photos) {
+        const error = clientFileError(photo);
+        if (error) {
+          next.photos = error;
+          break;
         }
       }
-      setProgress("Menyimpan laporan…");
+    }
+    if (!category) next.category = "Pilih kategori temuan.";
+    const cleanDescription = singleLine(description).trim();
+    if (cleanDescription.length < 10) {
+      next.description =
+        "Ceritakan temuan Anda minimal 10 karakter (contoh: jenis wadah dan posisinya).";
+    } else if (cleanDescription.length > 1000) {
+      next.description = "Keterangan maksimal 1000 karakter.";
+    }
+    if (singleLine(locationNote).trim().length > 250) {
+      next.locationNote = "Petunjuk lokasi maksimal 250 karakter.";
+    }
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  }
+
+  function onPhotoChange(event: ChangeEvent<HTMLInputElement>) {
+    const incoming = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (incoming.length === 0) return;
+
+    resetAttemptKey();
+    setSubmitError(null);
+
+    const combined = [...photos, ...incoming];
+    if (combined.length > 3) {
+      setErrors((current) => ({
+        ...current,
+        photos:
+          "Maksimal 3 foto per laporan. Hapus salah satu foto jika ingin menggantinya.",
+      }));
+      return;
+    }
+
+    for (const file of incoming) {
+      const fileErr = clientFileError(file);
+      if (fileErr) {
+        setErrors((current) => ({ ...current, photos: fileErr }));
+        return;
+      }
+    }
+
+    const hadPhotosBefore = photoItems.length > 0;
+    const newItems: PhotoItem[] = incoming.map((file) => ({
+      file,
+      previewUrl: URL.createObjectURL(file),
+    }));
+    const nextItems = [...photoItems, ...newItems];
+    setPhotoItems(nextItems);
+    setErrors((current) => {
+      const rest = { ...current };
+      delete rest.photos;
+      return rest;
+    });
+
+    if (!hadPhotosBefore && nextItems[0]) {
+      void analyzeFirstPhoto(nextItems[0].file);
+    }
+  }
+
+  function removePhoto(index: number) {
+    resetAttemptKey();
+    const removed = photoItems[index];
+    if (removed) {
+      URL.revokeObjectURL(removed.previewUrl);
+      const upload = uploadedByFileRef.current.get(removed.file);
+      if (upload) {
+        releaseUpload(upload);
+        uploadedByFileRef.current.delete(removed.file);
+      }
+    }
+    const next = photoItems.filter((_, itemIndex) => itemIndex !== index);
+    setPhotoItems(next);
+
+    if (index === 0) {
+      analysisRunRef.current += 1;
+      analysisAbortRef.current?.abort();
+      if (next[0]) {
+        const existingUpload = uploadedByFileRef.current.get(next[0].file);
+        void analyzeFirstPhoto(next[0].file, existingUpload);
+      } else {
+        setAiStatus("idle");
+        setAiNotice(null);
+      }
+    }
+  }
+
+  function requestLocation() {
+    if (!("geolocation" in navigator)) {
+      setGeoState("unavailable");
+      return;
+    }
+    setGeoState("loading");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        resetAttemptKey();
+        setCoordinates({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: Math.round(position.coords.accuracy),
+        });
+        setGeoState("ready");
+      },
+      (error) => {
+        setCoordinates(null);
+        setGeoState(error.code === 1 ? "denied" : "unavailable");
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 },
+    );
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitError(null);
+    if (!validateClient()) return;
+
+    if (aiStatus === "uploading" || aiStatus === "analyzing") {
+      analysisRunRef.current += 1;
+      analysisAbortRef.current?.abort();
+      setAiStatus("unavailable");
+    }
+
+    setSubmitting(true);
+    try {
+      const uploadIds: string[] = [];
+      for (const [index, photo] of photos.entries()) {
+        let existing = uploadedByFileRef.current.get(photo);
+        if (!existing) {
+          setUploadStep(
+            `Mengunggah foto ${index + 1} dari ${photos.length}...`,
+          );
+          existing = await uploadPhoto(photo);
+          uploadedByFileRef.current.set(photo, existing);
+        }
+        uploadIds.push(existing.id);
+      }
+
+      setUploadStep("Menyimpan laporan...");
+      idempotencyKey.current ??= makeKey();
+
+      const payload: Record<string, unknown> = {
+        areaId,
+        category,
+        description: singleLine(description).trim(),
+        imageUploadIds: uploadIds,
+        location:
+          coordinates || locationNote.trim()
+            ? {
+                latitude: coordinates?.latitude ?? null,
+                longitude: coordinates?.longitude ?? null,
+                ...(locationNote.trim()
+                  ? { note: singleLine(locationNote).trim() }
+                  : {}),
+              }
+            : null,
+      };
+
+      if (aiMetadata.visibleObjects) {
+        payload.visibleObjects = aiMetadata.visibleObjects;
+      }
+      if (aiMetadata.preventionAdvice) {
+        payload.preventionAdvice = aiMetadata.preventionAdvice;
+      }
+
       const response = await fetch("/api/v1/reports", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Idempotency-Key": requestKey,
+          "Idempotency-Key": idempotencyKey.current,
         },
-        body: JSON.stringify({
-          areaId,
-          category,
-          description,
-          visibleObjects,
-          preventionAdvice,
-          imageUploadIds: ids,
-          location:
-            coordinates || locationNote
-              ? {
-                  latitude: coordinates?.latitude ?? null,
-                  longitude: coordinates?.longitude ?? null,
-                  note: locationNote,
-                }
-              : null,
-        }),
+        body: JSON.stringify(payload),
       });
-      const payload = await response.json();
-      if (!response.ok) {
-        if (payload.error?.fieldErrors) {
-          const serverErrors: Record<string, string> = {};
-          for (const [path, message] of Object.entries(
-            payload.error.fieldErrors as Record<string, string>,
-          )) {
-            const field = path.split(".")[0] ?? "form";
-            const target = field === "imageUploadIds" ? "photos" : field;
-            serverErrors[target] ??= message;
-          }
-          setFieldErrors(serverErrors);
-          setPreview(false);
-          focusErrorsRef.current = true;
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.data?.id) {
+        if (response.status === 409) {
+          uploadedByFileRef.current.clear();
+          resetAttemptKey();
+        }
+        if (result?.error?.fieldErrors) {
+          setErrors(result.error.fieldErrors);
         }
         throw new Error(
-          payload.error?.message ?? "Laporan belum dapat disimpan.",
+          result?.error?.message ?? "Laporan belum dapat disimpan. Coba lagi.",
         );
       }
-      router.push(
-        `/app/laporan/${payload.data.id}?toast=${encodeURIComponent("Laporan berhasil dikirim!")}`,
+
+      const refLabel = result.data.publicReference
+        ? ` (${result.data.publicReference})`
+        : "";
+      toast.success(
+        `Laporan${refLabel} berhasil dikirim dan menunggu pemeriksaan pengelola.`,
       );
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Laporan belum dapat disimpan.",
+      router.push(`/app/laporan/${result.data.id}?status=terkirim`);
+      router.refresh();
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "Laporan belum dapat disimpan. Coba lagi.",
       );
-      setProgress("");
-    } finally {
-      setBusy(false);
+      setSubmitting(false);
+      setUploadStep(null);
     }
   }
 
-  const control =
-    "min-h-11 w-full rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] px-3.5 py-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]";
-  const fieldError = (name: string) =>
-    fieldErrors[name] ? (
-      <p id={`${name}-error`} className="text-sm text-[var(--danger)]">
-        {fieldErrors[name]}
-      </p>
-    ) : null;
-  const aiBadge = (field: AiField) =>
-    aiFields.includes(field) ? (
-      <span className="ml-2 rounded-full bg-[var(--info-subtle)] px-2 py-0.5 text-xs font-semibold text-[var(--info)]">
-        Diisi AI · periksa
-      </span>
-    ) : null;
-  const activeErrors = Object.entries(fieldErrors).filter(([, message]) =>
-    Boolean(message),
-  );
-  const errorTargets: Record<string, string> = {
-    photos: "photos",
-    imageUploadIds: "photos",
-    areaId: "areaId",
-    category: "category",
-    visibleObjects: "visibleObjects",
-    description: "description",
-    preventionAdvice: "preventionAdvice",
-    location: "locationNote",
-  };
+  const errorEntries = Object.entries(errors);
+  const singleArea = areas.length === 1 ? areas[0] : null;
 
   return (
-    <div className={`grid gap-7 ${preview ? "max-w-3xl" : ""}`}>
-      {activeErrors.length ? (
+    <form
+      noValidate
+      onSubmit={handleSubmit}
+      className="grid gap-5"
+      aria-label="Formulir laporan lingkungan"
+    >
+      {/* Ringkasan validasi yang dapat menerima fokus */}
+      {errorEntries.length > 0 ? (
         <div
           ref={errorSummaryRef}
-          role="alert"
           tabIndex={-1}
+          role="alert"
           aria-labelledby="report-errors-title"
-          className="rounded-[var(--radius-control)] border border-[var(--danger)] bg-[var(--danger-subtle)] p-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--danger)]"
+          className="rounded-[var(--radius-card)] border border-[var(--danger)] bg-[var(--danger-subtle)] p-4 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
         >
-          <h2 id="report-errors-title" className="font-semibold">
-            Periksa isian berikut
-          </h2>
-          <ul className="mt-2 list-disc pl-5">
-            {activeErrors.map(([name, message]) => (
-              <li key={name}>
+          <p
+            id="report-errors-title"
+            className="font-bold text-[var(--danger)]"
+          >
+            Periksa kembali bagian berikut sebelum mengirim:
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            {errorEntries.map(([field, message]) => (
+              <li key={field}>
                 <a
-                  href={`#${errorTargets[name] ?? "description"}`}
-                  className="text-[var(--danger)] underline underline-offset-2 focus-visible:outline-2"
+                  href={`#${field}`}
+                  className="font-semibold text-[var(--primary)] underline underline-offset-2"
                 >
                   {message}
                 </a>
@@ -461,434 +570,605 @@ export function ReportForm({ areas }: { areas: Area[] }) {
           </ul>
         </div>
       ) : null}
-      {error ? (
-        <p
+
+      {submitError ? (
+        <div
           role="alert"
-          className="rounded-[var(--radius-control)] border border-[var(--danger)] bg-[var(--danger-subtle)] p-4 text-[var(--danger)]"
+          className="rounded-[var(--radius-card)] border border-[var(--danger)] bg-[var(--danger-subtle)] p-4 text-sm"
         >
-          {error}
-        </p>
+          <p className="font-bold text-[var(--danger)]">{submitError}</p>
+          <p className="mt-1 text-xs text-[var(--foreground)]">
+            Isian dan foto Anda tetap tersimpan di halaman ini. Silakan coba
+            kirim kembali.
+          </p>
+        </div>
       ) : null}
-      {!preview ? (
-        <div className="grid gap-7 lg:grid-cols-12 lg:items-start">
-          <div className="grid gap-6 lg:col-span-5">
-            <div className="grid gap-2">
-              <p id="photos-label" className="text-sm font-semibold">
-                Foto lingkungan <span aria-hidden="true">*</span>
-              </p>
-              <input
-                id="photos"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                multiple
-                onChange={(event) => {
-                  changePhotos(event.currentTarget.files);
-                  event.currentTarget.value = "";
-                }}
-                aria-labelledby="photos-label"
-                aria-required="true"
-                aria-describedby="photos-help photos-selected photos-error"
-                aria-invalid={Boolean(fieldErrors.photos)}
-                className="peer sr-only"
-              />
-              <label
-                htmlFor="photos"
-                className="inline-flex min-h-11 w-fit cursor-pointer items-center rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm font-semibold hover:border-[var(--primary)] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--focus)]"
-              >
-                {photos.length ? "Ganti pilihan foto" : "Pilih foto"}
-              </label>
-              <p
-                id="photos-selected"
-                aria-live="polite"
-                className="text-sm text-[var(--muted-foreground)]"
-              >
-                {photos.length
-                  ? `${photos.length} foto dipilih`
-                  : "Belum ada foto dipilih"}
-              </p>
-              <p
-                id="photos-help"
-                className="text-sm text-[var(--muted-foreground)]"
-              >
-                Pilih 1–3 foto JPG, PNG, atau WebP, masing-masing maksimal 5
-                MiB. Pilihan baru mengganti foto sebelumnya. Hindari wajah, plat
-                kendaraan, dan alamat rumah. Foto pertama langsung dianalisis AI
-                (Gemini) untuk mengisi formulir; lokasi dan data akun tidak
-                dikirim.
-              </p>
-              {fieldError("photos")}
-              <div className="grid grid-cols-3 gap-3">
-                {photos.map((photo, index) => (
-                  <div
-                    key={photo.url}
-                    className="rounded-[var(--radius-control)] border border-[var(--border)] p-2"
-                  >
-                    {/* Image is a local blob preview; the server creates normalized private copies. */}
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={photo.url}
+
+      {/* A. FOTO TEMUAN */}
+      <section
+        aria-labelledby="section-photos-title"
+        className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2
+              id="section-photos-title"
+              className="text-base font-bold text-[var(--foreground)]"
+            >
+              1. Foto temuan <span aria-hidden="true">*</span>
+            </h2>
+            <p
+              id="photos-help"
+              className="mt-0.5 text-xs text-[var(--muted-foreground)]"
+            >
+              Unggah 1–3 foto (JPG, PNG, atau WebP, maks. 5 MiB per foto).
+              Hindari memotret wajah orang atau dokumen pribadi.
+            </p>
+          </div>
+          <span
+            id="photos-selected"
+            className="rounded-full bg-[var(--background)] px-2.5 py-1 text-xs font-semibold text-[var(--muted-foreground)]"
+          >
+            {photos.length > 0
+              ? `${photos.length}/3 foto dipilih`
+              : "Belum ada foto"}
+          </span>
+        </div>
+
+        {/* Area unggah / tambah foto */}
+        <div className="mt-3.5 rounded-xl border-2 border-dashed border-[var(--control-border)] bg-[var(--background)] p-4 transition hover:border-[var(--primary)]">
+          <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+            <div className="flex items-start gap-3">
+              <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--primary-subtle)] text-[var(--primary)]">
+                <ImagePlus aria-hidden="true" className="size-5" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-[var(--foreground)]">
+                  {photos.length === 0
+                    ? "Tambahkan foto kondisi lingkungan"
+                    : photos.length < 3
+                      ? "Anda dapat menambahkan hingga 3 foto"
+                      : "Batas maksimal 3 foto telah tercapai"}
+                </p>
+                <p
+                  id="photos-ai-notice"
+                  className="mt-0.5 text-xs text-[var(--muted-foreground)]"
+                >
+                  Foto pertama akan dianalisis AI untuk membantu mengisi draf
+                  kategori dan keterangan.
+                </p>
+              </div>
+            </div>
+
+            {photos.length < 3 ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  id="photos"
+                  name="photos"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  aria-describedby={
+                    errors.photos
+                      ? "photos-help photos-ai-notice photos-error"
+                      : "photos-help photos-ai-notice"
+                  }
+                  aria-invalid={Boolean(errors.photos)}
+                  onChange={onPhotoChange}
+                  className="peer sr-only"
+                />
+                <label
+                  htmlFor="photos"
+                  className="inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--primary)] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[var(--primary-hover)] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--primary)]"
+                >
+                  <ImagePlus aria-hidden="true" className="size-4" />
+                  Pilih foto
+                </label>
+
+                <input
+                  id="camera-photo"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  capture="environment"
+                  onChange={onPhotoChange}
+                  className="peer/camera sr-only"
+                />
+                <label
+                  htmlFor="camera-photo"
+                  className="inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] px-3.5 py-2 text-xs font-semibold text-[var(--foreground)] transition hover:border-[var(--primary)] peer-focus-visible/camera:outline-2 peer-focus-visible/camera:outline-offset-2 peer-focus-visible/camera:outline-[var(--primary)]"
+                >
+                  <Camera
+                    aria-hidden="true"
+                    className="size-4 text-[var(--primary)]"
+                  />
+                  Ambil foto
+                </label>
+              </div>
+            ) : null}
+          </div>
+
+          {/* Daftar thumbnail foto yang sudah dipilih */}
+          {previews.length > 0 ? (
+            <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {previews.map((url, index) => (
+                <li
+                  key={url}
+                  className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]"
+                >
+                  <div className="relative">
+                    <Image
+                      unoptimized
+                      src={url}
                       alt={`Pratinjau foto ${index + 1}`}
-                      className="aspect-[4/3] w-full rounded object-cover"
+                      width={320}
+                      height={220}
+                      className="aspect-[4/3] w-full object-cover"
                     />
+                    {index === 0 ? (
+                      <span className="absolute top-2 left-2 rounded-md bg-[var(--surface)]/95 px-2 py-0.5 text-[11px] font-bold text-[var(--primary)] shadow-2xs">
+                        Foto 1 · Utama
+                      </span>
+                    ) : (
+                      <span className="absolute top-2 left-2 rounded-md bg-[var(--surface)]/90 px-2 py-0.5 text-[11px] font-semibold text-[var(--foreground)]">
+                        Foto {index + 1}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
+                    <span className="truncate text-[var(--muted-foreground)]">
+                      {photos[index]?.name ?? `Foto ${index + 1}`}
+                    </span>
                     <button
                       type="button"
                       onClick={() => removePhoto(index)}
-                      className="mt-1 min-h-11 w-full text-sm font-semibold text-[var(--danger)] focus-visible:outline-2"
+                      className="inline-flex shrink-0 items-center gap-1 font-semibold text-[var(--danger)] hover:underline"
                     >
+                      <Trash2 aria-hidden="true" className="size-3.5" />
                       Hapus foto {index + 1}
                     </button>
                   </div>
-                ))}
-              </div>
-            </div>
-            {photos.length ? (
-              <section
-                aria-labelledby="ai-heading"
-                className="grid gap-3 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4"
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+
+        {errors.photos ? (
+          <p
+            id="photos-error"
+            className="mt-2 text-xs font-semibold text-[var(--danger)]"
+          >
+            {errors.photos}
+          </p>
+        ) : null}
+
+        {/* Status analisis AI ringkas tepat di bawah foto */}
+        {aiStatus === "uploading" || aiStatus === "analyzing" ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--primary-subtle)]/50 px-3.5 py-2.5 text-xs"
+          >
+            <span className="inline-flex items-center gap-2 font-semibold text-[var(--foreground)]">
+              <Loader2
+                aria-hidden="true"
+                className="size-4 animate-spin text-[var(--primary)]"
+              />
+              {aiStatus === "uploading"
+                ? "Mengunggah foto pertama untuk dianalisis AI..."
+                : "AI sedang membaca foto pertama untuk menyarankan kategori & keterangan..."}
+            </span>
+            <button
+              type="button"
+              onClick={cancelAnalysis}
+              className="font-semibold text-[var(--primary)] underline underline-offset-2"
+            >
+              Batalkan analisis
+            </button>
+          </div>
+        ) : null}
+
+        {aiStatus === "succeeded" && aiNotice ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className="mt-3 flex items-center gap-2 rounded-[var(--radius-control)] border border-[var(--primary)]/30 bg-[var(--primary-subtle)]/60 px-3.5 py-2.5 text-xs text-[var(--foreground)]"
+          >
+            <Sparkles
+              aria-hidden="true"
+              className="size-4 shrink-0 text-[var(--primary)]"
+            />
+            <span>{aiNotice}</span>
+          </div>
+        ) : null}
+
+        {aiStatus === "unavailable" && aiNotice ? (
+          <div
+            role="alert"
+            className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--background)] px-3.5 py-2.5 text-xs text-[var(--muted-foreground)]"
+          >
+            <span>{aiNotice}</span>
+            {photos[0] ? (
+              <button
+                type="button"
+                onClick={() =>
+                  void analyzeFirstPhoto(
+                    photos[0]!,
+                    uploadedByFileRef.current.get(photos[0]!),
+                  )
+                }
+                className="font-semibold text-[var(--primary)] underline underline-offset-2"
               >
-                <h2 id="ai-heading" className="font-semibold">
-                  Isi otomatis dengan AI
-                </h2>
-                <p
-                  role={
-                    aiStage === "unavailable" ||
-                    aiStage === "invalid" ||
-                    aiStage === "rate"
-                      ? "alert"
-                      : "status"
-                  }
-                  className="text-sm text-[var(--muted-foreground)]"
-                >
-                  {aiStage === "loading"
-                    ? "AI sedang membaca foto pertama dan mengisi formulir. Anda tetap dapat mengisi sendiri."
-                    : aiStage === "idle"
-                      ? "Minta AI mengisi kolom yang masih kosong dari foto pertama, atau isi sendiri."
-                      : aiMessage}
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {aiStage === "loading" ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => {
-                        aiGenerationRef.current += 1;
-                        aiControllerRef.current?.abort();
-                        setAiStage("cancelled");
-                        setAiMessage(
-                          "Analisis dibatalkan. Isian Anda tetap tersedia.",
-                        );
-                      }}
-                    >
-                      Batalkan analisis
-                    </Button>
-                  ) : aiStage !== "success" && aiStage !== "rate" ? (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={busy}
-                      onClick={() =>
-                        analyzePhoto(photos[0]!.file, uploadedIds[0])
-                      }
-                    >
-                      Analisis ulang
-                    </Button>
-                  ) : null}
-                </div>
-              </section>
+                Analisis ulang
+              </button>
             ) : null}
           </div>
-          <div className="grid gap-4 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-5 lg:col-span-7">
-            <div className="grid gap-5 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <label htmlFor="areaId" className="text-sm font-semibold">
-                  Wilayah <span aria-hidden="true">*</span>
-                </label>
-                <select
-                  id="areaId"
-                  value={areaId}
-                  aria-required="true"
-                  aria-invalid={Boolean(fieldErrors.areaId)}
-                  aria-describedby={
-                    fieldErrors.areaId ? "areaId-error" : undefined
-                  }
-                  onChange={(event) => {
-                    setAreaId(event.target.value);
-                    invalidateAi();
-                    setRequestKey(crypto.randomUUID());
-                  }}
-                  className={control}
-                >
-                  {areas.map((area) => (
-                    <option key={area.id} value={area.id}>
-                      {cleanSimulationText(area.name)}
-                    </option>
-                  ))}
-                </select>
-                {fieldError("areaId")}
-              </div>
-              <div className="grid gap-2">
-                <label htmlFor="category" className="text-sm font-semibold">
-                  Kategori temuan <span aria-hidden="true">*</span>
-                  {aiBadge("category")}
-                </label>
-                <select
-                  id="category"
-                  value={category}
-                  aria-required="true"
-                  aria-invalid={Boolean(fieldErrors.category)}
-                  aria-describedby={
-                    fieldErrors.category ? "category-error" : undefined
-                  }
-                  onChange={(event) =>
-                    editField("category", event.target.value)
-                  }
-                  className={control}
-                >
-                  <option value="">Pilih kategori</option>
-                  {Object.entries(reportCategoryLabels).map(
-                    ([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ),
-                  )}
-                </select>
-                {fieldError("category")}
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <label htmlFor="visibleObjects" className="text-sm font-semibold">
-                Yang tampak pada foto <span aria-hidden="true">*</span>
-                {aiBadge("visibleObjects")}
-              </label>
-              <textarea
-                id="visibleObjects"
-                value={visibleObjects}
-                aria-required="true"
-                onChange={(event) =>
-                  editField("visibleObjects", event.target.value)
-                }
-                maxLength={500}
-                rows={2}
-                aria-invalid={Boolean(fieldErrors.visibleObjects)}
-                aria-describedby="visibleObjects-help visibleObjects-error"
-                className={control}
-                placeholder="Contoh: ember terbuka, air tergenang, ban bekas"
-              />
-              <p
-                id="visibleObjects-help"
-                className="text-sm text-[var(--muted-foreground)]"
-              >
-                5–500 karakter. Sebutkan benda atau kondisi yang terlihat.
-              </p>
-              {fieldError("visibleObjects")}
-            </div>
-            <div className="grid gap-2">
-              <label htmlFor="description" className="text-sm font-semibold">
-                Deskripsi lingkungan <span aria-hidden="true">*</span>
-                {aiBadge("description")}
-              </label>
-              <textarea
-                id="description"
-                value={description}
-                aria-required="true"
-                onChange={(event) =>
-                  editField("description", event.target.value)
-                }
-                maxLength={1000}
-                rows={3}
-                aria-invalid={Boolean(fieldErrors.description)}
-                aria-describedby="description-help description-error"
-                className={control}
-                placeholder="Jelaskan objek dan kondisinya tanpa menyebut identitas penghuni."
-              />
-              <p
-                id="description-help"
-                className="text-sm text-[var(--muted-foreground)]"
-              >
-                10–1000 karakter. Deskripsikan yang terlihat, tanpa diagnosis.
-              </p>
-              {fieldError("description")}
-            </div>
-            <div className="grid gap-2">
-              <label
-                htmlFor="preventionAdvice"
-                className="text-sm font-semibold"
-              >
-                Saran pencegahan <span aria-hidden="true">*</span>
-                {aiBadge("preventionAdvice")}
-              </label>
-              <textarea
-                id="preventionAdvice"
-                value={preventionAdvice}
-                aria-required="true"
-                onChange={(event) =>
-                  editField("preventionAdvice", event.target.value)
-                }
-                maxLength={500}
-                rows={2}
-                aria-invalid={Boolean(fieldErrors.preventionAdvice)}
-                aria-describedby="preventionAdvice-help preventionAdvice-error"
-                className={control}
-                placeholder="Contoh: tutup wadah dan kuras seminggu sekali."
-              />
-              <p
-                id="preventionAdvice-help"
-                className="text-sm text-[var(--muted-foreground)]"
-              >
-                10–500 karakter. Langkah sederhana yang bisa segera dilakukan.
-              </p>
-              {fieldError("preventionAdvice")}
-            </div>
-            <div className="grid gap-3 rounded-[var(--radius-control)] bg-[var(--background)] p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold">Lokasi titik (opsional)</p>
-                  <p className="text-sm text-[var(--muted-foreground)]">
-                    Hanya terlihat oleh Anda dan petugas berwenang.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={useLocation}
-                  >
-                    Gunakan lokasi perangkat
-                  </Button>
-                  {coordinates ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => {
-                        setCoordinates(null);
-                        setRequestKey(crypto.randomUUID());
-                      }}
-                    >
-                      Hapus titik
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-              {coordinates ? (
-                <p className="text-sm" role="status">
-                  Titik GPS tersimpan · akurasi sekitar ±
-                  {coordinates.accuracy.toLocaleString("id-ID")} m.
-                  {coordinates.accuracy > 100
-                    ? " Titik ini kurang tepat; tambahkan petunjuk lokasi agar kader mudah menemukannya."
-                    : ""}
-                </p>
-              ) : null}
-              <label htmlFor="locationNote" className="text-sm font-semibold">
-                Petunjuk lokasi umum (opsional)
-              </label>
-              <input
-                id="locationNote"
-                value={locationNote}
-                aria-invalid={Boolean(fieldErrors.location)}
-                aria-describedby={
-                  fieldErrors.location ? "location-error" : undefined
-                }
-                onChange={(event) => {
-                  setLocationNote(event.target.value);
-                  setRequestKey(crypto.randomUUID());
-                }}
-                maxLength={250}
-                className={control}
-                placeholder="Contoh: gang sebelah masjid, dekat pos ronda"
-              />
-              {fieldError("location")}
-            </div>
-            <Button
-              type="button"
-              className="sm:justify-self-end"
-              onClick={() => {
-                if (validate()) setPreview(true);
-              }}
+        ) : null}
+      </section>
+
+      {/* B. KATEGORI TEMUAN */}
+      <section
+        aria-labelledby="section-category-title"
+        className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2
+              id="section-category-title"
+              className="text-base font-bold text-[var(--foreground)]"
             >
-              Tinjau laporan
-            </Button>
+              2. Kategori temuan <span aria-hidden="true">*</span>
+            </h2>
+            <p
+              id="category-help"
+              className="mt-0.5 text-xs text-[var(--muted-foreground)]"
+            >
+              Pilih jenis objek yang paling sesuai. Pilih{" "}
+              <strong>Temuan lain</strong> bila Anda ragu.
+            </p>
+          </div>
+          {aiFilledFields.category ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-[var(--primary-subtle)] px-2.5 py-0.5 text-xs font-semibold text-[var(--primary)]">
+              <Sparkles aria-hidden="true" className="size-3" />
+              Disarankan AI
+            </span>
+          ) : null}
+        </div>
+
+        <div
+          id="category"
+          role="radiogroup"
+          aria-labelledby="section-category-title"
+          aria-describedby={
+            errors.category ? "category-help category-error" : "category-help"
+          }
+          aria-invalid={Boolean(errors.category)}
+          className="mt-3.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3"
+        >
+          {reportCategories.map((item) => {
+            const Icon = categoryMeta[item].icon;
+            const isSelected = category === item;
+            return (
+              <label
+                key={item}
+                className={`group relative flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--primary)] ${
+                  isSelected
+                    ? "border-[var(--primary)] bg-[var(--primary-subtle)]/65 shadow-2xs ring-1 ring-[var(--primary)]"
+                    : "border-[var(--border)] bg-[var(--background)] hover:border-[var(--primary)]/60"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="category"
+                  value={item}
+                  checked={isSelected}
+                  onChange={() => {
+                    resetAttemptKey();
+                    setCategory(item);
+                    setAiFilledFields((curr) => ({ ...curr, category: false }));
+                    setErrors((curr) => {
+                      const next = { ...curr };
+                      delete next.category;
+                      return next;
+                    });
+                  }}
+                  className="sr-only"
+                />
+                <span
+                  className={`inline-flex size-9 shrink-0 items-center justify-center rounded-lg transition ${
+                    isSelected
+                      ? "bg-[var(--primary)] text-white"
+                      : "bg-[var(--surface)] text-[var(--primary)] border border-[var(--border)]"
+                  }`}
+                >
+                  <Icon aria-hidden="true" className="size-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-bold text-[var(--foreground)]">
+                    {reportCategoryLabels[item]}
+                  </span>
+                  <span className="mt-0.5 block text-xs leading-snug text-[var(--muted-foreground)]">
+                    {categoryMeta[item].hint}
+                  </span>
+                </span>
+              </label>
+            );
+          })}
+        </div>
+
+        {errors.category ? (
+          <p
+            id="category-error"
+            className="mt-2 text-xs font-semibold text-[var(--danger)]"
+          >
+            {errors.category}
+          </p>
+        ) : null}
+      </section>
+
+      {/* C. KETERANGAN TEMUAN */}
+      <section
+        aria-labelledby="section-description-title"
+        className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <label
+            htmlFor="description"
+            id="section-description-title"
+            className="text-base font-bold text-[var(--foreground)]"
+          >
+            3. Apa yang Anda temukan? <span aria-hidden="true">*</span>
+          </label>
+          <div className="flex items-center gap-2">
+            {aiFilledFields.description ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-[var(--primary-subtle)] px-2.5 py-0.5 text-xs font-semibold text-[var(--primary)]">
+                <Sparkles aria-hidden="true" className="size-3" />
+                Draf AI · dapat diedit
+              </span>
+            ) : null}
+            <span className="text-xs tabular-nums text-[var(--muted-foreground)]">
+              {singleLine(description).trim().length}/1000
+            </span>
           </div>
         </div>
-      ) : (
-        <section
-          className="grid gap-5 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-7"
-          aria-labelledby="preview-title"
+        <p
+          id="description-help"
+          className="mt-0.5 text-xs text-[var(--muted-foreground)]"
         >
-          <h2 id="preview-title" className="text-2xl font-bold">
-            Tinjau sebelum kirim
-          </h2>
-          <p>
-            <span className="font-semibold">Wilayah:</span>{" "}
-            {areas.find((area) => area.id === areaId)?.name}
+          Jelaskan objek yang terlihat dan kondisinya secara singkat (10–1000
+          karakter).
+        </p>
+
+        <textarea
+          id="description"
+          name="description"
+          rows={3}
+          required
+          value={description}
+          placeholder="Ada ban bekas berisi air di dekat tempat sampah. Lokasinya berada di sisi kiri gang."
+          aria-describedby={
+            errors.description
+              ? "description-help description-error"
+              : "description-help"
+          }
+          aria-invalid={Boolean(errors.description)}
+          onChange={(event) => {
+            resetAttemptKey();
+            setDescription(event.target.value);
+            setAiFilledFields((curr) => ({ ...curr, description: false }));
+            setErrors((curr) => {
+              const next = { ...curr };
+              delete next.description;
+              return next;
+            });
+          }}
+          className={`${controlClass} mt-2.5`}
+        />
+        {errors.description ? (
+          <p
+            id="description-error"
+            className="mt-1.5 text-xs font-semibold text-[var(--danger)]"
+          >
+            {errors.description}
           </p>
-          <p>
-            <span className="font-semibold">Kategori:</span>{" "}
-            {category ? reportCategoryLabels[category] : ""}
-          </p>
-          <p className="whitespace-pre-wrap break-words">
-            <span className="font-semibold">Yang tampak pada foto:</span>{" "}
-            {visibleObjects}
-          </p>
-          <p className="whitespace-pre-wrap break-words">
-            <span className="font-semibold">Deskripsi:</span> {description}
-          </p>
-          <p className="whitespace-pre-wrap break-words">
-            <span className="font-semibold">Saran pencegahan:</span>{" "}
-            {preventionAdvice}
-          </p>
-          <p>
-            <span className="font-semibold">Lokasi:</span>{" "}
-            {coordinates
-              ? `Titik GPS disertakan (akurasi ±${coordinates.accuracy.toLocaleString("id-ID")} m)`
-              : "Tanpa titik lokasi"}
-            {locationNote ? ` — ${locationNote}` : ""}
-          </p>
-          <p>
-            <span className="font-semibold">Foto:</span> {photos.length}
-          </p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {photos.map((photo, index) => (
-              <div key={photo.url}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={photo.url}
-                  alt={`Pratinjau foto ${index + 1}`}
-                  className="aspect-square w-full rounded object-cover"
+        ) : null}
+      </section>
+
+      {/* D. LOKASI TEMUAN */}
+      <section
+        aria-labelledby="section-location-title"
+        className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5"
+      >
+        <h2
+          id="section-location-title"
+          className="text-base font-bold text-[var(--foreground)]"
+        >
+          4. Lokasi temuan
+        </h2>
+        <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
+          Bantu petugas dan kader menemukan titik lokasi dengan cepat di
+          lapangan.
+        </p>
+
+        <div className="mt-3.5 grid gap-4">
+          {/* Wilayah */}
+          {singleArea ? (
+            <input id="areaId" name="areaId" type="hidden" value={areaId} />
+          ) : (
+            <div>
+              <label
+                htmlFor="areaId"
+                className="block text-xs font-semibold text-[var(--foreground)]"
+              >
+                Wilayah pelaporan <span aria-hidden="true">*</span>
+              </label>
+              <div className="mt-1.5">
+                <CustomSelect
+                  id="areaId"
+                  name="areaId"
+                  value={areaId}
+                  size="md"
+                  placeholder="Pilih wilayah…"
+                  aria-invalid={Boolean(errors.areaId)}
+                  aria-describedby={errors.areaId ? "areaId-error" : undefined}
+                  onChange={(val) => {
+                    resetAttemptKey();
+                    setAreaId(val);
+                  }}
+                  options={areas.map((area) => ({
+                    value: area.id,
+                    label: area.name,
+                  }))}
                 />
               </div>
-            ))}
-          </div>
-          <p className="rounded-[var(--radius-control)] bg-[var(--primary-subtle)] p-4 text-sm">
-            Foto disimpan privat dan hanya dapat dibaca oleh Anda serta petugas
-            yang berwenang. Metadata lokasi perangkat pada foto dihapus. Laporan
-            ini adalah temuan lingkungan, bukan diagnosis DBD.
-          </p>
-          {error ? (
-            <p className="text-sm text-[var(--muted-foreground)]">
-              Isian Anda tetap tersedia. Perbaiki laporan atau coba kirim lagi.
-            </p>
-          ) : null}
-          {progress ? (
-            <p role="status" aria-live="polite">
-              {progress}
-            </p>
-          ) : null}
-          <div className="flex flex-wrap gap-3">
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={busy}
-              onClick={() => setPreview(false)}
+              {errors.areaId ? (
+                <p
+                  id="areaId-error"
+                  className="mt-1.5 text-xs font-semibold text-[var(--danger)]"
+                >
+                  {errors.areaId}
+                </p>
+              ) : null}
+            </div>
+          )}
+
+          {/* Patokan / Petunjuk lokasi */}
+          <div>
+            <label
+              htmlFor="locationNote"
+              className="block text-sm font-semibold text-[var(--foreground)]"
             >
-              Ubah laporan
-            </Button>
-            <Button type="button" disabled={busy} onClick={submit}>
-              {busy ? "Mengirim…" : "Konfirmasi dan kirim"}
-            </Button>
+              Patokan / petunjuk lokasi
+            </label>
+            <p
+              id="locationNote-help"
+              className="mt-0.5 text-xs text-[var(--muted-foreground)]"
+            >
+              Tulis patokan jalan, gang, atau bangunan terdekat (disarankan jika
+              tidak menggunakan GPS).
+            </p>
+            <input
+              id="locationNote"
+              name="locationNote"
+              type="text"
+              maxLength={250}
+              value={locationNote}
+              placeholder="Contoh: Di belakang Mushola Al-Ikhlas, dekat tempat sampah RT 03"
+              aria-describedby={
+                errors.locationNote
+                  ? "locationNote-help locationNote-error"
+                  : "locationNote-help"
+              }
+              aria-invalid={Boolean(errors.locationNote)}
+              onChange={(event) => {
+                resetAttemptKey();
+                setLocationNote(event.target.value);
+              }}
+              className={`${controlClass} mt-2`}
+            />
+            {errors.locationNote ? (
+              <p
+                id="locationNote-error"
+                className="mt-1.5 text-xs font-semibold text-[var(--danger)]"
+              >
+                {errors.locationNote}
+              </p>
+            ) : null}
           </div>
-        </section>
-      )}
-    </div>
+
+          {/* Titik GPS opsional */}
+          <div className="rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--background)] p-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold text-[var(--foreground)]">
+                  Titik GPS perangkat (opsional)
+                </p>
+                <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
+                  Gunakan tombol ini saat Anda sedang berada langsung di lokasi
+                  temuan.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={requestLocation}
+                  disabled={geoState === "loading"}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--foreground)] transition hover:border-[var(--primary)] disabled:opacity-60"
+                >
+                  <Navigation
+                    aria-hidden="true"
+                    className="size-3.5 text-[var(--primary)]"
+                  />
+                  {geoState === "loading"
+                    ? "Mengambil lokasi..."
+                    : coordinates
+                      ? "Perbarui lokasi saya"
+                      : "Gunakan lokasi saya"}
+                </button>
+                {coordinates ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetAttemptKey();
+                      setCoordinates(null);
+                      setGeoState("idle");
+                    }}
+                    className="inline-flex min-h-9 items-center gap-1 text-xs font-semibold text-[var(--danger)] hover:underline"
+                  >
+                    <XCircle aria-hidden="true" className="size-3.5" />
+                    Hapus titik
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            {coordinates ? (
+              <p className="mt-2.5 inline-flex items-center gap-1.5 rounded-md bg-[var(--primary-subtle)] px-2.5 py-1 text-xs font-semibold text-[var(--primary)]">
+                <CheckCircle2 aria-hidden="true" className="size-3.5" />
+                Titik GPS tersimpan ({coordinates.latitude.toFixed(5)},{" "}
+                {coordinates.longitude.toFixed(5)} · akurasi ±
+                {coordinates.accuracy} m)
+              </p>
+            ) : null}
+
+            {geoState === "denied" ? (
+              <p className="mt-2 text-xs text-[var(--muted-foreground)]">
+                Izin lokasi ditolak pada perangkat Anda. Anda tetap dapat
+                mengirim laporan menggunakan patokan lokasi di atas.
+              </p>
+            ) : null}
+
+            {geoState === "unavailable" ? (
+              <p className="mt-2 text-xs text-[var(--muted-foreground)]">
+                Titik GPS belum dapat diambil saat ini. Anda tetap dapat
+                mengirim laporan tanpa titik GPS.
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
+      {/* E. PENGIRIMAN */}
+      <div className="flex flex-col-reverse items-stretch justify-between gap-3 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 sm:flex-row sm:items-center">
+        <p className="text-xs text-[var(--muted-foreground)]">
+          Laporan akan diterima pengelola wilayah untuk diperiksa sebelum
+          penugasan kader.
+        </p>
+        <button
+          type="submit"
+          disabled={submitting}
+          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--primary)] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {submitting ? (
+            <>
+              <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+              <span>{uploadStep ?? "Mengirim laporan..."}</span>
+            </>
+          ) : (
+            <span>Kirim laporan</span>
+          )}
+        </button>
+      </div>
+    </form>
   );
 }

@@ -2,12 +2,17 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { FileText, Plus, Search } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
+import { Button } from "@/components/ui/Button";
+import { CustomSelect } from "@/components/ui/CustomSelect";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LinkButton } from "@/components/ui/LinkButton";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ServiceUnavailable } from "@/components/feedback/ServiceUnavailable";
 import { getDefaultPortal, getVerifiedAreas } from "@/features/areas/access";
-import { listReportRows } from "@/features/reports/data";
+import {
+  getResidentStatusCounts,
+  listReportRows,
+} from "@/features/reports/data";
 import { ReportListItem } from "@/features/reports/components/ReportListItem";
 import {
   reportStatuses,
@@ -58,13 +63,67 @@ export default async function MyReportsPage({
   const q = query.q?.trim() ? query.q.trim().slice(0, 120) : undefined;
   const sort = query.sort === "oldest" ? "oldest" : "newest";
 
-  const result = await listReportRows(page, 10, {
-    status: status ? [status] : undefined,
-    q,
-    sort,
-  });
+  const [result, statusCounts] = await Promise.all([
+    listReportRows(page, 10, {
+      status: status ? [status] : undefined,
+      q,
+      sort,
+    }),
+    getResidentStatusCounts(q),
+  ]);
   const area = getVerifiedAreas(access.context, "resident")[0];
   const hasActiveFilter = Boolean(status || q || sort !== "newest");
+
+  const statusTabs: {
+    key: ReportStatus | "all";
+    label: string;
+    count: number;
+  }[] = [
+    { key: "all", label: "Semua", count: statusCounts.all },
+    {
+      key: "needs_information",
+      label: reportStatusLabels.needs_information,
+      count: statusCounts.needs_information,
+    },
+    {
+      key: "pending_verification",
+      label: reportStatusLabels.pending_verification,
+      count: statusCounts.pending_verification,
+    },
+    {
+      key: "verified",
+      label: reportStatusLabels.verified,
+      count: statusCounts.verified,
+    },
+    {
+      key: "in_action",
+      label: reportStatusLabels.in_action,
+      count: statusCounts.in_action,
+    },
+    {
+      key: "resolved",
+      label: reportStatusLabels.resolved,
+      count: statusCounts.resolved,
+    },
+    ...(statusCounts.rejected > 0 || status === "rejected"
+      ? [
+          {
+            key: "rejected" as const,
+            label: reportStatusLabels.rejected,
+            count: statusCounts.rejected,
+          },
+        ]
+      : []),
+    ...(statusCounts.duplicate > 0 || status === "duplicate"
+      ? [
+          {
+            key: "duplicate" as const,
+            label: reportStatusLabels.duplicate,
+            count: statusCounts.duplicate,
+          },
+        ]
+      : []),
+  ];
 
   return (
     <AppShell
@@ -74,7 +133,7 @@ export default async function MyReportsPage({
     >
       <PageHeader
         title="Laporan saya"
-        description="Lihat status dan riwayat temuan lingkungan Anda."
+        description="Arsip lengkap, pencarian, dan pelacakan status laporan lingkungan Anda."
         actions={
           area ? (
             <LinkButton href="/app/laporan/buat">
@@ -84,6 +143,43 @@ export default async function MyReportsPage({
           ) : null
         }
       />
+
+      {/* Ringkasan status ringkas melalui filter tab dengan jumlah item yang sinkron */}
+      <nav
+        aria-label="Filter status cepat"
+        className="mb-3 flex flex-wrap items-center gap-1.5"
+      >
+        {statusTabs.map((tab) => {
+          const isActive = tab.key === "all" ? !status : status === tab.key;
+          return (
+            <Link
+              key={tab.key}
+              href={buildQuery({
+                status: tab.key === "all" ? undefined : tab.key,
+                q,
+                sort,
+              })}
+              aria-current={isActive ? "page" : undefined}
+              className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                isActive
+                  ? "border-[var(--primary)] bg-[var(--primary)] text-white"
+                  : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:border-[var(--primary)]"
+              }`}
+            >
+              <span>{tab.label}</span>
+              <span
+                className={`rounded-full px-1.5 py-0.2 text-[11px] tabular-nums ${
+                  isActive
+                    ? "bg-white/20 text-white"
+                    : "bg-[var(--background)] text-[var(--muted-foreground)]"
+                }`}
+              >
+                {tab.count}
+              </span>
+            </Link>
+          );
+        })}
+      </nav>
 
       {/* Filter & pencarian server-side */}
       <form
@@ -97,7 +193,7 @@ export default async function MyReportsPage({
             htmlFor="report-search"
             className="block text-xs font-semibold text-[var(--foreground)]"
           >
-            Cari referensi atau deskripsi
+            Cari referensi, deskripsi, atau lokasi
           </label>
           <div className="relative mt-1">
             <Search
@@ -110,7 +206,7 @@ export default async function MyReportsPage({
               type="search"
               defaultValue={q ?? ""}
               placeholder="Contoh: DW-2026 atau selokan..."
-              className="min-h-10 w-full rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--background)] py-1.5 pr-3 pl-9 text-sm"
+              className="min-h-10 w-full rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] py-1.5 pr-3 pl-9 text-sm"
             />
           </div>
         </div>
@@ -121,21 +217,23 @@ export default async function MyReportsPage({
           >
             Status laporan
           </label>
-          <select
-            id="report-status"
-            name="status"
-            defaultValue={status ?? ""}
-            className="mt-1 min-h-10 w-full rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-sm"
-          >
-            <option value="">Semua status</option>
-            {reportStatuses.map((item) => (
-              <option key={item} value={item}>
-                {reportStatusLabels[item]}
-              </option>
-            ))}
-          </select>
+          <div className="mt-1">
+            <CustomSelect
+              id="report-status"
+              name="status"
+              defaultValue={status ?? ""}
+              size="md"
+              options={[
+                { value: "", label: `Semua status (${statusCounts.all})` },
+                ...reportStatuses.map((item) => ({
+                  value: item,
+                  label: `${reportStatusLabels[item]} (${statusCounts[item]})`,
+                })),
+              ]}
+            />
+          </div>
         </div>
-        <div className="sm:col-span-3 flex items-center gap-2">
+        <div className="flex items-end gap-2 sm:col-span-3">
           <div className="flex-1">
             <label
               htmlFor="report-sort"
@@ -143,22 +241,22 @@ export default async function MyReportsPage({
             >
               Urutan
             </label>
-            <select
-              id="report-sort"
-              name="sort"
-              defaultValue={sort}
-              className="mt-1 min-h-10 w-full rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-sm"
-            >
-              <option value="newest">Terbaru</option>
-              <option value="oldest">Terlama</option>
-            </select>
+            <div className="mt-1">
+              <CustomSelect
+                id="report-sort"
+                name="sort"
+                defaultValue={sort}
+                size="md"
+                options={[
+                  { value: "newest", label: "Terbaru" },
+                  { value: "oldest", label: "Terlama" },
+                ]}
+              />
+            </div>
           </div>
-          <button
-            type="submit"
-            className="mt-5 inline-flex min-h-10 items-center justify-center rounded-[var(--radius-control)] bg-[var(--primary)] px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-[var(--primary-hover)]"
-          >
+          <Button type="submit" size="md" className="shrink-0">
             Terapkan
-          </button>
+          </Button>
         </div>
         {hasActiveFilter ? (
           <div className="flex items-center justify-between border-t border-[var(--border)] pt-2.5 text-xs text-[var(--muted-foreground)] sm:col-span-12">
@@ -236,6 +334,7 @@ export default async function MyReportsPage({
                 <ReportListItem
                   href={`/app/laporan/${report.id}`}
                   report={report}
+                  role="resident"
                 />
               </li>
             ))}

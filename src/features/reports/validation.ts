@@ -39,15 +39,19 @@ export const createReportSchema = z
     areaId: z.uuid(),
     category: reportCategorySchema,
     description: safeText(1000).pipe(z.string().min(10)),
-    // T29: prefilled by AI when available, always editable and required.
-    visibleObjects: safeText(500).pipe(
-      z
-        .string()
-        .min(5, "Tulis apa yang tampak pada foto (minimal 5 karakter)."),
-    ),
-    preventionAdvice: safeText(500).pipe(
-      z.string().min(10, "Tulis saran pencegahan (minimal 10 karakter)."),
-    ),
+    // Optional metadata: may be populated by AI analysis or legacy clients, never required from residents.
+    visibleObjects: safeText(500)
+      .pipe(
+        z
+          .string()
+          .min(5, "Tulis apa yang tampak pada foto (minimal 5 karakter)."),
+      )
+      .nullable()
+      .optional(),
+    preventionAdvice: safeText(500)
+      .pipe(z.string().min(10, "Tulis saran pencegahan (minimal 10 karakter)."))
+      .nullable()
+      .optional(),
     imageUploadIds: z
       .array(z.uuid())
       .min(1)

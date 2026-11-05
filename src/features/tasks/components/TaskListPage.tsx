@@ -10,6 +10,7 @@ import {
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { CustomSelect } from "@/components/ui/CustomSelect";
 import { EmptyState } from "@/components/ui/EmptyState";
 import {
   StatusBadge,
@@ -18,7 +19,6 @@ import {
 } from "@/components/ui/StatusBadge";
 import type { AreaSummary } from "@/features/areas/types";
 import { formatJakarta } from "@/features/reports/components/ReportDetailView";
-import { controlClass } from "@/features/reports/components/reportAction";
 import {
   listTaskAssignees,
   listTaskRows,
@@ -260,7 +260,7 @@ export async function TaskListPage({
           <div className="relative">
             <Search
               aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--muted-foreground)]"
+              className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-[var(--muted-foreground)]"
             />
             <input
               id="q"
@@ -268,69 +268,81 @@ export async function TaskListPage({
               type="search"
               defaultValue={values.q ?? ""}
               placeholder="Judul, lokasi, atau DW-2026..."
-              className="min-h-10 w-full rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--background)] py-1.5 pr-3 pl-9 text-sm"
+              className="min-h-9 w-full rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] py-1.5 pr-3 pl-9 text-xs font-medium text-[var(--foreground)]"
             />
           </div>
         </div>
-        <div className="grid gap-1.5 lg:col-span-3">
-          <label htmlFor="status" className="text-xs font-semibold">
+        <div className="grid gap-1 lg:col-span-3">
+          <label
+            htmlFor="status"
+            className="text-[11px] font-semibold text-[var(--foreground)]"
+          >
             Status
           </label>
-          <select
+          <CustomSelect
             id="status"
             name="status"
             defaultValue={selectedStatus}
-            className={controlClass}
-          >
-            <option value={openStatus}>Belum selesai</option>
-            {Object.entries(taskStatusLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-            <option value="all">Semua status</option>
-          </select>
+            size="sm"
+            options={[
+              { value: openStatus, label: "Belum selesai" },
+              ...Object.entries(taskStatusLabels).map(([value, label]) => ({
+                value,
+                label,
+              })),
+              { value: "all", label: "Semua status" },
+            ]}
+          />
         </div>
-        <div className="grid gap-1.5 lg:col-span-2">
-          <label htmlFor="due" className="text-xs font-semibold">
+        <div className="grid gap-1 lg:col-span-2">
+          <label
+            htmlFor="due"
+            className="text-[11px] font-semibold text-[var(--foreground)]"
+          >
             Tenggat
           </label>
-          <select
+          <CustomSelect
             id="due"
             name="due"
             defaultValue={values.due ?? "all"}
-            className={controlClass}
-          >
-            <option value="all">Semua tenggat</option>
-            <option value="overdue">Lewat tenggat</option>
-            <option value="due_soon">≤ 48 jam</option>
-          </select>
+            size="sm"
+            options={[
+              { value: "all", label: "Semua tenggat" },
+              { value: "overdue", label: "Lewat tenggat" },
+              { value: "due_soon", label: "≤ 48 jam" },
+            ]}
+          />
         </div>
         {areas.length > 1 ? (
-          <div className="grid gap-1.5 lg:col-span-2">
-            <label htmlFor="areaId" className="text-xs font-semibold">
+          <div className="grid gap-1 lg:col-span-2">
+            <label
+              htmlFor="areaId"
+              className="text-[11px] font-semibold text-[var(--foreground)]"
+            >
               Wilayah
             </label>
-            <select
+            <CustomSelect
               id="areaId"
               name="areaId"
               defaultValue={values.areaId ?? ""}
-              className={controlClass}
-            >
-              <option value="">Semua wilayah</option>
-              {areas.map((area) => (
-                <option key={area.id} value={area.id}>
-                  {area.name}
-                </option>
-              ))}
-            </select>
+              size="sm"
+              options={[
+                { value: "", label: "Semua wilayah" },
+                ...areas.map((area) => ({
+                  value: area.id,
+                  label: cleanSimulationText(area.name),
+                })),
+              ]}
+            />
           </div>
         ) : null}
         <div className="flex flex-wrap items-center gap-2 sm:col-span-2 lg:col-span-3">
-          <Button type="submit">Terapkan filter</Button>
+          <Button type="submit" size="sm" className="min-h-9 px-4">
+            Terapkan filter
+          </Button>
           <Link
             href={basePath}
-            className="inline-flex min-h-10 items-center px-2 text-xs font-semibold text-[var(--primary)] underline underline-offset-2"
+            className="inline-flex min-h-9 items-center px-2 text-xs font-semibold text-[var(--primary)] underline underline-offset-2"
           >
             Atur ulang
           </Link>

@@ -24,7 +24,7 @@ export default async function ReportDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ informasi?: string }>;
+  searchParams: Promise<{ informasi?: string; status?: string }>;
 }) {
   const query = await searchParams;
   const access = await getAccessContext();
@@ -75,6 +75,15 @@ export default async function ReportDetailPage({
           </>
         }
       />
+      {query.status === "terkirim" ? (
+        <div className="mb-5 max-w-3xl">
+          <Alert title={`Laporan ${report.publicReference} berhasil dikirim`}>
+            Terima kasih. Laporan Anda telah tercatat dengan nomor referensi{" "}
+            <strong className="font-mono">{report.publicReference}</strong> dan
+            sedang menunggu pemeriksaan pengelola wilayah.
+          </Alert>
+        </div>
+      ) : null}
       {query.informasi === "terkirim" &&
       report.status === "pending_verification" ? (
         <div className="mb-5 max-w-3xl">

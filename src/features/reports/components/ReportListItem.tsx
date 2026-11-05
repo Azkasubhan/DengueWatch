@@ -25,10 +25,12 @@ export function ReportListItem({
   report,
   href,
   areaName,
+  role = "manager",
 }: {
   report: ReportSummary & Partial<ReportListRow>;
   href: string;
   areaName?: string;
+  role?: "resident" | "manager";
 }) {
   const days = waitingDays(report);
   const locationLabel =
@@ -64,7 +66,7 @@ export function ReportListItem({
             <span className="font-bold text-[var(--foreground)] group-hover:text-[var(--primary)]">
               {reportCategoryLabels[report.category]}
             </span>
-            <span className="text-xs font-semibold text-[var(--muted-foreground)]">
+            <span className="font-mono text-xs font-semibold text-[var(--muted-foreground)]">
               {report.publicReference}
             </span>
           </div>
@@ -82,13 +84,13 @@ export function ReportListItem({
               </span>
             ) : null}
             {areaName ? <span>· {areaName}</span> : null}
-            {report.status === "pending_verification" ? (
+            {role === "manager" && report.status === "pending_verification" ? (
               <span className="inline-flex items-center gap-1 font-semibold text-[var(--warning)]">
                 <Clock3 aria-hidden="true" className="size-3.5" />
                 {days > 0 ? `Menunggu ${days} hari` : "Masuk hari ini"}
               </span>
             ) : null}
-            {report.needsMandatoryTask ? (
+            {role === "manager" && report.needsMandatoryTask ? (
               <span className="rounded bg-[var(--info-subtle)] px-1.5 py-0.5 font-semibold text-[var(--info)]">
                 Perlu penugasan kader
               </span>

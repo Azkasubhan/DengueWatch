@@ -1,5 +1,5 @@
 export const controlClass =
-  "min-h-11 w-full rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] px-3.5 py-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] aria-[invalid=true]:border-[var(--danger)]";
+  "min-h-11 w-full rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] px-3.5 py-2.5 text-sm text-[var(--foreground)] shadow-2xs transition focus-visible:border-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--primary)] aria-[invalid=true]:border-[var(--danger)] disabled:cursor-not-allowed disabled:opacity-60";
 
 export type ReportActionResult =
   | { kind: "ok"; data?: { id?: string; status?: string } }

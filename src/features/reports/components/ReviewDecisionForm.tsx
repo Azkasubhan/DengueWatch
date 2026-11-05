@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { CustomSelect } from "@/components/ui/CustomSelect";
 import {
   controlClass,
   postReportAction,
@@ -51,7 +52,6 @@ export function ReviewDecisionForm({
   const router = useRouter();
   const decisionRef = useRef<HTMLFieldSetElement>(null);
   const reasonRef = useRef<HTMLTextAreaElement>(null);
-  const targetRef = useRef<HTMLSelectElement>(null);
   const [decision, setDecision] = useState<Decision | null>(null);
   const [reason, setReason] = useState("");
   const [target, setTarget] = useState("");
@@ -78,7 +78,8 @@ export function ReviewDecisionForm({
   function focusFirst(next: Record<string, string>) {
     if (next.decision)
       decisionRef.current?.querySelector<HTMLInputElement>("input")?.focus();
-    else if (next.duplicateOfReportId) targetRef.current?.focus();
+    else if (next.duplicateOfReportId)
+      document.getElementById("duplicateOfReportId")?.focus();
     else if (next.reason) reasonRef.current?.focus();
   }
 
@@ -185,23 +186,23 @@ export function ReviewDecisionForm({
             Laporan rujukan <span aria-hidden="true">*</span>
           </label>
           {candidates.length ? (
-            <select
-              ref={targetRef}
+            <CustomSelect
               id="duplicateOfReportId"
               value={target}
-              aria-required="true"
+              placeholder="Pilih laporan yang lebih awal"
+              ariaLabel="Laporan rujukan duplikat"
               aria-invalid={Boolean(errors.duplicateOfReportId)}
               aria-describedby={describedBy("duplicateOfReportId", true)}
-              onChange={(event) => setTarget(event.target.value)}
-              className={controlClass}
-            >
-              <option value="">Pilih laporan yang lebih awal</option>
-              {candidates.map((candidate) => (
-                <option key={candidate.id} value={candidate.id}>
-                  {candidate.label}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setTarget(val)}
+              size="md"
+              options={[
+                { value: "", label: "Pilih laporan yang lebih awal" },
+                ...candidates.map((candidate) => ({
+                  value: candidate.id,
+                  label: candidate.label,
+                })),
+              ]}
+            />
           ) : null}
           <p
             id="duplicateOfReportId-help"

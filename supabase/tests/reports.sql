@@ -86,9 +86,9 @@ select is((select visible_objects||' | '||prevention_advice from public.reports)
   'Wadah air terbuka, genangan | Tutup wadah dan kuras seminggu sekali.','observation fields are stored (T29)');
 select throws_ok($$ select * from public.create_environmental_report(
   '32000000-0000-4000-8000-000000000001','water_container',
-  'Wadah air terlihat di area bersama setelah hujan.',null,'Tutup wadah dan kuras seminggu sekali.',null,null,null,
-  array['33000000-0000-4000-8000-000000000001'::uuid],'m3-no-visible') $$,
-  'P0422','invalid visible objects','visible objects are required');
+  'Wadah air terlihat di area bersama setelah hujan.','air','Tutup wadah dan kuras seminggu sekali.',null,null,null,
+  array['33000000-0000-4000-8000-000000000001'::uuid],'m3-short-visible') $$,
+  'P0422','invalid visible objects','non-null visible objects needs at least 5 characters');
 select throws_ok($$ select * from public.create_environmental_report(
   '32000000-0000-4000-8000-000000000001','water_container',
   'Wadah air terlihat di area bersama setelah hujan.','Wadah air terbuka','Tutup.',null,null,null,

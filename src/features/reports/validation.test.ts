@@ -33,12 +33,18 @@ describe("report validation", () => {
     ).toBe(false);
   });
 
-  it("requires visible objects and prevention advice (T29)", () => {
+  it("allows omitting visible objects and prevention advice while validating when provided", () => {
     for (const patch of [
-      { visibleObjects: undefined },
+      { visibleObjects: undefined, preventionAdvice: undefined },
+      { visibleObjects: null, preventionAdvice: null },
+    ]) {
+      expect(createReportSchema.safeParse({ ...valid, ...patch }).success).toBe(
+        true,
+      );
+    }
+    for (const patch of [
       { visibleObjects: "air" },
       { visibleObjects: "x".repeat(501) },
-      { preventionAdvice: undefined },
       { preventionAdvice: "Tutup." },
       { preventionAdvice: "Tutup wadah\nsegera hari ini." },
     ])

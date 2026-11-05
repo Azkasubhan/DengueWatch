@@ -5,11 +5,12 @@ import { PendingArea } from "@/components/feedback/PendingArea";
 import { ServiceUnavailable } from "@/components/feedback/ServiceUnavailable";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/Button";
+import { CustomDatePicker } from "@/components/ui/CustomDatePicker";
+import { CustomSelect } from "@/components/ui/CustomSelect";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { decidePortalAccess, getVerifiedAreas } from "@/features/areas/access";
 import { ReportListItem } from "@/features/reports/components/ReportListItem";
-import { controlClass } from "@/features/reports/components/reportAction";
 import {
   getVerificationQueueCounts,
   listReportRows,
@@ -215,7 +216,7 @@ export default async function VerificationQueuePage({
           <div className="relative">
             <Search
               aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--muted-foreground)]"
+              className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-[var(--muted-foreground)]"
             />
             <input
               id="q"
@@ -223,111 +224,130 @@ export default async function VerificationQueuePage({
               type="search"
               defaultValue={values.q ?? ""}
               placeholder="DW-2026, lokasi, deskripsi..."
-              className="min-h-10 w-full rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--background)] py-1.5 pr-3 pl-9 text-sm"
+              className="min-h-9 w-full rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] py-1.5 pr-3 pl-9 text-xs font-medium text-[var(--foreground)]"
             />
           </div>
         </div>
-        <div className="grid gap-1.5">
-          <label htmlFor="status" className="text-xs font-semibold">
+        <div className="grid gap-1">
+          <label
+            htmlFor="status"
+            className="text-[11px] font-semibold text-[var(--foreground)]"
+          >
             Status
           </label>
-          <select
+          <CustomSelect
             id="status"
             name="status"
             defaultValue={selectedStatus}
-            className={controlClass}
-          >
-            <option value={queueStatus}>Perlu pemeriksaan</option>
-            {Object.entries(reportStatusLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-            <option value="all">Semua status</option>
-          </select>
+            size="sm"
+            options={[
+              { value: queueStatus, label: "Perlu pemeriksaan" },
+              ...Object.entries(reportStatusLabels).map(([value, label]) => ({
+                value,
+                label,
+              })),
+              { value: "all", label: "Semua status" },
+            ]}
+          />
         </div>
-        <div className="grid gap-1.5">
-          <label htmlFor="category" className="text-xs font-semibold">
+        <div className="grid gap-1">
+          <label
+            htmlFor="category"
+            className="text-[11px] font-semibold text-[var(--foreground)]"
+          >
             Kategori
           </label>
-          <select
+          <CustomSelect
             id="category"
             name="category"
             defaultValue={values.category ?? ""}
-            className={controlClass}
-          >
-            <option value="">Semua kategori</option>
-            {Object.entries(reportCategoryLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+            size="sm"
+            options={[
+              { value: "", label: "Semua kategori" },
+              ...Object.entries(reportCategoryLabels).map(([value, label]) => ({
+                value,
+                label,
+              })),
+            ]}
+          />
         </div>
-        <div className="grid gap-1.5">
-          <label htmlFor="sort" className="text-xs font-semibold">
+        <div className="grid gap-1">
+          <label
+            htmlFor="sort"
+            className="text-[11px] font-semibold text-[var(--foreground)]"
+          >
             Urutkan
           </label>
-          <select
+          <CustomSelect
             id="sort"
             name="sort"
             defaultValue={values.sort ?? "newest"}
-            className={controlClass}
-          >
-            <option value="newest">Terbaru masuk</option>
-            <option value="waiting_longest">Paling lama menunggu</option>
-            <option value="oldest">Terlama</option>
-          </select>
+            size="sm"
+            options={[
+              { value: "newest", label: "Terbaru masuk" },
+              { value: "waiting_longest", label: "Paling lama menunggu" },
+              { value: "oldest", label: "Terlama" },
+            ]}
+          />
         </div>
         {areas.length > 1 ? (
-          <div className="grid gap-1.5">
-            <label htmlFor="areaId" className="text-xs font-semibold">
+          <div className="grid gap-1">
+            <label
+              htmlFor="areaId"
+              className="text-[11px] font-semibold text-[var(--foreground)]"
+            >
               Wilayah
             </label>
-            <select
+            <CustomSelect
               id="areaId"
               name="areaId"
               defaultValue={values.areaId ?? ""}
-              className={controlClass}
-            >
-              <option value="">Semua wilayah tugas</option>
-              {areas.map((area) => (
-                <option key={area.id} value={area.id}>
-                  {area.name}
-                </option>
-              ))}
-            </select>
+              size="sm"
+              options={[
+                { value: "", label: "Semua wilayah tugas" },
+                ...areas.map((area) => ({
+                  value: area.id,
+                  label: cleanSimulationText(area.name),
+                })),
+              ]}
+            />
           </div>
         ) : null}
-        <div className="grid gap-1.5">
-          <label htmlFor="submittedFrom" className="text-xs font-semibold">
+        <div className="grid gap-1">
+          <label
+            htmlFor="submittedFrom"
+            className="text-[11px] font-semibold text-[var(--foreground)]"
+          >
             Dikirim sejak
           </label>
-          <input
+          <CustomDatePicker
             id="submittedFrom"
             name="submittedFrom"
-            type="date"
             defaultValue={values.submittedFrom}
-            className={controlClass}
+            size="sm"
           />
         </div>
-        <div className="grid gap-1.5">
-          <label htmlFor="submittedTo" className="text-xs font-semibold">
+        <div className="grid gap-1">
+          <label
+            htmlFor="submittedTo"
+            className="text-[11px] font-semibold text-[var(--foreground)]"
+          >
             Dikirim sampai
           </label>
-          <input
+          <CustomDatePicker
             id="submittedTo"
             name="submittedTo"
-            type="date"
             defaultValue={values.submittedTo}
-            className={controlClass}
+            size="sm"
           />
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:col-span-2 lg:col-span-4">
-          <Button type="submit">Terapkan filter</Button>
+          <Button type="submit" size="sm" className="min-h-9 px-4">
+            Terapkan filter
+          </Button>
           <Link
             href="/pengelola/verifikasi"
-            className="inline-flex min-h-10 items-center px-2 text-xs font-semibold text-[var(--primary)] underline underline-offset-2"
+            className="inline-flex min-h-9 items-center px-2 text-xs font-semibold text-[var(--primary)] underline underline-offset-2"
           >
             Atur ulang
           </Link>

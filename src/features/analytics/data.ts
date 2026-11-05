@@ -62,51 +62,20 @@ export type ManagerSummary = NonNullable<
   Awaited<ReturnType<typeof getManagerSummary>>["data"]
 >;
 
-export type UrgentActionItem =
-  | {
-      kind: "verify_report";
-      id: string;
-      reference: string;
-      title: string;
-      subtitle: string;
-      ageLabel: string;
-      href: string;
-      actionLabel: string;
-      tone: "warning" | "danger" | "info";
-    }
-  | {
-      kind: "assign_task";
-      id: string;
-      reference: string;
-      title: string;
-      subtitle: string;
-      ageLabel: string;
-      href: string;
-      actionLabel: string;
-      tone: "info" | "warning";
-    }
-  | {
-      kind: "review_evidence";
-      id: string;
-      reference: string;
-      title: string;
-      subtitle: string;
-      ageLabel: string;
-      href: string;
-      actionLabel: string;
-      tone: "warning";
-    }
-  | {
-      kind: "overdue_task";
-      id: string;
-      reference: string;
-      title: string;
-      subtitle: string;
-      ageLabel: string;
-      href: string;
-      actionLabel: string;
-      tone: "danger";
-    };
+export type UrgentActionItem = {
+  kind: "verify_report" | "assign_task" | "review_evidence" | "overdue_task";
+  typeLabel: string;
+  id: string;
+  reference: string;
+  title: string;
+  locationLabel: string;
+  timeLabel: string;
+  href: string;
+  actionLabel: string;
+  tone: "warning" | "danger" | "info" | "neutral";
+  priorityRank: number;
+  sortTimestamp: number;
+};
 
 const categoryLabelMap: Record<string, string> = {
   water_container: "Wadah air terbuka",
@@ -116,10 +85,14 @@ const categoryLabelMap: Record<string, string> = {
   other: "Temuan lain",
 };
 
-function formatDaysAgo(iso: string, now = Date.now()): string {
+function formatWaitDuration(
+  iso: string,
+  prefix: string,
+  now = Date.now(),
+): string {
   const days = Math.max(0, Math.floor((now - Date.parse(iso)) / 86_400_000));
-  if (days === 0) return "Hari ini";
-  return `${days} hari lalu`;
+  if (days === 0) return `${prefix} hari ini`;
+  return `${prefix} ${days} hari`;
 }
 
 // Operational queue is current open work (all time in managed areas), never hidden by period filter.
@@ -196,28 +169,30 @@ export async function getManagerOperationalOverview(areaId: string | null) {
   let needsInformationCount = 0;
   let verifiedWithoutTaskCount = 0;
 
-  const urgentItems: UrgentActionItem[] = [];
+  const candidates: UrgentActionItem[] = [];
 
   for (const r of openReports) {
+    const submittedMs = Date.parse(r.submitted_at) || now;
+    const waitDays = Math.max(0, Math.floor((now - submittedMs) / 86_400_000));
+    const loc = r.location_note?.trim() || "Tanpa patokan lokasi tertulis";
+
     if (r.status === "pending_verification") {
       pendingVerificationCount += 1;
-      if (urgentItems.filter((i) => i.kind === "verify_report").length < 4) {
-        const waitDays = Math.floor(
-          (now - Date.parse(r.submitted_at)) / 86_400_000,
-        );
-        urgentItems.push({
-          kind: "verify_report",
-          id: r.id,
-          reference: r.public_reference,
-          title: categoryLabelMap[r.category] ?? "Temuan lingkungan",
-          subtitle: r.location_note || r.description,
-          ageLabel:
-            waitDays > 0 ? `Menunggu ${waitDays} hari` : "Masuk hari ini",
-          href: `/pengelola/verifikasi/${r.id}`,
-          actionLabel: "Periksa laporan",
-          tone: waitDays >= 2 ? "danger" : "warning",
-        });
-      }
+      candidates.push({
+        kind: "verify_report",
+        typeLabel: "Verifikasi",
+        id: r.id,
+        reference: r.public_reference,
+        title: categoryLabelMap[r.category] ?? "Temuan lingkungan",
+        locationLabel: loc,
+        timeLabel:
+          waitDays > 0 ? `Menunggu ${waitDays} hari` : "Masuk hari ini",
+        href: `/pengelola/verifikasi/${r.id}`,
+        actionLabel: "Periksa laporan",
+        tone: waitDays >= 3 ? "warning" : "neutral",
+        priorityRank: 3,
+        sortTimestamp: submittedMs,
+      });
     } else if (r.status === "needs_information") {
       needsInformationCount += 1;
     } else if (r.status === "verified" || r.status === "in_action") {
@@ -226,19 +201,20 @@ export async function getManagerOperationalOverview(areaId: string | null) {
       );
       if (!hasActiveMandatory) {
         verifiedWithoutTaskCount += 1;
-        if (urgentItems.filter((i) => i.kind === "assign_task").length < 3) {
-          urgentItems.push({
-            kind: "assign_task",
-            id: r.id,
-            reference: r.public_reference,
-            title: `${categoryLabelMap[r.category] ?? "Laporan"} · Belum ada tugas wajib`,
-            subtitle: r.location_note || r.description,
-            ageLabel: formatDaysAgo(r.submitted_at, now),
-            href: `/pengelola/verifikasi/${r.id}`,
-            actionLabel: "Buat tugas",
-            tone: "info",
-          });
-        }
+        candidates.push({
+          kind: "assign_task",
+          typeLabel: "Penugasan",
+          id: r.id,
+          reference: r.public_reference,
+          title: categoryLabelMap[r.category] ?? "Temuan terverifikasi",
+          locationLabel: loc,
+          timeLabel: formatWaitDuration(r.submitted_at, "Menunggu tugas", now),
+          href: `/pengelola/verifikasi/${r.id}`,
+          actionLabel: "Buat tugas",
+          tone: "info",
+          priorityRank: 4,
+          sortTimestamp: submittedMs,
+        });
       }
     }
   }
@@ -248,63 +224,95 @@ export async function getManagerOperationalOverview(areaId: string | null) {
   let tasksWithPendingEvidenceCount = 0;
 
   for (const t of openTasks) {
-    const isOverdue = Boolean(t.due_at && new Date(t.due_at).getTime() < now);
+    const dueMs = t.due_at ? Date.parse(t.due_at) : null;
+    const isOverdue = Boolean(dueMs !== null && dueMs < now);
     if (isOverdue) {
       overdueTasksCount += 1;
     }
+
+    const loc =
+      t.reports?.location_note?.trim() || "Lokasi sesuai laporan terkait";
 
     const activeRoundPending = (t.task_evidence ?? []).filter(
       (ev) =>
         ev.evidence_round === t.evidence_round &&
         ev.review_status === "pending",
     );
+
     if (activeRoundPending.length > 0) {
       pendingEvidenceSubmissionsCount += activeRoundPending.length;
       tasksWithPendingEvidenceCount += 1;
-      if (urgentItems.filter((i) => i.kind === "review_evidence").length < 3) {
-        urgentItems.push({
-          kind: "review_evidence",
-          id: t.id,
-          reference: t.reports?.public_reference ?? "Tugas",
-          title: t.title,
-          subtitle: `${activeRoundPending.length} bukti kader menunggu pemeriksaan`,
-          ageLabel: t.reports?.location_note ?? "Wilayah kelola",
-          href: `/pengelola/tugas/${t.id}`,
-          actionLabel: "Tinjau bukti",
-          tone: "warning",
-        });
-      }
-    } else if (
-      isOverdue &&
-      urgentItems.filter((i) => i.kind === "overdue_task").length < 3
-    ) {
-      const overdueDays = Math.max(
-        1,
-        Math.ceil((now - new Date(t.due_at!).getTime()) / 86_400_000),
+
+      const oldestEvidenceMs = Math.min(
+        ...activeRoundPending.map((ev) => Date.parse(ev.created_at) || now),
       );
-      urgentItems.push({
-        kind: "overdue_task",
+      const waitDays = Math.max(
+        0,
+        Math.floor((now - oldestEvidenceMs) / 86_400_000),
+      );
+
+      candidates.push({
+        kind: "review_evidence",
+        typeLabel: `Tinjau bukti (${activeRoundPending.length})`,
         id: t.id,
         reference: t.reports?.public_reference ?? "Tugas",
         title: t.title,
-        subtitle: t.reports?.location_note ?? "Melewati tenggat penyelesaian",
-        ageLabel: `Terlambat ${overdueDays} hari`,
+        locationLabel: loc,
+        timeLabel:
+          waitDays > 0
+            ? `Bukti menunggu ${waitDays} hari`
+            : "Bukti masuk hari ini",
         href: `/pengelola/tugas/${t.id}`,
-        actionLabel: "Pantau tugas",
+        actionLabel: "Tinjau bukti",
+        tone: "warning",
+        priorityRank: 2,
+        sortTimestamp: oldestEvidenceMs,
+      });
+    } else if (isOverdue && dueMs !== null) {
+      const overdueDays = Math.max(1, Math.ceil((now - dueMs) / 86_400_000));
+      candidates.push({
+        kind: "overdue_task",
+        typeLabel: "Tenggat tugas",
+        id: t.id,
+        reference: t.reports?.public_reference ?? "Tugas",
+        title: t.title,
+        locationLabel: loc,
+        timeLabel: `Lewat tenggat ${overdueDays} hari`,
+        href: `/pengelola/tugas/${t.id}`,
+        actionLabel: "Lihat tugas",
         tone: "danger",
+        priorityRank: 1,
+        sortTimestamp: dueMs,
       });
     }
   }
 
+  // Deterministic operational priority sort:
+  // 1. Overdue tasks (oldest due_at first)
+  // 2. Active-round cadre evidence waiting review (oldest evidence submission first)
+  // 3. Reports pending verification (oldest submitted_at first)
+  // 4. Verified reports without mandatory task (oldest submitted_at first)
+  candidates.sort((a, b) => {
+    if (a.priorityRank !== b.priorityRank) {
+      return a.priorityRank - b.priorityRank;
+    }
+    if (a.sortTimestamp !== b.sortTimestamp) {
+      return a.sortTimestamp - b.sortTimestamp;
+    }
+    return a.id.localeCompare(b.id);
+  });
+
   return {
     data: {
+      asOf: new Date(now).toISOString(),
       pendingVerificationCount,
       needsInformationCount,
       verifiedWithoutTaskCount,
       overdueTasksCount,
       pendingEvidenceSubmissionsCount,
       tasksWithPendingEvidenceCount,
-      urgentItems: urgentItems.slice(0, 8),
+      totalUrgentCount: candidates.length,
+      urgentItems: candidates.slice(0, 5),
     },
     error: null,
   };

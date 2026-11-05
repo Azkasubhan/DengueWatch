@@ -367,21 +367,68 @@ export async function listReportRows(
   };
 }
 
+export type ResidentRecentEvent = {
+  id: string;
+  reportId: string;
+  publicReference: string;
+  category: ReportCategory;
+  reportStatus: ReportStatus;
+  eventType: string;
+  reason: string | null;
+  createdAt: string;
+};
+
 export async function getResidentReportSummary() {
   const client = await createUserClient();
-  const result = await client
-    .from("reports")
-    .select(
-      "id,public_reference,area_id,category,description,status,submitted_at,is_demo,location_note",
-    )
-    .order("submitted_at", { ascending: false })
-    .overrideTypes<
-      (ReportRow & { location_note: string | null })[],
-      { merge: false }
-    >();
+  const [result, eventsResult] = await Promise.all([
+    client
+      .from("reports")
+      .select(
+        "id,public_reference,area_id,category,description,status,submitted_at,is_demo,location_note",
+      )
+      .order("submitted_at", { ascending: false })
+      .overrideTypes<
+        (ReportRow & { location_note: string | null })[],
+        { merge: false }
+      >(),
+    client
+      .from("report_events")
+      .select(
+        "id,report_id,event_type,reason,created_at,reports!inner(id,public_reference,category,status)",
+      )
+      .order("created_at", { ascending: false })
+      .limit(25)
+      .overrideTypes<
+        {
+          id: string;
+          report_id: string;
+          event_type: string;
+          reason: string | null;
+          created_at: string;
+          reports: {
+            id: string;
+            public_reference: string;
+            category: ReportCategory;
+            status: ReportStatus;
+          };
+        }[],
+        { merge: false }
+      >(),
+  ]);
 
   if (result.error || !result.data) {
     return { data: null, error: result.error };
+  }
+
+  const latestRequestReasonByReport = new Map<string, string>();
+  for (const ev of eventsResult.data ?? []) {
+    if (
+      ev.event_type === "report_information_requested" &&
+      ev.reason &&
+      !latestRequestReasonByReport.has(ev.report_id)
+    ) {
+      latestRequestReasonByReport.set(ev.report_id, ev.reason);
+    }
   }
 
   let awaitingReview = 0;
@@ -390,6 +437,7 @@ export async function getResidentReportSummary() {
   let resolved = 0;
   const needsInformationReports: (ReportSummary & {
     locationNote: string | null;
+    requestReason: string | null;
   })[] = [];
 
   for (const row of result.data) {
@@ -399,12 +447,40 @@ export async function getResidentReportSummary() {
       needsInformationReports.push({
         ...toReportSummary(row),
         locationNote: row.location_note,
+        requestReason: latestRequestReasonByReport.get(row.id) ?? null,
       });
     } else if (row.status === "verified" || row.status === "in_action") {
       inAction += 1;
     } else if (row.status === "resolved") {
       resolved += 1;
     }
+  }
+
+  // Exclude needs_information reports already shown in the "Perlu tanggapan Anda" section
+  const shownNeedsInfoIds = new Set(
+    needsInformationReports.slice(0, 2).map((item) => item.id),
+  );
+
+  const recentEvents: ResidentRecentEvent[] = [];
+  for (const ev of eventsResult.data ?? []) {
+    if (
+      ev.event_type === "report_information_requested" &&
+      (shownNeedsInfoIds.has(ev.report_id) ||
+        ev.reports.status === "needs_information")
+    ) {
+      continue;
+    }
+    recentEvents.push({
+      id: ev.id,
+      reportId: ev.report_id,
+      publicReference: ev.reports.public_reference,
+      category: ev.reports.category,
+      reportStatus: ev.reports.status,
+      eventType: ev.event_type,
+      reason: ev.reason,
+      createdAt: ev.created_at,
+    });
+    if (recentEvents.length >= 3) break;
   }
 
   return {
@@ -415,9 +491,43 @@ export async function getResidentReportSummary() {
       inAction,
       resolved,
       needsInformationReports,
+      recentEvents,
     },
     error: null,
   };
+}
+
+export async function getResidentStatusCounts(q?: string) {
+  const client = await createUserClient();
+  let query = client.from("reports").select("id,status");
+  if (q) {
+    const escaped = q.replace(/[%_,()]/g, "").trim();
+    if (escaped) {
+      query = query.or(
+        `public_reference.ilike.%${escaped}%,description.ilike.%${escaped}%,location_note.ilike.%${escaped}%`,
+      );
+    }
+  }
+  const result = await query.overrideTypes<
+    { id: string; status: ReportStatus }[],
+    { merge: false }
+  >();
+  const counts: Record<ReportStatus | "all", number> = {
+    all: 0,
+    pending_verification: 0,
+    needs_information: 0,
+    verified: 0,
+    in_action: 0,
+    resolved: 0,
+    rejected: 0,
+    duplicate: 0,
+  };
+  if (result.error || !result.data) return counts;
+  counts.all = result.data.length;
+  for (const row of result.data) {
+    counts[row.status] = (counts[row.status] ?? 0) + 1;
+  }
+  return counts;
 }
 
 export async function getVerificationQueueCounts(areaId?: string) {
@@ -480,6 +590,8 @@ export type MapReportPoint = {
   tasks: { id: string; title: string; status: string }[];
 };
 
+export const MAP_POINTS_LIMIT = 300;
+
 export async function listMapReports(filters: {
   areaId?: string | null;
   category?: ReportCategory;
@@ -488,34 +600,61 @@ export async function listMapReports(filters: {
   to?: string;
 }) {
   const client = await createUserClient();
-  let query = client
+
+  let pointsQuery = client
     .from("reports")
     .select(
       "id,public_reference,area_id,category,description,status,submitted_at,is_demo,latitude,longitude,location_note,action_tasks(id,title,status)",
+      { count: "exact" },
     )
+    .not("latitude", "is", null)
+    .not("longitude", "is", null)
     .order("submitted_at", { ascending: false })
-    .limit(300);
+    .limit(MAP_POINTS_LIMIT);
 
-  if (filters.areaId) query = query.eq("area_id", filters.areaId);
-  if (filters.category) query = query.eq("category", filters.category);
-  if (filters.status?.length) query = query.in("status", filters.status);
-  if (filters.from)
-    query = query.gte("submitted_at", jakartaDayStart(filters.from));
-  if (filters.to)
-    query = query.lt("submitted_at", jakartaDayStart(filters.to, 1));
+  let missingQuery = client
+    .from("reports")
+    .select("id", { count: "exact", head: true })
+    .or("latitude.is.null,longitude.is.null");
 
-  const result = await query.overrideTypes<
-    (ReportRow & {
-      latitude: number | null;
-      longitude: number | null;
-      location_note: string | null;
-      action_tasks?: { id: string; title: string; status: string }[];
-    })[],
-    { merge: false }
-  >();
+  if (filters.areaId) {
+    pointsQuery = pointsQuery.eq("area_id", filters.areaId);
+    missingQuery = missingQuery.eq("area_id", filters.areaId);
+  }
+  if (filters.category) {
+    pointsQuery = pointsQuery.eq("category", filters.category);
+    missingQuery = missingQuery.eq("category", filters.category);
+  }
+  if (filters.status?.length) {
+    pointsQuery = pointsQuery.in("status", filters.status);
+    missingQuery = missingQuery.in("status", filters.status);
+  }
+  if (filters.from) {
+    const start = jakartaDayStart(filters.from);
+    pointsQuery = pointsQuery.gte("submitted_at", start);
+    missingQuery = missingQuery.gte("submitted_at", start);
+  }
+  if (filters.to) {
+    const end = jakartaDayStart(filters.to, 1);
+    pointsQuery = pointsQuery.lt("submitted_at", end);
+    missingQuery = missingQuery.lt("submitted_at", end);
+  }
 
-  if (result.error || !result.data) {
-    return { data: null, error: result.error };
+  const [result, missingRes] = await Promise.all([
+    pointsQuery.overrideTypes<
+      (ReportRow & {
+        latitude: number | null;
+        longitude: number | null;
+        location_note: string | null;
+        action_tasks?: { id: string; title: string; status: string }[];
+      })[],
+      { merge: false }
+    >(),
+    missingQuery,
+  ]);
+
+  if (result.error || !result.data || missingRes.error) {
+    return { data: null, error: result.error ?? missingRes.error };
   }
 
   const withCoords = result.data.filter(
@@ -525,11 +664,14 @@ export async function listMapReports(filters: {
       Number.isFinite(row.latitude) &&
       Number.isFinite(row.longitude),
   );
-  const missingCoordinatesCount = result.data.length - withCoords.length;
+
+  const withCoordinatesTotal = result.count ?? withCoords.length;
+  const missingCoordinatesCount = missingRes.count ?? 0;
+  const totalMatching = withCoordinatesTotal + missingCoordinatesCount;
 
   const thumbnails = await fetchBatchThumbnails(
     client,
-    withCoords.slice(0, 80).map((r) => r.id),
+    withCoords.slice(0, 60).map((r) => r.id),
   );
 
   const points: MapReportPoint[] = withCoords.map((row) => ({
@@ -550,9 +692,12 @@ export async function listMapReports(filters: {
   return {
     data: {
       points,
-      totalMatching: result.data.length,
+      totalMatching,
       withCoordinatesCount: points.length,
+      withCoordinatesTotal,
       missingCoordinatesCount,
+      isTruncated: withCoordinatesTotal > points.length,
+      pointLimit: MAP_POINTS_LIMIT,
     },
     error: null,
   };
