@@ -219,11 +219,8 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
         body: JSON.stringify({
+          areaId,
           uploadId: upload.id,
-          categoryHint: valuesRef.current.category || undefined,
-          locationSection: locationNote.trim()
-            ? singleLine(locationNote.trim())
-            : undefined,
         }),
       });
       const payload = await response.json().catch(() => null);
