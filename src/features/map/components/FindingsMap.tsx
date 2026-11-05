@@ -53,10 +53,10 @@ function statusDotClass(status: ReportStatus): string {
 }
 
 function primaryActionLabel(report: MapReportPoint): string {
-  if (report.status === "pending_verification") return "Periksa laporan";
+  if (report.status === "pending_verification") return "Periksa";
   if (report.status === "verified" && report.tasks.length === 0)
     return "Buat tugas";
-  return "Detail laporan";
+  return "Periksa";
 }
 
 export function FindingsMap({

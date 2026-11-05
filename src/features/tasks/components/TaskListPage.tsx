@@ -138,10 +138,6 @@ export function CadreTaskTable({
               : null;
             const cleanTitle = cleanSimulationText(task.title);
             const cleanDescription = cleanSimulationText(task.description);
-            const isActionUrgent =
-              actionLabel === "Perbaiki bukti" ||
-              actionLabel === "Mulai tugas" ||
-              actionLabel === "Kirim bukti";
 
             return (
               <DataTableRow key={task.id}>
@@ -304,11 +300,7 @@ export function CadreTaskTable({
                 <DataTableCell className="w-[110px] whitespace-nowrap text-right pr-4 sm:pr-6">
                   <Link
                     href={href}
-                    className={`inline-flex min-h-8 w-[92px] items-center justify-center gap-1 rounded-[var(--radius-control)] px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] ${
-                      isActionUrgent
-                        ? "bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-2xs"
-                        : "border border-[var(--control-border)] bg-[var(--background)] text-[var(--foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)]"
-                    }`}
+                    className="inline-flex min-h-8 w-[92px] items-center justify-center gap-1 rounded-[var(--radius-control)] bg-[var(--primary)] px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-white shadow-2xs transition hover:bg-[var(--primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
                   >
                     <span>{actionLabel}</span>
                     <ArrowRight
@@ -678,7 +670,6 @@ export async function TaskListPage({
                     const cleanDescription = cleanSimulationText(
                       task.description,
                     );
-                    const isActionUrgent = actionLabel === "Tinjau bukti";
 
                     return (
                       <DataTableRow key={task.id}>
@@ -853,11 +844,7 @@ export async function TaskListPage({
                         <DataTableCell className="w-[110px] whitespace-nowrap text-right pr-4 sm:pr-6">
                           <Link
                             href={href}
-                            className={`inline-flex min-h-8 w-[92px] items-center justify-center gap-1 rounded-[var(--radius-control)] px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] ${
-                              isActionUrgent
-                                ? "bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-2xs"
-                                : "border border-[var(--control-border)] bg-[var(--background)] text-[var(--foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)]"
-                            }`}
+                            className="inline-flex min-h-8 w-[92px] items-center justify-center gap-1 rounded-[var(--radius-control)] bg-[var(--primary)] px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-white shadow-2xs transition hover:bg-[var(--primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
                           >
                             <span>{actionLabel}</span>
                             <ArrowRight

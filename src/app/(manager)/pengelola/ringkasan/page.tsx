@@ -839,9 +839,9 @@ export default async function ManagerSummaryPage({
                             <DataTableCell className="w-[110px] whitespace-nowrap text-right pr-4 sm:pr-6">
                               <Link
                                 href={href}
-                                className="inline-flex min-h-8 w-[92px] items-center justify-center gap-1 rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--background)] px-2.5 py-1 text-xs font-semibold text-[var(--primary)] transition hover:border-[var(--primary)] hover:bg-[var(--primary-subtle)]/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+                                className="inline-flex min-h-8 w-[92px] items-center justify-center gap-1 rounded-[var(--radius-control)] bg-[var(--primary)] px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-white shadow-2xs transition hover:bg-[var(--primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
                               >
-                                {item.actionLabel}
+                                <span>{item.actionLabel}</span>
                                 <ArrowRight
                                   aria-hidden="true"
                                   className="size-3.5 shrink-0"

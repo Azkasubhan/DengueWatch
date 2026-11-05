@@ -188,7 +188,7 @@ export async function getManagerOperationalOverview(areaId: string | null) {
         timeLabel:
           waitDays > 0 ? `Menunggu ${waitDays} hari` : "Masuk hari ini",
         href: `/pengelola/verifikasi/${r.id}`,
-        actionLabel: "Periksa laporan",
+        actionLabel: "Periksa",
         tone: waitDays >= 3 ? "warning" : "neutral",
         priorityRank: 3,
         sortTimestamp: submittedMs,
@@ -263,7 +263,7 @@ export async function getManagerOperationalOverview(areaId: string | null) {
             ? `Bukti menunggu ${waitDays} hari`
             : "Bukti masuk hari ini",
         href: `/pengelola/tugas/${t.id}`,
-        actionLabel: "Tinjau bukti",
+        actionLabel: "Tinjau",
         tone: "warning",
         priorityRank: 2,
         sortTimestamp: oldestEvidenceMs,
@@ -279,7 +279,7 @@ export async function getManagerOperationalOverview(areaId: string | null) {
         locationLabel: loc,
         timeLabel: `Lewat tenggat ${overdueDays} hari`,
         href: `/pengelola/tugas/${t.id}`,
-        actionLabel: "Lihat tugas",
+        actionLabel: "Periksa",
         tone: "danger",
         priorityRank: 1,
         sortTimestamp: dueMs,

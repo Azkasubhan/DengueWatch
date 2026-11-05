@@ -291,11 +291,7 @@ export function ReportTable({
                 <DataTableCell className="w-[110px] whitespace-nowrap text-right pr-4 sm:pr-6">
                   <Link
                     href={action.href}
-                    className={`inline-flex min-h-8 w-[92px] items-center justify-center gap-1.5 rounded-[var(--radius-control)] px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] ${
-                      action.isPrimary
-                        ? "bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-2xs"
-                        : "border border-[var(--control-border)] bg-[var(--background)] text-[var(--foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)]"
-                    }`}
+                    className="inline-flex min-h-8 w-[92px] items-center justify-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--primary)] px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-white shadow-2xs transition hover:bg-[var(--primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
                   >
                     <span>{action.label}</span>
                     <ArrowRight
