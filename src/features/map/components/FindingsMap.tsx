@@ -552,16 +552,11 @@ export function FindingsMap({
             className=" hidden sm:block absolute top-3 left-3 z-30 w-80 rounded-xl border border-[var(--border)] bg-[var(--surface)]/96 p-3.5 shadow-md backdrop-blur-xs"
           >
             <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-xs font-bold text-[var(--foreground)]">
-                    {reportCategoryLabels[selectedReport.category]}
-                  </span>
-                  <span className="font-mono text-[11px] font-semibold text-[var(--muted-foreground)]">
-                    {selectedReport.publicReference}
-                  </span>
-                </div>
-                <p className="mt-1 line-clamp-1 text-xs text-[var(--muted-foreground)]">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-bold text-[var(--foreground)]">
+                  {reportCategoryLabels[selectedReport.category]}
+                </p>
+                <p className="mt-1 truncate text-xs text-[var(--muted-foreground)]">
                   {selectedReport.locationNote ||
                     `${selectedReport.latitude.toFixed(5)}, ${selectedReport.longitude.toFixed(5)}`}
                 </p>
@@ -732,13 +727,10 @@ export function FindingsMap({
       {selectedReport ? (
         <div className="border-t border-[var(--border)] bg-[var(--background)] p-3 sm:hidden">
           <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-xs font-bold text-[var(--foreground)]">
+                <span className="truncate text-xs font-bold text-[var(--foreground)]">
                   {reportCategoryLabels[selectedReport.category]}
-                </span>
-                <span className="font-mono text-[11px] text-[var(--muted-foreground)]">
-                  {selectedReport.publicReference}
                 </span>
                 <StatusBadge tone={reportStatusTone[selectedReport.status]}>
                   {reportStatusLabels[selectedReport.status]}

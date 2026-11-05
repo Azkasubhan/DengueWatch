@@ -231,21 +231,29 @@ export default async function VerificationDetailPage({
                   Belum ada tugas untuk laporan ini.
                 </p>
               ) : (
-                <ul className="mt-4 grid gap-3">
-                  {tasks.data.map((task) => (
+                <ul className="mt-3 divide-y divide-[var(--border)] overflow-hidden rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)]">
+                  {tasks.data.map((task, index) => (
                     <li key={task.id}>
                       <Link
                         href={`/pengelola/tugas/${task.id}`}
-                        className="flex flex-wrap justify-between gap-2 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 hover:border-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+                        className="flex items-center justify-between gap-3 px-3.5 py-3 transition hover:bg-[var(--background)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--primary)]"
                       >
-                        <span className="min-w-0">
-                          <span className="block font-semibold break-words">
-                            {task.title}
-                            {task.isMandatory ? "" : " (opsional)"}
+                        <span className="flex min-w-0 flex-1 items-center gap-3">
+                          <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--background)] font-mono text-xs font-bold tabular-nums text-[var(--foreground)]">
+                            {index + 1}
                           </span>
-                          <span className="block text-sm break-words text-[var(--muted-foreground)]">
-                            {assignees.data.get(task.id)?.join(", ") ??
-                              "Kader belum dapat dimuat"}
+                          <span className="min-w-0 flex-1">
+                            <span
+                              title={task.title}
+                              className="block truncate font-semibold text-[var(--foreground)]"
+                            >
+                              {task.title}
+                              {task.isMandatory ? "" : " (opsional)"}
+                            </span>
+                            <span className="block truncate text-xs text-[var(--muted-foreground)]">
+                              {assignees.data.get(task.id)?.join(", ") ??
+                                "Kader belum dapat dimuat"}
+                            </span>
                           </span>
                         </span>
                         <StatusBadge tone={taskStatusTone[task.status]}>

@@ -3,15 +3,25 @@ import {
   AlertTriangle,
   ArrowRight,
   CalendarClock,
-  CheckCircle2,
   ListChecks,
-  MapPin,
   Search,
-  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { CustomSelect } from "@/components/ui/CustomSelect";
+import {
+  AssigneeListSummary,
+  DataTable,
+  DataTableBody,
+  DataTableCell,
+  DataTableContainer,
+  DataTableHeadCell,
+  DataTableHeader,
+  DataTableRow,
+  RowNumberCell,
+  RowNumberHeader,
+} from "@/components/ui/DataTable";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PhotoLightboxButton } from "@/components/ui/PhotoLightboxButton";
 import {
   StatusBadge,
   taskStatusTone,
@@ -19,6 +29,10 @@ import {
 } from "@/components/ui/StatusBadge";
 import type { AreaSummary } from "@/features/areas/types";
 import { formatJakarta } from "@/features/reports/components/ReportDetailView";
+import {
+  reportCategoryLabels,
+  type ReportCategory,
+} from "@/features/reports/validation";
 import {
   listTaskAssignees,
   listTaskRows,
@@ -48,31 +62,268 @@ export type TaskListParams = Partial<
   >
 >;
 
-const myEvidenceLabels: Record<EvidenceStatus, string> = {
-  missing: "Belum kirim bukti",
-  pending: "Menunggu periksa",
-  revision_required: "Perlu perbaikan",
+export const myEvidenceLabels: Record<EvidenceStatus, string> = {
+  missing: "Belum dikirim",
+  pending: "Menunggu pemeriksaan",
+  revision_required: "Perlu revisi",
   approved: "Disetujui",
 };
 
-const myEvidenceTones: Record<EvidenceStatus, Tone> = {
+export const myEvidenceTones: Record<EvidenceStatus, Tone> = {
   missing: "neutral",
   pending: "warning",
   revision_required: "danger",
   approved: "success",
 };
 
-function getActionLabel(task: TaskListRow, isManager: boolean): string {
+export function getTaskActionLabel(
+  task: TaskListRow,
+  isManager: boolean,
+): string {
   if (isManager) {
-    if (task.pendingEvidenceCount > 0) return "Periksa bukti";
-    return "Lihat tugas";
+    if (task.pendingEvidenceCount > 0) return "Tinjau";
+    return "Periksa";
   }
-  if (task.myEvidenceStatus === "revision_required") return "Perbaiki bukti";
+  if (task.myEvidenceStatus === "revision_required") return "Perbaiki";
   if (task.status === "assigned" || task.status === "reopened") {
-    return "Mulai tugas";
+    return "Mulai";
   }
   if (task.myEvidenceStatus === "missing") return "Kirim bukti";
-  return "Lihat tugas";
+  return "Periksa";
+}
+
+export function CadreTaskTable({
+  tasks,
+  detailBase = "/kader/tugas",
+  page = 1,
+  pageSize: size = 10,
+  caption = "Daftar tugas kader",
+}: {
+  tasks: TaskListRow[];
+  detailBase?: string;
+  page?: number;
+  pageSize?: number;
+  caption?: string;
+}) {
+  return (
+    <DataTableContainer>
+      <DataTable caption={caption}>
+        <DataTableHeader>
+          <RowNumberHeader />
+          <DataTableHeadCell>Tugas</DataTableHeadCell>
+          <DataTableHeadCell className="hidden md:table-cell">
+            Lokasi
+          </DataTableHeadCell>
+          <DataTableHeadCell className="hidden lg:table-cell">
+            Tenggat
+          </DataTableHeadCell>
+          <DataTableHeadCell className="hidden sm:table-cell">
+            Status tugas
+          </DataTableHeadCell>
+          <DataTableHeadCell className="hidden md:table-cell">
+            Bukti saya
+          </DataTableHeadCell>
+          <DataTableHeadCell className="w-[110px] whitespace-nowrap text-right pr-4 sm:pr-6">
+            Tindakan
+          </DataTableHeadCell>
+        </DataTableHeader>
+        <DataTableBody>
+          {tasks.map((task, index) => {
+            const rowNumber = (page - 1) * size + index + 1;
+            const href = `${detailBase}/${task.id}`;
+            const actionLabel = getTaskActionLabel(task, false);
+            const myStatus = task.myEvidenceStatus ?? "missing";
+            const locationNote = task.reportLocationNote
+              ? cleanSimulationText(task.reportLocationNote)
+              : null;
+            const cleanTitle = cleanSimulationText(task.title);
+            const cleanDescription = cleanSimulationText(task.description);
+            const isActionUrgent =
+              actionLabel === "Perbaiki bukti" ||
+              actionLabel === "Mulai tugas" ||
+              actionLabel === "Kirim bukti";
+
+            return (
+              <DataTableRow key={task.id}>
+                {/* 1. No. (PALING KIRI) */}
+                <RowNumberCell number={rowNumber} />
+
+                {/* 2. Tugas */}
+                <DataTableCell className="max-w-[240px] sm:max-w-[280px]">
+                  <div className="min-w-0">
+                    <Link
+                      href={href}
+                      title={cleanTitle}
+                      className="block truncate font-semibold text-[var(--foreground)] transition hover:text-[var(--primary)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+                    >
+                      {cleanTitle}
+                    </Link>
+                    {task.reportCategory ? (
+                      <span className="mt-0.5 block truncate text-xs text-[var(--muted-foreground)]">
+                        {
+                          reportCategoryLabels[
+                            task.reportCategory as ReportCategory
+                          ]
+                        }
+                        {!task.isMandatory ? " · Opsional" : ""}
+                      </span>
+                    ) : null}
+                    <p
+                      title={cleanDescription}
+                      className="mt-0.5 block truncate text-xs text-[var(--muted-foreground)]"
+                    >
+                      {cleanDescription}
+                    </p>
+                    {task.myRevisionReason ? (
+                      <p
+                        title={cleanSimulationText(task.myRevisionReason)}
+                        className="mt-1 block truncate rounded bg-[var(--danger-subtle)] px-2 py-0.5 text-[11px] font-medium text-[var(--danger)]"
+                      >
+                        Perlu revisi:{" "}
+                        {cleanSimulationText(task.myRevisionReason)}
+                      </p>
+                    ) : null}
+
+                    {/* Mobile compact metadata & disclosure */}
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:hidden">
+                      <StatusBadge tone={taskStatusTone[task.status]}>
+                        {taskStatusLabels[task.status]}
+                      </StatusBadge>
+                      <StatusBadge tone={myEvidenceTones[myStatus]}>
+                        {myEvidenceLabels[myStatus]}
+                      </StatusBadge>
+                    </div>
+                    <details className="mt-1.5 md:hidden">
+                      <summary className="cursor-pointer text-[11px] font-semibold text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+                        Rincian lokasi, tenggat & bukti
+                      </summary>
+                      <div className="mt-1.5 space-y-1 rounded-[var(--radius-sm)] bg-[var(--surface-muted)] p-2 text-xs text-[var(--muted-foreground)]">
+                        <p className="truncate">
+                          <span className="font-semibold text-[var(--foreground)]">
+                            Lokasi:{" "}
+                          </span>
+                          {locationNote ?? "Belum dicantumkan"}
+                        </p>
+                        <p>
+                          <span className="font-semibold text-[var(--foreground)]">
+                            Tenggat:{" "}
+                          </span>
+                          {task.dueAt
+                            ? formatJakarta(task.dueAt, false)
+                            : "Tanpa tenggat"}
+                          {task.isOverdue
+                            ? " (Lewat tenggat)"
+                            : task.isDueSoon
+                              ? " (Segera)"
+                              : ""}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                          <span className="font-semibold text-[var(--foreground)]">
+                            Bukti saya:{" "}
+                          </span>
+                          <StatusBadge tone={myEvidenceTones[myStatus]}>
+                            {myEvidenceLabels[myStatus]}
+                          </StatusBadge>
+                          {task.myEvidenceCount > 0 ? (
+                            <PhotoLightboxButton
+                              count={task.myEvidenceCount}
+                              fetchUrl={`/api/v1/tasks/${task.id}/evidence-photos?mine=1`}
+                              labelType="bukti"
+                              title={`Bukti Tugas: ${cleanTitle}`}
+                              hideWhenEmpty
+                            />
+                          ) : null}
+                        </div>
+                      </div>
+                    </details>
+                  </div>
+                </DataTableCell>
+
+                {/* 3. Lokasi */}
+                <DataTableCell className="hidden max-w-[200px] lg:max-w-[240px] md:table-cell">
+                  {locationNote ? (
+                    <span
+                      title={locationNote}
+                      className="block truncate text-xs text-[var(--foreground)]"
+                    >
+                      {locationNote}
+                    </span>
+                  ) : (
+                    <span className="block truncate text-xs italic text-[var(--muted-foreground)]">
+                      Belum dicantumkan
+                    </span>
+                  )}
+                </DataTableCell>
+
+                {/* 4. Tenggat */}
+                <DataTableCell className="hidden whitespace-nowrap lg:table-cell">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs font-medium text-[var(--foreground)]">
+                      {task.dueAt
+                        ? formatJakarta(task.dueAt, false)
+                        : "Tanpa tenggat"}
+                    </span>
+                    {task.isOverdue ? (
+                      <span className="text-[11px] font-semibold text-[var(--danger)]">
+                        Lewat tenggat
+                      </span>
+                    ) : task.isDueSoon ? (
+                      <span className="text-[11px] font-semibold text-[var(--warning)]">
+                        Segera
+                      </span>
+                    ) : null}
+                  </div>
+                </DataTableCell>
+
+                {/* 5. Status tugas */}
+                <DataTableCell className="hidden whitespace-nowrap sm:table-cell">
+                  <StatusBadge tone={taskStatusTone[task.status]}>
+                    {taskStatusLabels[task.status]}
+                  </StatusBadge>
+                </DataTableCell>
+
+                {/* 6. Bukti saya */}
+                <DataTableCell className="hidden whitespace-nowrap md:table-cell">
+                  <div className="flex flex-col items-start gap-1">
+                    <StatusBadge tone={myEvidenceTones[myStatus]}>
+                      {myEvidenceLabels[myStatus]}
+                    </StatusBadge>
+                    {task.myEvidenceCount > 0 ? (
+                      <PhotoLightboxButton
+                        count={task.myEvidenceCount}
+                        fetchUrl={`/api/v1/tasks/${task.id}/evidence-photos?mine=1`}
+                        labelType="bukti"
+                        title={`Bukti Tugas: ${cleanTitle}`}
+                        hideWhenEmpty
+                      />
+                    ) : null}
+                  </div>
+                </DataTableCell>
+
+                {/* 7. Tindakan */}
+                <DataTableCell className="w-[110px] whitespace-nowrap text-right pr-4 sm:pr-6">
+                  <Link
+                    href={href}
+                    className={`inline-flex min-h-8 w-[92px] items-center justify-center gap-1 rounded-[var(--radius-control)] px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] ${
+                      isActionUrgent
+                        ? "bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-2xs"
+                        : "border border-[var(--control-border)] bg-[var(--background)] text-[var(--foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                    }`}
+                  >
+                    <span>{actionLabel}</span>
+                    <ArrowRight
+                      aria-hidden="true"
+                      className="size-3.5 shrink-0"
+                    />
+                  </Link>
+                </DataTableCell>
+              </DataTableRow>
+            );
+          })}
+        </DataTableBody>
+      </DataTable>
+    </DataTableContainer>
+  );
 }
 
 // Shared server view. Cadres only ever see tasks assigned to them (RLS); managers see
@@ -194,7 +445,7 @@ export async function TaskListPage({
             })}
             className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
               isNeedsReviewActive
-                ? "border-[var(--warning)] bg-[var(--warning)] text-white"
+                ? "border-[var(--primary)] bg-[var(--primary)] text-white"
                 : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:border-[var(--primary)]"
             }`}
           >
@@ -210,7 +461,7 @@ export async function TaskListPage({
           })}
           className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
             isOverdueActive
-              ? "border-[var(--danger)] bg-[var(--danger)] text-white"
+              ? "border-[var(--primary)] bg-[var(--primary)] text-white"
               : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:border-[var(--primary)]"
           }`}
         >
@@ -225,7 +476,7 @@ export async function TaskListPage({
           })}
           className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
             isDueSoonActive
-              ? "border-[var(--warning)] bg-[var(--warning)] text-white"
+              ? "border-[var(--primary)] bg-[var(--primary)] text-white"
               : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:border-[var(--primary)]"
           }`}
         >
@@ -255,7 +506,7 @@ export async function TaskListPage({
       >
         <div className="grid gap-1.5 lg:col-span-4">
           <label htmlFor="q" className="text-xs font-semibold">
-            Cari tugas atau referensi
+            Cari tugas atau lokasi
           </label>
           <div className="relative">
             <Search
@@ -267,7 +518,7 @@ export async function TaskListPage({
               name="q"
               type="search"
               defaultValue={values.q ?? ""}
-              placeholder="Judul, lokasi, atau DW-2026..."
+              placeholder="Judul tugas, lokasi, atau deskripsi..."
               className="min-h-9 w-full rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] py-1.5 pr-3 pl-9 text-xs font-medium text-[var(--foreground)]"
             />
           </div>
@@ -389,132 +640,246 @@ export async function TaskListPage({
             {total} tugas · halaman {page} dari{" "}
             {Math.max(1, Math.ceil(total / pageSize))}
           </p>
-          <ul className="grid gap-2.5" aria-label="Daftar tugas">
-            {result.data.map((task) => {
-              const assignedNames = assignees?.data.get(task.id) ?? [];
-              const actionLabel = getActionLabel(task, showAssignees);
-              const myStatus = task.myEvidenceStatus ?? "missing";
-              return (
-                <li key={task.id}>
-                  <Link
-                    href={`${detailBase}/${task.id}`}
-                    className="group block rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 transition hover:border-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
-                  >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-bold text-[var(--foreground)] group-hover:text-[var(--primary)]">
-                            {task.title}
-                          </span>
-                          <span className="rounded bg-[var(--sand)] px-2 py-0.5 font-mono text-xs text-[var(--muted-foreground)]">
-                            {task.reportReference ?? "Laporan"}
-                          </span>
-                          {!task.isMandatory ? (
-                            <span className="text-xs text-[var(--muted-foreground)]">
-                              · Opsional
-                            </span>
-                          ) : null}
-                        </div>
+          {showAssignees ? (
+            <DataTableContainer>
+              <DataTable caption="Daftar tugas wilayah">
+                <DataTableHeader>
+                  <RowNumberHeader />
+                  <DataTableHeadCell>Tugas</DataTableHeadCell>
+                  <DataTableHeadCell className="hidden md:table-cell">
+                    Lokasi
+                  </DataTableHeadCell>
+                  <DataTableHeadCell className="hidden lg:table-cell">
+                    Kader
+                  </DataTableHeadCell>
+                  <DataTableHeadCell className="hidden lg:table-cell">
+                    Tenggat
+                  </DataTableHeadCell>
+                  <DataTableHeadCell className="hidden md:table-cell">
+                    Progres bukti
+                  </DataTableHeadCell>
+                  <DataTableHeadCell className="hidden sm:table-cell">
+                    Status
+                  </DataTableHeadCell>
+                  <DataTableHeadCell className="w-[110px] whitespace-nowrap text-right pr-4 sm:pr-6">
+                    Tindakan
+                  </DataTableHeadCell>
+                </DataTableHeader>
+                <DataTableBody>
+                  {result.data.map((task, index) => {
+                    const rowNumber = (page - 1) * pageSize + index + 1;
+                    const assignedNames = assignees?.data.get(task.id) ?? [];
+                    const actionLabel = getTaskActionLabel(task, true);
+                    const href = `${detailBase}/${task.id}`;
+                    const locationNote = task.reportLocationNote
+                      ? cleanSimulationText(task.reportLocationNote)
+                      : null;
+                    const cleanTitle = cleanSimulationText(task.title);
+                    const cleanDescription = cleanSimulationText(
+                      task.description,
+                    );
+                    const isActionUrgent = actionLabel === "Tinjau bukti";
 
-                        <p className="mt-1 line-clamp-1 break-words text-xs text-[var(--muted-foreground)]">
-                          {task.description}
-                        </p>
+                    return (
+                      <DataTableRow key={task.id}>
+                        {/* 1. No. (PALING KIRI) */}
+                        <RowNumberCell number={rowNumber} />
 
-                        {!showAssignees && task.myRevisionReason ? (
-                          <p className="mt-1.5 rounded bg-[var(--danger-subtle)] px-2 py-1 text-xs font-medium text-[var(--danger)]">
-                            Perlu perbaikan: {task.myRevisionReason}
-                          </p>
-                        ) : null}
-
-                        <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-[var(--muted-foreground)]">
-                          {task.reportLocationNote ? (
-                            <span className="inline-flex items-center gap-1">
-                              <MapPin
-                                aria-hidden="true"
-                                className="size-3.5 shrink-0 text-[var(--primary)]"
-                              />
-                              <span className="max-w-[220px] truncate">
-                                {task.reportLocationNote}
+                        {/* 2. Tugas */}
+                        <DataTableCell className="max-w-[240px] sm:max-w-[280px]">
+                          <div className="min-w-0">
+                            <Link
+                              href={href}
+                              title={cleanTitle}
+                              className="block truncate font-semibold text-[var(--foreground)] transition hover:text-[var(--primary)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+                            >
+                              {cleanTitle}
+                              {assignedNames.length > 0 ? (
+                                <span className="sr-only">
+                                  {" "}
+                                  · {assignedNames.join(", ")}
+                                </span>
+                              ) : null}
+                            </Link>
+                            {task.reportCategory ? (
+                              <span className="mt-0.5 block truncate text-xs text-[var(--muted-foreground)]">
+                                {
+                                  reportCategoryLabels[
+                                    task.reportCategory as ReportCategory
+                                  ]
+                                }
+                                {!task.isMandatory ? " · Opsional" : ""}
                               </span>
+                            ) : null}
+                            <p
+                              title={cleanDescription}
+                              className="mt-0.5 block truncate text-xs text-[var(--muted-foreground)]"
+                            >
+                              {cleanDescription}
+                            </p>
+
+                            {/* Mobile compact metadata & disclosure */}
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:hidden">
+                              <StatusBadge tone={taskStatusTone[task.status]}>
+                                {taskStatusLabels[task.status]}
+                              </StatusBadge>
+                              <span className="text-[11px] font-medium text-[var(--muted-foreground)]">
+                                {task.approvedAssigneeCount}/
+                                {task.assigneeCount} disetujui
+                              </span>
+                            </div>
+                            <details className="mt-1.5 md:hidden">
+                              <summary className="cursor-pointer text-[11px] font-semibold text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+                                Rincian lokasi, kader & progres
+                              </summary>
+                              <div className="mt-1.5 space-y-1 rounded-[var(--radius-sm)] bg-[var(--surface-muted)] p-2 text-xs text-[var(--muted-foreground)]">
+                                <p className="truncate">
+                                  <span className="font-semibold text-[var(--foreground)]">
+                                    Lokasi:{" "}
+                                  </span>
+                                  {locationNote ?? "Belum dicantumkan"}
+                                  {areas.length > 1
+                                    ? ` · ${areaName(task.areaId)}`
+                                    : ""}
+                                </p>
+                                <p className="truncate">
+                                  <span className="font-semibold text-[var(--foreground)]">
+                                    Kader:{" "}
+                                  </span>
+                                  {assignedNames.length > 0
+                                    ? assignedNames.join(", ")
+                                    : "Belum ditugaskan"}
+                                </p>
+                                <p>
+                                  <span className="font-semibold text-[var(--foreground)]">
+                                    Tenggat:{" "}
+                                  </span>
+                                  {task.dueAt
+                                    ? formatJakarta(task.dueAt, false)
+                                    : "Tanpa tenggat"}
+                                  {task.isOverdue
+                                    ? " (Lewat tenggat)"
+                                    : task.isDueSoon
+                                      ? " (Segera)"
+                                      : ""}
+                                </p>
+                                <p>
+                                  <span className="font-semibold text-[var(--foreground)]">
+                                    Progres bukti:{" "}
+                                  </span>
+                                  {task.approvedAssigneeCount}/
+                                  {task.assigneeCount} disetujui
+                                  {task.pendingEvidenceCount > 0
+                                    ? ` (${task.pendingEvidenceCount} menunggu tinjau)`
+                                    : ""}
+                                </p>
+                              </div>
+                            </details>
+                          </div>
+                        </DataTableCell>
+
+                        {/* 3. Lokasi */}
+                        <DataTableCell className="hidden max-w-[200px] lg:max-w-[240px] md:table-cell">
+                          {locationNote ? (
+                            <span
+                              title={locationNote}
+                              className="block truncate text-xs text-[var(--foreground)]"
+                            >
+                              {locationNote}
                             </span>
-                          ) : null}
-
-                          <span
-                            className={`inline-flex items-center gap-1 font-medium ${
-                              task.isOverdue
-                                ? "text-[var(--danger)]"
-                                : task.isDueSoon
-                                  ? "text-[var(--warning)]"
-                                  : ""
-                            }`}
-                          >
-                            <CalendarClock
-                              aria-hidden="true"
-                              className="size-3.5 shrink-0"
-                            />
-                            {task.dueAt
-                              ? `Tenggat ${formatJakarta(task.dueAt, false)}`
-                              : "Tanpa tenggat"}
-                            {task.isOverdue
-                              ? " (Lewat tenggat)"
-                              : task.isDueSoon
-                                ? " (Segera)"
-                                : ""}
-                          </span>
-
-                          {showAssignees && assignedNames.length > 0 ? (
-                            <span className="inline-flex items-center gap-1 font-medium text-[var(--foreground)]">
-                              <Users
-                                aria-hidden="true"
-                                className="size-3.5 shrink-0 text-[var(--primary)]"
-                              />
-                              {assignedNames.join(", ")}
+                          ) : (
+                            <span className="block truncate text-xs italic text-[var(--muted-foreground)]">
+                              Belum dicantumkan
                             </span>
-                          ) : null}
-
-                          <span className="inline-flex items-center gap-1">
-                            <CheckCircle2
-                              aria-hidden="true"
-                              className="size-3.5 shrink-0"
-                            />
-                            {task.approvedAssigneeCount}/{task.assigneeCount}{" "}
-                            bukti disetujui
-                          </span>
-
-                          {showAssignees && task.pendingEvidenceCount > 0 ? (
-                            <span className="rounded bg-[var(--warning-subtle)] px-1.5 py-0.5 font-semibold text-[var(--warning)]">
-                              {task.pendingEvidenceCount} bukti menunggu periksa
-                            </span>
-                          ) : null}
-
+                          )}
                           {areas.length > 1 ? (
-                            <span>· {areaName(task.areaId)}</span>
+                            <span
+                              title={areaName(task.areaId)}
+                              className="mt-0.5 block truncate text-[11px] text-[var(--muted-foreground)]"
+                            >
+                              {areaName(task.areaId)}
+                            </span>
                           ) : null}
-                        </div>
-                      </div>
+                        </DataTableCell>
 
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-2.5 sm:shrink-0 sm:flex-col sm:items-end sm:border-t-0 sm:pt-0">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {!showAssignees ? (
-                            <StatusBadge tone={myEvidenceTones[myStatus]}>
-                              Bukti saya: {myEvidenceLabels[myStatus]}
-                            </StatusBadge>
-                          ) : null}
+                        {/* 4. Kader */}
+                        <DataTableCell className="hidden max-w-[200px] lg:table-cell">
+                          <AssigneeListSummary names={assignedNames} />
+                        </DataTableCell>
+
+                        {/* 5. Tenggat */}
+                        <DataTableCell className="hidden whitespace-nowrap lg:table-cell">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs font-medium text-[var(--foreground)]">
+                              {task.dueAt
+                                ? formatJakarta(task.dueAt, false)
+                                : "Tanpa tenggat"}
+                            </span>
+                            {task.isOverdue ? (
+                              <span className="text-[11px] font-semibold text-[var(--danger)]">
+                                Lewat tenggat
+                              </span>
+                            ) : task.isDueSoon ? (
+                              <span className="text-[11px] font-semibold text-[var(--warning)]">
+                                Segera
+                              </span>
+                            ) : null}
+                          </div>
+                        </DataTableCell>
+
+                        {/* 6. Progres bukti */}
+                        <DataTableCell className="hidden whitespace-nowrap md:table-cell">
+                          <div className="flex flex-col items-start gap-1">
+                            <span className="text-xs font-semibold text-[var(--foreground)]">
+                              {task.approvedAssigneeCount}/{task.assigneeCount}{" "}
+                              disetujui
+                            </span>
+                            {task.pendingEvidenceCount > 0 ? (
+                              <span className="rounded bg-[var(--warning-subtle)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--warning)]">
+                                {task.pendingEvidenceCount} menunggu tinjau
+                              </span>
+                            ) : null}
+                          </div>
+                        </DataTableCell>
+
+                        {/* 7. Status */}
+                        <DataTableCell className="hidden whitespace-nowrap sm:table-cell">
                           <StatusBadge tone={taskStatusTone[task.status]}>
                             {taskStatusLabels[task.status]}
                           </StatusBadge>
-                        </div>
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--primary)] group-hover:underline">
-                          {actionLabel}
-                          <ArrowRight aria-hidden="true" className="size-3.5" />
-                        </span>
-                      </div>
-                    </div>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+                        </DataTableCell>
+
+                        {/* 8. Tindakan */}
+                        <DataTableCell className="w-[110px] whitespace-nowrap text-right pr-4 sm:pr-6">
+                          <Link
+                            href={href}
+                            className={`inline-flex min-h-8 w-[92px] items-center justify-center gap-1 rounded-[var(--radius-control)] px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] ${
+                              isActionUrgent
+                                ? "bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-2xs"
+                                : "border border-[var(--control-border)] bg-[var(--background)] text-[var(--foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                            }`}
+                          >
+                            <span>{actionLabel}</span>
+                            <ArrowRight
+                              aria-hidden="true"
+                              className="size-3.5 shrink-0"
+                            />
+                          </Link>
+                        </DataTableCell>
+                      </DataTableRow>
+                    );
+                  })}
+                </DataTableBody>
+              </DataTable>
+            </DataTableContainer>
+          ) : (
+            <CadreTaskTable
+              tasks={result.data}
+              detailBase={detailBase}
+              page={page}
+              pageSize={pageSize}
+            />
+          )}
           <nav
             aria-label="Halaman tugas"
             className="mt-6 flex flex-wrap gap-4 border-t border-[var(--border)] pt-4"

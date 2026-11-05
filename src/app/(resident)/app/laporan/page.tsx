@@ -13,7 +13,7 @@ import {
   getResidentStatusCounts,
   listReportRows,
 } from "@/features/reports/data";
-import { ReportListItem } from "@/features/reports/components/ReportListItem";
+import { ReportTable } from "@/features/reports/components/ReportListItem";
 import {
   reportStatuses,
   reportStatusLabels,
@@ -181,39 +181,39 @@ export default async function MyReportsPage({
         })}
       </nav>
 
-      {/* Filter & pencarian server-side */}
+      {/* Filter & pencarian server-side yang ringkas */}
       <form
         action="/app/laporan"
         method="get"
         aria-label="Filter laporan"
-        className="mb-5 grid gap-3 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-3.5 sm:grid-cols-12 sm:items-end"
+        className="mb-4 grid gap-2.5 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-3 sm:grid-cols-12 sm:items-end"
       >
         <div className="sm:col-span-5">
           <label
             htmlFor="report-search"
-            className="block text-xs font-semibold text-[var(--foreground)]"
+            className="block text-[11px] font-semibold text-[var(--foreground)]"
           >
-            Cari referensi, deskripsi, atau lokasi
+            Cari deskripsi atau lokasi
           </label>
           <div className="relative mt-1">
             <Search
               aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--muted-foreground)]"
+              className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-[var(--muted-foreground)]"
             />
             <input
               id="report-search"
               name="q"
               type="search"
               defaultValue={q ?? ""}
-              placeholder="Contoh: DW-2026 atau selokan..."
-              className="min-h-10 w-full rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] py-1.5 pr-3 pl-9 text-sm"
+              placeholder="Contoh: selokan atau patokan lokasi..."
+              className="min-h-9 w-full rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] py-1.5 pr-3 pl-9 text-xs font-medium"
             />
           </div>
         </div>
         <div className="sm:col-span-4">
           <label
             htmlFor="report-status"
-            className="block text-xs font-semibold text-[var(--foreground)]"
+            className="block text-[11px] font-semibold text-[var(--foreground)]"
           >
             Status laporan
           </label>
@@ -222,7 +222,7 @@ export default async function MyReportsPage({
               id="report-status"
               name="status"
               defaultValue={status ?? ""}
-              size="md"
+              size="sm"
               options={[
                 { value: "", label: `Semua status (${statusCounts.all})` },
                 ...reportStatuses.map((item) => ({
@@ -237,7 +237,7 @@ export default async function MyReportsPage({
           <div className="flex-1">
             <label
               htmlFor="report-sort"
-              className="block text-xs font-semibold text-[var(--foreground)]"
+              className="block text-[11px] font-semibold text-[var(--foreground)]"
             >
               Urutan
             </label>
@@ -246,7 +246,7 @@ export default async function MyReportsPage({
                 id="report-sort"
                 name="sort"
                 defaultValue={sort}
-                size="md"
+                size="sm"
                 options={[
                   { value: "newest", label: "Terbaru" },
                   { value: "oldest", label: "Terlama" },
@@ -254,7 +254,7 @@ export default async function MyReportsPage({
               />
             </div>
           </div>
-          <Button type="submit" size="md" className="shrink-0">
+          <Button type="submit" size="sm" className="min-h-9 shrink-0 px-3.5">
             Terapkan
           </Button>
         </div>
@@ -328,20 +328,16 @@ export default async function MyReportsPage({
         />
       ) : (
         <>
-          <ul className="grid gap-2.5">
-            {result.data.map((report) => (
-              <li key={report.id}>
-                <ReportListItem
-                  href={`/app/laporan/${report.id}`}
-                  report={report}
-                  role="resident"
-                />
-              </li>
-            ))}
-          </ul>
+          <ReportTable
+            reports={result.data}
+            role="resident"
+            baseHref="/app/laporan"
+            page={page}
+            pageSize={10}
+          />
           <nav
             aria-label="Halaman laporan"
-            className="mt-6 flex items-center justify-between gap-4 border-t border-[var(--border)] pt-4 text-sm"
+            className="mt-5 flex items-center justify-between gap-4 border-t border-[var(--border)] pt-3.5 text-sm"
           >
             <span className="text-xs text-[var(--muted-foreground)]">
               Halaman {page} · Total {result.count ?? result.data.length}{" "}

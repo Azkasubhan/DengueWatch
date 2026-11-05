@@ -170,21 +170,28 @@ export async function getReportDetail(id: string) {
   ]);
   if (images.error || events.error)
     throw new Error("REPORT_DETAIL_UNAVAILABLE");
-  const withUrls = await Promise.all(
-    (images.data ?? []).map(async (image) => {
-      const signed = await client.storage
-        .from(reportBucket)
-        .createSignedUrl(image.storage_path, 60);
-      if (signed.error || !signed.data)
-        throw new Error("SIGNED_URL_UNAVAILABLE");
-      return {
-        id: image.id,
-        width: image.width,
-        height: image.height,
-        url: signed.data.signedUrl,
-      };
-    }),
-  );
+  const withUrls = (
+    await Promise.all(
+      (images.data ?? []).map(async (image) => {
+        try {
+          const signed = await client.storage
+            .from(reportBucket)
+            .createSignedUrl(image.storage_path, 60);
+          if (signed.error || !signed.data?.signedUrl) {
+            return null;
+          }
+          return {
+            id: image.id,
+            width: image.width,
+            height: image.height,
+            url: signed.data.signedUrl,
+          };
+        } catch {
+          return null;
+        }
+      }),
+    )
+  ).filter((item): item is NonNullable<typeof item> => item !== null);
   const row = report.data;
   return {
     report: {
@@ -223,48 +230,26 @@ type RichReportRow = ReportRow & {
 export type ReportListRow = ReportSummary & {
   locationNote: string | null;
   hasCoordinates: boolean;
-  thumbnailUrl: string | null;
+  photoCount: number;
   needsMandatoryTask: boolean;
 };
 
-async function fetchBatchThumbnails(
+async function fetchBatchPhotoCounts(
   client: Awaited<ReturnType<typeof createUserClient>>,
   reportIds: string[],
 ) {
-  const map = new Map<string, string>();
-  if (!reportIds.length) return map;
+  const counts = new Map<string, number>();
+  if (!reportIds.length) return counts;
   const images = await client
     .from("report_images")
-    .select("report_id,storage_path,created_at")
-    .in("report_id", reportIds)
-    .order("created_at", { ascending: true });
-  if (images.error || !images.data?.length) return map;
+    .select("report_id")
+    .in("report_id", reportIds);
+  if (images.error || !images.data?.length) return counts;
 
-  const firstPathByReport = new Map<string, string>();
   for (const row of images.data) {
-    if (!firstPathByReport.has(row.report_id)) {
-      firstPathByReport.set(row.report_id, row.storage_path);
-    }
+    counts.set(row.report_id, (counts.get(row.report_id) ?? 0) + 1);
   }
-  const paths = Array.from(firstPathByReport.values());
-  if (!paths.length) return map;
-
-  const signed = await client.storage
-    .from(reportBucket)
-    .createSignedUrls(paths, 60);
-  if (signed.error || !signed.data) return map;
-
-  const urlByPath = new Map<string, string>();
-  for (const item of signed.data) {
-    if (item.path && item.signedUrl) {
-      urlByPath.set(item.path, item.signedUrl);
-    }
-  }
-  for (const [reportId, path] of firstPathByReport.entries()) {
-    const url = urlByPath.get(path);
-    if (url) map.set(reportId, url);
-  }
-  return map;
+  return counts;
 }
 
 export async function listReportRows(
@@ -316,7 +301,7 @@ export async function listReportRows(
         ),
     );
     const paged = needingTask.slice((page - 1) * limit, page * limit);
-    const thumbnails = await fetchBatchThumbnails(
+    const photoCounts = await fetchBatchPhotoCounts(
       client,
       paged.map((r) => r.id),
     );
@@ -325,7 +310,7 @@ export async function listReportRows(
         ...toReportSummary(row),
         locationNote: row.location_note,
         hasCoordinates: row.latitude !== null && row.longitude !== null,
-        thumbnailUrl: thumbnails.get(row.id) ?? null,
+        photoCount: photoCounts.get(row.id) ?? 0,
         needsMandatoryTask: true,
       })),
       count: needingTask.length,
@@ -345,7 +330,7 @@ export async function listReportRows(
     return { data: null, count: result.count, error: result.error };
   }
 
-  const thumbnails = await fetchBatchThumbnails(
+  const photoCounts = await fetchBatchPhotoCounts(
     client,
     result.data.map((r) => r.id),
   );
@@ -355,7 +340,7 @@ export async function listReportRows(
       ...toReportSummary(row),
       locationNote: row.location_note,
       hasCoordinates: row.latitude !== null && row.longitude !== null,
-      thumbnailUrl: thumbnails.get(row.id) ?? null,
+      photoCount: photoCounts.get(row.id) ?? 0,
       needsMandatoryTask:
         ["verified", "in_action"].includes(row.status) &&
         !(row.action_tasks ?? []).some(
@@ -669,11 +654,6 @@ export async function listMapReports(filters: {
   const missingCoordinatesCount = missingRes.count ?? 0;
   const totalMatching = withCoordinatesTotal + missingCoordinatesCount;
 
-  const thumbnails = await fetchBatchThumbnails(
-    client,
-    withCoords.slice(0, 60).map((r) => r.id),
-  );
-
   const points: MapReportPoint[] = withCoords.map((row) => ({
     id: row.id,
     publicReference: row.public_reference,
@@ -685,7 +665,7 @@ export async function listMapReports(filters: {
     latitude: Number(row.latitude),
     longitude: Number(row.longitude),
     locationNote: row.location_note,
-    thumbnailUrl: thumbnails.get(row.id) ?? null,
+    thumbnailUrl: null,
     tasks: (row.action_tasks ?? []).filter((t) => t.status !== "cancelled"),
   }));
 

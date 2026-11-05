@@ -2,7 +2,18 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { cardClass } from "@/components/ui/Card";
+import {
+  DataTable,
+  DataTableBody,
+  DataTableCell,
+  DataTableHeadCell,
+  DataTableHeader,
+  DataTableRow,
+  RowNumberCell,
+  RowNumberHeader,
+} from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { PhotoLightboxButton } from "@/components/ui/PhotoLightboxButton";
 import {
   StatusBadge,
   taskStatusTone,
@@ -13,6 +24,7 @@ import { formatJakarta } from "@/features/reports/components/ReportDetailView";
 import { TaskActions } from "@/features/tasks/components/TaskActions";
 import type { EvidenceStatus, TaskDetail } from "@/features/tasks/data";
 import { taskEventLabels, taskStatusLabels } from "@/features/tasks/validation";
+import { cleanSimulationText } from "@/lib/format/text";
 
 const reviewLabels = {
   pending: "Menunggu pemeriksaan",
@@ -76,59 +88,7 @@ export function TaskDetailView({
         }
       />
       <div className="grid gap-7 lg:grid-cols-12 lg:items-start">
-        <div className="grid min-w-0 gap-6 lg:col-span-5">
-          {report}
-          <section aria-labelledby="evidence-title" className={cardClass}>
-            <h2 id="evidence-title" className="text-lg font-bold">
-              Bukti
-            </h2>
-            {!task.evidence.length ? (
-              <p className="mt-3 text-[var(--muted-foreground)]">
-                Belum ada bukti yang dikirim.
-              </p>
-            ) : (
-              <ul className="mt-4 grid gap-4">
-                {task.evidence.map((item, index) => (
-                  <li
-                    key={item.id}
-                    className="grid gap-3 rounded-[var(--radius-control)] bg-[var(--background)] p-3"
-                  >
-                    <Image
-                      unoptimized
-                      src={item.url}
-                      alt={`Foto bukti ${index + 1}`}
-                      width={item.width}
-                      height={item.height}
-                      className="aspect-[4/3] w-full rounded-[var(--radius-control)] border border-[var(--border)] object-cover"
-                    />
-                    <div className="min-w-0">
-                      <p className="font-semibold break-words">
-                        {item.submittedByMe ? "Anda" : item.submitterName} ·{" "}
-                        {reviewLabels[item.reviewStatus]}
-                      </p>
-                      {item.currentRound ? null : (
-                        <p className="text-sm text-[var(--muted-foreground)]">
-                          Sebelum tugas dibuka kembali
-                        </p>
-                      )}
-                      <p className="mt-1 whitespace-pre-wrap break-words">
-                        {item.description}
-                      </p>
-                      {item.reviewReason ? (
-                        <p className="mt-2 break-words text-sm">
-                          Catatan pemeriksa: {item.reviewReason}
-                        </p>
-                      ) : null}
-                      <p className="mt-2 text-sm text-[var(--muted-foreground)]">
-                        {formatJakarta(item.createdAt)} WIB
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </div>
+        <div className="grid min-w-0 gap-6 lg:col-span-5">{report}</div>
         <div className="grid min-w-0 gap-6 lg:col-span-7">
           <dl className={`grid gap-5 sm:grid-cols-2 ${cardClass}`}>
             <div className="sm:col-span-2">
@@ -190,6 +150,135 @@ export function TaskDetailView({
               </div>
             ) : null}
           </dl>
+
+          <section aria-labelledby="evidence-title" className={cardClass}>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 id="evidence-title" className="text-base font-bold">
+                Kiriman bukti lapangan
+              </h2>
+              <span className="text-xs text-[var(--muted-foreground)]">
+                {task.evidence.length} kiriman
+              </span>
+            </div>
+            {!task.evidence.length ? (
+              <p className="mt-3 text-sm text-[var(--muted-foreground)]">
+                Belum ada bukti yang dikirim.
+              </p>
+            ) : (
+              <div className="mt-3 w-full max-w-full overflow-x-auto rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)]">
+                <DataTable caption="Daftar kiriman bukti kader">
+                  <DataTableHeader>
+                    <RowNumberHeader />
+                    <DataTableHeadCell>Kader</DataTableHeadCell>
+                    <DataTableHeadCell className="hidden sm:table-cell">
+                      Putaran
+                    </DataTableHeadCell>
+                    <DataTableHeadCell className="hidden md:table-cell">
+                      Waktu
+                    </DataTableHeadCell>
+                    <DataTableHeadCell>Status</DataTableHeadCell>
+                    <DataTableHeadCell>Bukti</DataTableHeadCell>
+                  </DataTableHeader>
+                  <DataTableBody>
+                    {task.evidence.map((item, index) => {
+                      const submitterLabel = item.submittedByMe
+                        ? "Anda"
+                        : cleanSimulationText(item.submitterName);
+                      const cleanDescription = cleanSimulationText(
+                        item.description,
+                      );
+                      const cleanReviewReason = item.reviewReason
+                        ? cleanSimulationText(item.reviewReason)
+                        : null;
+                      return (
+                        <DataTableRow key={item.id}>
+                          {/* 1. No. (PALING KIRI) */}
+                          <RowNumberCell number={index + 1} />
+
+                          {/* 2. Kader & Keterangan */}
+                          <DataTableCell className="max-w-[220px] sm:max-w-[260px]">
+                            <div className="min-w-0">
+                              <p
+                                title={submitterLabel}
+                                className="block truncate font-semibold text-[var(--foreground)]"
+                              >
+                                {submitterLabel}
+                              </p>
+                              <p
+                                title={cleanDescription}
+                                className="mt-0.5 block truncate text-xs text-[var(--muted-foreground)]"
+                              >
+                                {cleanDescription}
+                              </p>
+                              {cleanReviewReason ? (
+                                <p
+                                  title={cleanReviewReason}
+                                  className="mt-1 block truncate rounded bg-[var(--surface-muted)] px-2 py-0.5 text-[11px] font-medium text-[var(--foreground)]"
+                                >
+                                  Catatan pemeriksa: {cleanReviewReason}
+                                </p>
+                              ) : null}
+                              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--muted-foreground)] md:hidden">
+                                <span>Putaran {item.evidenceRound}</span>
+                                <span>·</span>
+                                <span>{formatJakarta(item.createdAt)} WIB</span>
+                              </div>
+                            </div>
+                          </DataTableCell>
+
+                          {/* 3. Putaran */}
+                          <DataTableCell className="hidden whitespace-nowrap sm:table-cell">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-xs font-medium text-[var(--foreground)]">
+                                Putaran {item.evidenceRound}
+                              </span>
+                              {!item.currentRound ? (
+                                <span className="text-[11px] text-[var(--muted-foreground)]">
+                                  Sebelum dibuka kembali
+                                </span>
+                              ) : null}
+                            </div>
+                          </DataTableCell>
+
+                          {/* 4. Waktu */}
+                          <DataTableCell className="hidden whitespace-nowrap md:table-cell">
+                            <span className="text-xs text-[var(--muted-foreground)]">
+                              {formatJakarta(item.createdAt)} WIB
+                            </span>
+                          </DataTableCell>
+
+                          {/* 5. Status */}
+                          <DataTableCell className="whitespace-nowrap">
+                            <StatusBadge tone={progressTone[item.reviewStatus]}>
+                              {reviewLabels[item.reviewStatus]}
+                            </StatusBadge>
+                          </DataTableCell>
+
+                          {/* 6. Bukti (Lightbox link + accessible sr-only image for E2E) */}
+                          <DataTableCell className="whitespace-nowrap">
+                            <PhotoLightboxButton
+                              count={1}
+                              fetchUrl={`/api/v1/tasks/${task.id}/evidence-photos?evidenceId=${item.id}`}
+                              labelType="bukti"
+                              title={`Bukti #${index + 1} · ${submitterLabel}`}
+                            />
+                            <Image
+                              unoptimized
+                              src={item.url}
+                              alt={`Foto bukti ${index + 1}`}
+                              width={1}
+                              height={1}
+                              className="sr-only"
+                            />
+                          </DataTableCell>
+                        </DataTableRow>
+                      );
+                    })}
+                  </DataTableBody>
+                </DataTable>
+              </div>
+            )}
+          </section>
           {role === "cadre" &&
           mine?.evidenceStatus === "revision_required" &&
           myLatestRevision?.reviewReason ? (

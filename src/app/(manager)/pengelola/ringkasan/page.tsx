@@ -1,12 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import {
-  AlertCircle,
-  ArrowRight,
-  Clock,
-  MapPin,
-  RefreshCw,
-} from "lucide-react";
+import { AlertCircle, ArrowRight, RefreshCw } from "lucide-react";
 import { Alert } from "@/components/feedback/Alert";
 import { PendingArea } from "@/components/feedback/PendingArea";
 import { ServiceUnavailable } from "@/components/feedback/ServiceUnavailable";
@@ -14,6 +8,16 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/Button";
 import { CustomDatePicker } from "@/components/ui/CustomDatePicker";
 import { CustomSelect } from "@/components/ui/CustomSelect";
+import {
+  DataTable,
+  DataTableBody,
+  DataTableCell,
+  DataTableHeadCell,
+  DataTableHeader,
+  DataTableRow,
+  RowNumberCell,
+  RowNumberHeader,
+} from "@/components/ui/DataTable";
 import { decidePortalAccess, getVerifiedAreas } from "@/features/areas/access";
 import { DailyTrendChart } from "@/features/analytics/components/DailyTrendChart";
 import {
@@ -731,74 +735,129 @@ export default async function ManagerSummaryPage({
               </div>
             ) : (
               <>
-                <ul className="mt-2 divide-y divide-[var(--border)]">
-                  {operational.urgentItems.map((item) => {
-                    const typeBadgeClass =
-                      item.tone === "danger"
-                        ? "bg-[var(--danger-subtle)] text-[var(--danger)]"
-                        : item.tone === "warning"
-                          ? "bg-[var(--warning-subtle)] text-[var(--warning)]"
-                          : item.tone === "info"
-                            ? "bg-[var(--info-subtle)] text-[var(--info)]"
-                            : "border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)]";
+                <div className="mt-3 w-full max-w-full overflow-x-auto rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)]">
+                  <DataTable caption="Daftar pekerjaan perlu ditindaklanjuti">
+                    <DataTableHeader>
+                      <RowNumberHeader />
+                      <DataTableHeadCell>Pekerjaan</DataTableHeadCell>
+                      <DataTableHeadCell className="hidden md:table-cell">
+                        Lokasi
+                      </DataTableHeadCell>
+                      <DataTableHeadCell className="hidden lg:table-cell">
+                        Waktu / Tenggat
+                      </DataTableHeadCell>
+                      <DataTableHeadCell className="hidden sm:table-cell">
+                        Jenis
+                      </DataTableHeadCell>
+                      <DataTableHeadCell className="w-[110px] whitespace-nowrap text-right pr-4 sm:pr-6">
+                        Tindakan
+                      </DataTableHeadCell>
+                    </DataTableHeader>
+                    <DataTableBody>
+                      {operational.urgentItems.map((item, index) => {
+                        const typeBadgeClass =
+                          item.tone === "danger"
+                            ? "bg-[var(--danger-subtle)] text-[var(--danger)]"
+                            : item.tone === "warning"
+                              ? "bg-[var(--warning-subtle)] text-[var(--warning)]"
+                              : item.tone === "info"
+                                ? "bg-[var(--info-subtle)] text-[var(--info)]"
+                                : "border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)]";
+                        const href = withAreaParam(item.href, selectedAreaId);
 
-                    return (
-                      <li
-                        key={`${item.kind}-${item.id}`}
-                        className="flex flex-col justify-between gap-2.5 py-3 first:pt-2 last:pb-0 sm:flex-row sm:items-center"
-                      >
-                        <div className="min-w-0 flex-1">
-                          {/* Baris 1: Jenis tindakan + Judul/Kategori + Referensi */}
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span
-                              className={`inline-flex shrink-0 items-center rounded px-2 py-0.5 text-[11px] font-bold ${typeBadgeClass}`}
-                            >
-                              {item.typeLabel}
-                            </span>
-                            <span className="truncate text-sm font-bold text-[var(--foreground)]">
-                              {item.title}
-                            </span>
-                            <span className="font-mono text-xs font-semibold text-[var(--muted-foreground)]">
-                              {item.reference}
-                            </span>
-                          </div>
+                        return (
+                          <DataTableRow key={`${item.kind}-${item.id}`}>
+                            {/* 1. No. (PALING KIRI) */}
+                            <RowNumberCell number={index + 1} />
 
-                          {/* Baris 2: Lokasi singkat & Waktu tunggu/tenggat pada posisi konsisten */}
-                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted-foreground)]">
-                            <span className="inline-flex max-w-64 items-center gap-1 truncate">
-                              <MapPin
-                                aria-hidden="true"
-                                className="size-3.5 shrink-0"
-                              />
-                              <span className="truncate">
+                            {/* 2. Pekerjaan */}
+                            <DataTableCell className="max-w-[240px] sm:max-w-[280px]">
+                              <div className="min-w-0">
+                                <Link
+                                  href={href}
+                                  title={item.title}
+                                  className="block truncate font-semibold text-[var(--foreground)] transition hover:text-[var(--primary)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+                                >
+                                  {item.title}
+                                </Link>
+                                <div className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:hidden">
+                                  <span
+                                    className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-bold ${typeBadgeClass}`}
+                                  >
+                                    {item.typeLabel}
+                                  </span>
+                                </div>
+                                <details className="mt-1.5 md:hidden">
+                                  <summary className="cursor-pointer text-[11px] font-semibold text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+                                    Rincian lokasi & waktu
+                                  </summary>
+                                  <div className="mt-1.5 space-y-1 rounded-[var(--radius-sm)] bg-[var(--surface-muted)] p-2 text-xs text-[var(--muted-foreground)]">
+                                    <p className="truncate">
+                                      <span className="font-semibold text-[var(--foreground)]">
+                                        Lokasi:{" "}
+                                      </span>
+                                      {item.locationLabel}
+                                    </p>
+                                    <p>
+                                      <span className="font-semibold text-[var(--foreground)]">
+                                        Waktu:{" "}
+                                      </span>
+                                      {item.timeLabel}
+                                    </p>
+                                  </div>
+                                </details>
+                              </div>
+                            </DataTableCell>
+
+                            {/* 3. Lokasi */}
+                            <DataTableCell className="hidden max-w-[200px] lg:max-w-[240px] md:table-cell">
+                              <span
+                                title={item.locationLabel}
+                                className="block truncate text-xs text-[var(--foreground)]"
+                              >
                                 {item.locationLabel}
                               </span>
-                            </span>
-                            <span className="inline-flex items-center gap-1 font-medium text-[var(--foreground)]">
-                              <Clock
-                                aria-hidden="true"
-                                className="size-3.5 shrink-0 text-[var(--muted-foreground)]"
-                              />
-                              {item.timeLabel}
-                            </span>
-                          </div>
-                        </div>
+                            </DataTableCell>
 
-                        <Link
-                          href={withAreaParam(item.href, selectedAreaId)}
-                          className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--background)] px-3 py-1.5 text-xs font-semibold text-[var(--primary)] transition hover:border-[var(--primary)] hover:bg-[var(--primary-subtle)]/40"
-                        >
-                          {item.actionLabel}
-                          <ArrowRight aria-hidden="true" className="size-3.5" />
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
+                            {/* 4. Waktu / Tenggat */}
+                            <DataTableCell className="hidden whitespace-nowrap lg:table-cell">
+                              <span className="text-xs font-medium text-[var(--foreground)]">
+                                {item.timeLabel}
+                              </span>
+                            </DataTableCell>
+
+                            {/* 5. Jenis */}
+                            <DataTableCell className="hidden whitespace-nowrap sm:table-cell">
+                              <span
+                                className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-bold ${typeBadgeClass}`}
+                              >
+                                {item.typeLabel}
+                              </span>
+                            </DataTableCell>
+
+                            {/* 6. Tindakan */}
+                            <DataTableCell className="w-[110px] whitespace-nowrap text-right pr-4 sm:pr-6">
+                              <Link
+                                href={href}
+                                className="inline-flex min-h-8 w-[92px] items-center justify-center gap-1 rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--background)] px-2.5 py-1 text-xs font-semibold text-[var(--primary)] transition hover:border-[var(--primary)] hover:bg-[var(--primary-subtle)]/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+                              >
+                                {item.actionLabel}
+                                <ArrowRight
+                                  aria-hidden="true"
+                                  className="size-3.5 shrink-0"
+                                />
+                              </Link>
+                            </DataTableCell>
+                          </DataTableRow>
+                        );
+                      })}
+                    </DataTableBody>
+                  </DataTable>
+                </div>
 
                 {operational.totalUrgentCount >
                 operational.urgentItems.length ? (
-                  <p className="mt-3 border-t border-[var(--border)] pt-2.5 text-xs text-[var(--muted-foreground)]">
+                  <p className="mt-3 text-xs text-[var(--muted-foreground)]">
                     Menampilkan 5 dari {operational.totalUrgentCount} pekerjaan
                     terbuka berdasarkan prioritas operasional.
                   </p>

@@ -31,8 +31,20 @@ export function formatJakarta(value: string, withTime = true) {
 
 // Left column on report pages: first photo large, others as thumbnails.
 export function ReportPhotos({ images }: { images: ReportImage[] }) {
-  const [first, ...rest] = images;
-  if (!first) return null;
+  const validImages = (images ?? []).filter((img) => img.url && img.url.trim());
+  const [first, ...rest] = validImages;
+  if (!first) {
+    return (
+      <div className="flex aspect-[4/3] w-full flex-col items-center justify-center rounded-[var(--radius-card)] border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-center text-xs text-[var(--muted-foreground)]">
+        <p className="font-semibold text-[var(--foreground)]">
+          Foto tidak tersedia
+        </p>
+        <p className="mt-1 text-[11px]">
+          Lampiran foto belum diunggah atau tidak ditemukan di penyimpanan.
+        </p>
+      </div>
+    );
+  }
   const photo = (image: ReportImage, index: number, large: boolean) => (
     <Image
       unoptimized

@@ -157,11 +157,17 @@ export async function getTaskDetail(id: string, userId: string) {
     if (row.evidence_round === round) latest.set(row.submitted_by, row);
   const evidenceWithUrls = await Promise.all(
     (evidence.data ?? []).map(async (row) => {
-      const signed = await client.storage
-        .from(reportBucket)
-        .createSignedUrl(row.storage_path, 60);
-      if (signed.error || !signed.data)
-        throw new Error("SIGNED_URL_UNAVAILABLE");
+      let signedUrl = "";
+      try {
+        const signed = await client.storage
+          .from(reportBucket)
+          .createSignedUrl(row.storage_path, 60);
+        if (signed.data?.signedUrl) {
+          signedUrl = signed.data.signedUrl;
+        }
+      } catch {
+        // storage object might be offline or missing
+      }
       return {
         id: row.id,
         description: row.description,
@@ -171,8 +177,9 @@ export async function getTaskDetail(id: string, userId: string) {
         reviewedAt: row.reviewed_at,
         width: row.width,
         height: row.height,
-        url: signed.data.signedUrl,
+        url: signedUrl,
         submitterName: names.get(row.submitted_by) ?? "Kader",
+        evidenceRound: row.evidence_round,
         currentRound: row.evidence_round === round,
         submittedByMe: row.submitted_by === userId,
         reviewedByMe: row.reviewed_by === userId,
@@ -282,6 +289,9 @@ export function toTaskListRow(
   }
 
   const myLatest = latestByAssignee.get(userId);
+  const myEvidenceCount = sortedEvidence.filter(
+    (ev) => ev.submitted_by === userId && ev.evidence_round === round,
+  ).length;
   const myEvidenceStatus: EvidenceStatus = myLatest?.review_status ?? "missing";
   const myRevisionReason =
     myEvidenceStatus === "revision_required"
@@ -307,6 +317,8 @@ export function toTaskListRow(
     approvedAssigneeCount,
     pendingEvidenceCount,
     myEvidenceStatus,
+    myEvidenceCount,
+    myLatestEvidenceId: myLatest?.id ?? null,
     myRevisionReason,
     isOverdue,
     isDueSoon,

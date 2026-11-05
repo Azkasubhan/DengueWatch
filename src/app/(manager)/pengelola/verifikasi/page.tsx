@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Inbox, Search } from "lucide-react";
+import { Inbox, Search, SlidersHorizontal } from "lucide-react";
 import { PendingArea } from "@/components/feedback/PendingArea";
 import { ServiceUnavailable } from "@/components/feedback/ServiceUnavailable";
 import { AppShell } from "@/components/layout/AppShell";
@@ -10,7 +10,7 @@ import { CustomSelect } from "@/components/ui/CustomSelect";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { decidePortalAccess, getVerifiedAreas } from "@/features/areas/access";
-import { ReportListItem } from "@/features/reports/components/ReportListItem";
+import { ReportTable } from "@/features/reports/components/ReportListItem";
 import {
   getVerificationQueueCounts,
   listReportRows,
@@ -128,10 +128,15 @@ export default async function VerificationQueuePage({
     const qs = next.toString();
     return qs ? `/pengelola/verifikasi?${qs}` : "/pengelola/verifikasi";
   };
-  const areaName = (id: string) =>
-    cleanSimulationText(
-      areas.find((area) => area.id === id)?.name ?? "Wilayah tugas",
-    );
+  const areaNameMap = new Map(
+    areas.map((area) => [area.id, cleanSimulationText(area.name)]),
+  );
+  const hasAdvancedFilters = Boolean(
+    values.category ||
+    values.areaId ||
+    values.submittedFrom ||
+    values.submittedTo,
+  );
 
   return shell(
     <>
@@ -162,7 +167,7 @@ export default async function VerificationQueuePage({
           className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
             selectedStatus === "pending_verification" &&
             activeTab !== "needs_task"
-              ? "border-[var(--warning)] bg-[var(--warning)] text-white"
+              ? "border-[var(--primary)] bg-[var(--primary)] text-white"
               : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:border-[var(--primary)]"
           }`}
         >
@@ -172,7 +177,7 @@ export default async function VerificationQueuePage({
           href={tabHref({ status: "needs_information", tab: undefined })}
           className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
             selectedStatus === "needs_information" && activeTab !== "needs_task"
-              ? "border-[var(--info)] bg-[var(--info)] text-white"
+              ? "border-[var(--primary)] bg-[var(--primary)] text-white"
               : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:border-[var(--primary)]"
           }`}
         >
@@ -204,154 +209,175 @@ export default async function VerificationQueuePage({
         action="/pengelola/verifikasi"
         method="get"
         aria-label="Filter antrean"
-        className="mb-5 grid gap-3 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-3.5 sm:grid-cols-2 lg:grid-cols-6 lg:items-end"
+        className="mb-4 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-3.5"
       >
         {activeTab === "needs_task" ? (
           <input type="hidden" name="tab" value="needs_task" />
         ) : null}
-        <div className="grid gap-1.5 lg:col-span-2">
-          <label htmlFor="q" className="text-xs font-semibold">
-            Cari referensi atau lokasi
-          </label>
-          <div className="relative">
-            <Search
-              aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-[var(--muted-foreground)]"
-            />
-            <input
-              id="q"
-              name="q"
-              type="search"
-              defaultValue={values.q ?? ""}
-              placeholder="DW-2026, lokasi, deskripsi..."
-              className="min-h-9 w-full rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] py-1.5 pr-3 pl-9 text-xs font-medium text-[var(--foreground)]"
-            />
-          </div>
-        </div>
-        <div className="grid gap-1">
-          <label
-            htmlFor="status"
-            className="text-[11px] font-semibold text-[var(--foreground)]"
-          >
-            Status
-          </label>
-          <CustomSelect
-            id="status"
-            name="status"
-            defaultValue={selectedStatus}
-            size="sm"
-            options={[
-              { value: queueStatus, label: "Perlu pemeriksaan" },
-              ...Object.entries(reportStatusLabels).map(([value, label]) => ({
-                value,
-                label,
-              })),
-              { value: "all", label: "Semua status" },
-            ]}
-          />
-        </div>
-        <div className="grid gap-1">
-          <label
-            htmlFor="category"
-            className="text-[11px] font-semibold text-[var(--foreground)]"
-          >
-            Kategori
-          </label>
-          <CustomSelect
-            id="category"
-            name="category"
-            defaultValue={values.category ?? ""}
-            size="sm"
-            options={[
-              { value: "", label: "Semua kategori" },
-              ...Object.entries(reportCategoryLabels).map(([value, label]) => ({
-                value,
-                label,
-              })),
-            ]}
-          />
-        </div>
-        <div className="grid gap-1">
-          <label
-            htmlFor="sort"
-            className="text-[11px] font-semibold text-[var(--foreground)]"
-          >
-            Urutkan
-          </label>
-          <CustomSelect
-            id="sort"
-            name="sort"
-            defaultValue={values.sort ?? "newest"}
-            size="sm"
-            options={[
-              { value: "newest", label: "Terbaru masuk" },
-              { value: "waiting_longest", label: "Paling lama menunggu" },
-              { value: "oldest", label: "Terlama" },
-            ]}
-          />
-        </div>
-        {areas.length > 1 ? (
-          <div className="grid gap-1">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
+          <div className="grid gap-1 lg:col-span-5">
             <label
-              htmlFor="areaId"
+              htmlFor="q"
               className="text-[11px] font-semibold text-[var(--foreground)]"
             >
-              Wilayah
+              Cari laporan atau lokasi
+            </label>
+            <div className="relative">
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-[var(--muted-foreground)]"
+              />
+              <input
+                id="q"
+                name="q"
+                type="search"
+                defaultValue={values.q ?? ""}
+                placeholder="Lokasi, patokan, atau deskripsi..."
+                className="min-h-9 w-full rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] py-1.5 pr-3 pl-9 text-xs font-medium text-[var(--foreground)]"
+              />
+            </div>
+          </div>
+          <div className="grid gap-1 lg:col-span-3">
+            <label
+              htmlFor="status"
+              className="text-[11px] font-semibold text-[var(--foreground)]"
+            >
+              Status
             </label>
             <CustomSelect
-              id="areaId"
-              name="areaId"
-              defaultValue={values.areaId ?? ""}
+              id="status"
+              name="status"
+              defaultValue={selectedStatus}
               size="sm"
               options={[
-                { value: "", label: "Semua wilayah tugas" },
-                ...areas.map((area) => ({
-                  value: area.id,
-                  label: cleanSimulationText(area.name),
+                { value: queueStatus, label: "Perlu pemeriksaan" },
+                ...Object.entries(reportStatusLabels).map(([value, label]) => ({
+                  value,
+                  label,
                 })),
+                { value: "all", label: "Semua status" },
               ]}
             />
           </div>
-        ) : null}
-        <div className="grid gap-1">
-          <label
-            htmlFor="submittedFrom"
-            className="text-[11px] font-semibold text-[var(--foreground)]"
-          >
-            Dikirim sejak
-          </label>
-          <CustomDatePicker
-            id="submittedFrom"
-            name="submittedFrom"
-            defaultValue={values.submittedFrom}
-            size="sm"
-          />
+          <div className="grid gap-1 lg:col-span-2">
+            <label
+              htmlFor="sort"
+              className="text-[11px] font-semibold text-[var(--foreground)]"
+            >
+              Urutkan
+            </label>
+            <CustomSelect
+              id="sort"
+              name="sort"
+              defaultValue={values.sort ?? "newest"}
+              size="sm"
+              options={[
+                { value: "newest", label: "Terbaru masuk" },
+                { value: "waiting_longest", label: "Paling lama menunggu" },
+                { value: "oldest", label: "Terlama" },
+              ]}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2 sm:col-span-2 lg:col-span-2">
+            <Button type="submit" size="sm">
+              Terapkan
+            </Button>
+            {Object.keys(values).length > 0 ? (
+              <Link
+                href="/pengelola/verifikasi"
+                className="inline-flex min-h-9 items-center px-1.5 text-xs font-semibold text-[var(--primary)] underline underline-offset-2"
+              >
+                Atur ulang
+              </Link>
+            ) : null}
+          </div>
         </div>
-        <div className="grid gap-1">
-          <label
-            htmlFor="submittedTo"
-            className="text-[11px] font-semibold text-[var(--foreground)]"
-          >
-            Dikirim sampai
-          </label>
-          <CustomDatePicker
-            id="submittedTo"
-            name="submittedTo"
-            defaultValue={values.submittedTo}
-            size="sm"
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-2 sm:col-span-2 lg:col-span-4">
-          <Button type="submit" size="sm" className="min-h-9 px-4">
-            Terapkan filter
-          </Button>
-          <Link
-            href="/pengelola/verifikasi"
-            className="inline-flex min-h-9 items-center px-2 text-xs font-semibold text-[var(--primary)] underline underline-offset-2"
-          >
-            Atur ulang
-          </Link>
-        </div>
+
+        <details open={hasAdvancedFilters} className="group mt-2.5">
+          <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded px-1.5 py-1 text-xs font-semibold text-[var(--muted-foreground)] transition hover:text-[var(--foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] [&::-webkit-details-marker]:hidden">
+            <SlidersHorizontal aria-hidden="true" className="size-3.5" />
+            <span>Filter kategori & rentang tanggal</span>
+          </summary>
+          <div className="mt-2.5 grid gap-3 border-t border-[var(--border)] pt-3 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
+            <div className="grid gap-1 lg:col-span-3">
+              <label
+                htmlFor="category"
+                className="text-[11px] font-semibold text-[var(--foreground)]"
+              >
+                Kategori
+              </label>
+              <CustomSelect
+                id="category"
+                name="category"
+                defaultValue={values.category ?? ""}
+                size="sm"
+                options={[
+                  { value: "", label: "Semua kategori" },
+                  ...Object.entries(reportCategoryLabels).map(
+                    ([value, label]) => ({
+                      value,
+                      label,
+                    }),
+                  ),
+                ]}
+              />
+            </div>
+            {areas.length > 1 ? (
+              <div className="grid gap-1 lg:col-span-3">
+                <label
+                  htmlFor="areaId"
+                  className="text-[11px] font-semibold text-[var(--foreground)]"
+                >
+                  Wilayah
+                </label>
+                <CustomSelect
+                  id="areaId"
+                  name="areaId"
+                  defaultValue={values.areaId ?? ""}
+                  size="sm"
+                  options={[
+                    { value: "", label: "Semua wilayah tugas" },
+                    ...areas.map((area) => ({
+                      value: area.id,
+                      label: cleanSimulationText(area.name),
+                    })),
+                  ]}
+                />
+              </div>
+            ) : null}
+            <fieldset className="grid gap-2 sm:col-span-2 sm:grid-cols-2 lg:col-span-6">
+              <legend className="sr-only">Rentang tanggal pengiriman</legend>
+              <div className="grid gap-1">
+                <label
+                  htmlFor="submittedFrom"
+                  className="text-[11px] font-semibold text-[var(--foreground)]"
+                >
+                  Dikirim sejak
+                </label>
+                <CustomDatePicker
+                  id="submittedFrom"
+                  name="submittedFrom"
+                  defaultValue={values.submittedFrom}
+                  size="sm"
+                />
+              </div>
+              <div className="grid gap-1">
+                <label
+                  htmlFor="submittedTo"
+                  className="text-[11px] font-semibold text-[var(--foreground)]"
+                >
+                  Dikirim sampai
+                </label>
+                <CustomDatePicker
+                  id="submittedTo"
+                  name="submittedTo"
+                  defaultValue={values.submittedTo}
+                  size="sm"
+                />
+              </div>
+            </fieldset>
+          </div>
+        </details>
       </form>
 
       {!parsed.success || !areaAllowed ? (
@@ -401,19 +427,15 @@ export default async function VerificationQueuePage({
             {total} laporan · halaman {page} dari{" "}
             {Math.max(1, Math.ceil(total / pageSize))}
           </p>
-          <ul className="grid gap-2.5" aria-label="Daftar laporan">
-            {result.data.map((report) => (
-              <li key={report.id}>
-                <ReportListItem
-                  href={`/pengelola/verifikasi/${report.id}`}
-                  report={report}
-                  areaName={
-                    areas.length > 1 ? areaName(report.areaId) : undefined
-                  }
-                />
-              </li>
-            ))}
-          </ul>
+          <ReportTable
+            reports={result.data}
+            role="manager"
+            baseHref="/pengelola/verifikasi"
+            page={page}
+            pageSize={pageSize}
+            areaNamesById={areaNameMap}
+            showAreaName={areas.length > 1}
+          />
           <nav
             aria-label="Halaman antrean"
             className="mt-6 flex flex-wrap gap-4 border-t border-[var(--border)] pt-4"

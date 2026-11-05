@@ -5,9 +5,7 @@ import {
   AlertTriangle,
   ArrowRight,
   Camera,
-  CheckCircle2,
   ChevronRight,
-  Clock,
   FilePlus2,
   Plus,
   Sparkles,
@@ -147,25 +145,25 @@ export default async function ResidentHomePage({
               </div>
 
               <ul className="mt-3 grid gap-2.5">
-                {needsInfoList.slice(0, 2).map((item) => (
+                {needsInfoList.slice(0, 2).map((item, index) => (
                   <li
                     key={item.id}
                     className="flex flex-col justify-between gap-3 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--warning-subtle)]/40 p-3 sm:flex-row sm:items-center"
                   >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-bold text-[var(--foreground)]">
+                    <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                      <span className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] font-mono text-xs font-bold tabular-nums text-[var(--foreground)]">
+                        {index + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-bold text-[var(--foreground)]">
                           {reportCategoryLabels[item.category]}
-                        </span>
-                        <span className="font-mono text-xs font-semibold text-[var(--muted-foreground)]">
-                          {item.publicReference}
-                        </span>
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-[var(--foreground)]">
+                          {item.requestReason
+                            ? `Permintaan pengelola: "${item.requestReason}"`
+                            : "Pengelola wilayah meminta keterangan tambahan untuk memverifikasi lokasi temuan ini."}
+                        </p>
                       </div>
-                      <p className="mt-1 line-clamp-2 text-xs text-[var(--foreground)]">
-                        {item.requestReason
-                          ? `Permintaan pengelola: "${item.requestReason}"`
-                          : "Pengelola wilayah meminta keterangan tambahan untuk memverifikasi lokasi temuan ini."}
-                      </p>
                     </div>
                     <Link
                       href={`/app/laporan/${item.id}`}
@@ -294,15 +292,11 @@ export default async function ResidentHomePage({
                 </div>
               ) : summary?.recentEvents.length ? (
                 <ul className="mt-3 divide-y divide-[var(--border)]">
-                  {summary.recentEvents.map((ev) => {
+                  {summary.recentEvents.map((ev, index) => {
                     const eventLabel =
                       residentEventTitle[ev.eventType] ??
                       reportEventLabels[ev.eventType] ??
                       "Pembaruan laporan";
-                    const isResolved = ev.eventType === "report_resolved";
-                    const isStarted =
-                      ev.eventType === "report_action_started" ||
-                      ev.eventType === "report_verified";
 
                     return (
                       <li key={ev.id} className="py-3 first:pt-1 last:pb-0">
@@ -310,27 +304,18 @@ export default async function ResidentHomePage({
                           href={`/app/laporan/${ev.reportId}`}
                           className="group flex items-start justify-between gap-3 rounded-[var(--radius-control)] p-1.5 -mx-1.5 transition hover:bg-[var(--background)]"
                         >
-                          <div className="flex min-w-0 items-start gap-3">
+                          <div className="flex min-w-0 flex-1 items-start gap-3">
                             <span
-                              className={`mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full ${
-                                isResolved
-                                  ? "bg-[var(--primary-subtle)] text-[var(--primary)]"
-                                  : isStarted
-                                    ? "bg-[var(--info-subtle)] text-[var(--info)]"
-                                    : "bg-[var(--background)] text-[var(--muted-foreground)]"
-                              }`}
+                              aria-label={`Nomor urut ${index + 1}`}
+                              className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--background)] font-mono text-xs font-bold tabular-nums text-[var(--foreground)]"
                             >
-                              {isResolved ? (
-                                <CheckCircle2
-                                  aria-hidden="true"
-                                  className="size-4"
-                                />
-                              ) : (
-                                <Clock aria-hidden="true" className="size-4" />
-                              )}
+                              {index + 1}
                             </span>
-                            <div className="min-w-0">
-                              <p className="text-sm font-semibold text-[var(--foreground)] group-hover:text-[var(--primary)]">
+                            <div className="min-w-0 flex-1">
+                              <p
+                                title={eventLabel}
+                                className="block truncate text-sm font-semibold text-[var(--foreground)] group-hover:text-[var(--primary)]"
+                              >
                                 {eventLabel}
                               </p>
                               <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--muted-foreground)]">
@@ -338,14 +323,13 @@ export default async function ResidentHomePage({
                                   {reportCategoryLabels[ev.category]}
                                 </span>
                                 <span>·</span>
-                                <span className="font-mono">
-                                  {ev.publicReference}
-                                </span>
-                                <span>·</span>
                                 <span>{formatJakarta(ev.createdAt)} WIB</span>
                               </div>
                               {ev.reason ? (
-                                <p className="mt-1 line-clamp-1 text-xs text-[var(--muted-foreground)]">
+                                <p
+                                  title={ev.reason}
+                                  className="mt-1 block truncate text-xs text-[var(--muted-foreground)]"
+                                >
                                   Catatan: {ev.reason}
                                 </p>
                               ) : null}
