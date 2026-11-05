@@ -61,3 +61,317 @@ export async function getManagerSummary(query: SummaryQuery) {
 export type ManagerSummary = NonNullable<
   Awaited<ReturnType<typeof getManagerSummary>>["data"]
 >;
+
+export type UrgentActionItem =
+  | {
+      kind: "verify_report";
+      id: string;
+      reference: string;
+      title: string;
+      subtitle: string;
+      ageLabel: string;
+      href: string;
+      actionLabel: string;
+      tone: "warning" | "danger" | "info";
+    }
+  | {
+      kind: "assign_task";
+      id: string;
+      reference: string;
+      title: string;
+      subtitle: string;
+      ageLabel: string;
+      href: string;
+      actionLabel: string;
+      tone: "info" | "warning";
+    }
+  | {
+      kind: "review_evidence";
+      id: string;
+      reference: string;
+      title: string;
+      subtitle: string;
+      ageLabel: string;
+      href: string;
+      actionLabel: string;
+      tone: "warning";
+    }
+  | {
+      kind: "overdue_task";
+      id: string;
+      reference: string;
+      title: string;
+      subtitle: string;
+      ageLabel: string;
+      href: string;
+      actionLabel: string;
+      tone: "danger";
+    };
+
+const categoryLabelMap: Record<string, string> = {
+  water_container: "Wadah air terbuka",
+  discarded_tire: "Ban bekas",
+  clogged_drain: "Saluran tersumbat",
+  discarded_item: "Barang bekas",
+  other: "Temuan lain",
+};
+
+function formatDaysAgo(iso: string, now = Date.now()): string {
+  const days = Math.max(0, Math.floor((now - Date.parse(iso)) / 86_400_000));
+  if (days === 0) return "Hari ini";
+  return `${days} hari lalu`;
+}
+
+// Operational queue is current open work (all time in managed areas), never hidden by period filter.
+export async function getManagerOperationalOverview(areaId: string | null) {
+  const client = await createClient();
+  let reportsQuery = client
+    .from("reports")
+    .select(
+      "id,public_reference,area_id,category,description,status,submitted_at,location_note,action_tasks(id,status,is_mandatory)",
+    )
+    .in("status", [
+      "pending_verification",
+      "needs_information",
+      "verified",
+      "in_action",
+    ])
+    .order("submitted_at", { ascending: true });
+
+  let tasksQuery = client
+    .from("action_tasks")
+    .select(
+      "id,report_id,area_id,title,status,due_at,evidence_round,created_at,reports(public_reference,location_note),task_evidence(id,submitted_by,review_status,evidence_round,created_at),action_task_assignees(profile_id)",
+    )
+    .not("status", "in", "(completed,cancelled)")
+    .order("due_at", { ascending: true, nullsFirst: false });
+
+  if (areaId) {
+    reportsQuery = reportsQuery.eq("area_id", areaId);
+    tasksQuery = tasksQuery.eq("area_id", areaId);
+  }
+
+  const [reportsRes, tasksRes] = await Promise.all([reportsQuery, tasksQuery]);
+  if (reportsRes.error || tasksRes.error) {
+    return {
+      data: null,
+      error: reportsRes.error ?? tasksRes.error,
+    };
+  }
+
+  const now = Date.now();
+  const openReports = (reportsRes.data ?? []) as {
+    id: string;
+    public_reference: string;
+    area_id: string;
+    category: string;
+    description: string;
+    status: string;
+    submitted_at: string;
+    location_note: string | null;
+    action_tasks?: { id: string; status: string; is_mandatory: boolean }[];
+  }[];
+
+  const openTasks = (tasksRes.data ?? []) as unknown as {
+    id: string;
+    report_id: string;
+    area_id: string;
+    title: string;
+    status: string;
+    due_at: string | null;
+    evidence_round: number;
+    created_at: string;
+    reports: { public_reference: string; location_note: string | null } | null;
+    task_evidence?: {
+      id: string;
+      submitted_by: string;
+      review_status: string;
+      evidence_round: number;
+      created_at: string;
+    }[];
+    action_task_assignees?: { profile_id: string }[];
+  }[];
+
+  let pendingVerificationCount = 0;
+  let needsInformationCount = 0;
+  let verifiedWithoutTaskCount = 0;
+
+  const urgentItems: UrgentActionItem[] = [];
+
+  for (const r of openReports) {
+    if (r.status === "pending_verification") {
+      pendingVerificationCount += 1;
+      if (urgentItems.filter((i) => i.kind === "verify_report").length < 4) {
+        const waitDays = Math.floor(
+          (now - Date.parse(r.submitted_at)) / 86_400_000,
+        );
+        urgentItems.push({
+          kind: "verify_report",
+          id: r.id,
+          reference: r.public_reference,
+          title: categoryLabelMap[r.category] ?? "Temuan lingkungan",
+          subtitle: r.location_note || r.description,
+          ageLabel:
+            waitDays > 0 ? `Menunggu ${waitDays} hari` : "Masuk hari ini",
+          href: `/pengelola/verifikasi/${r.id}`,
+          actionLabel: "Periksa laporan",
+          tone: waitDays >= 2 ? "danger" : "warning",
+        });
+      }
+    } else if (r.status === "needs_information") {
+      needsInformationCount += 1;
+    } else if (r.status === "verified" || r.status === "in_action") {
+      const hasActiveMandatory = (r.action_tasks ?? []).some(
+        (t) => t.is_mandatory && t.status !== "cancelled",
+      );
+      if (!hasActiveMandatory) {
+        verifiedWithoutTaskCount += 1;
+        if (urgentItems.filter((i) => i.kind === "assign_task").length < 3) {
+          urgentItems.push({
+            kind: "assign_task",
+            id: r.id,
+            reference: r.public_reference,
+            title: `${categoryLabelMap[r.category] ?? "Laporan"} · Belum ada tugas wajib`,
+            subtitle: r.location_note || r.description,
+            ageLabel: formatDaysAgo(r.submitted_at, now),
+            href: `/pengelola/verifikasi/${r.id}`,
+            actionLabel: "Buat tugas",
+            tone: "info",
+          });
+        }
+      }
+    }
+  }
+
+  let overdueTasksCount = 0;
+  let pendingEvidenceSubmissionsCount = 0;
+  let tasksWithPendingEvidenceCount = 0;
+
+  for (const t of openTasks) {
+    const isOverdue = Boolean(t.due_at && new Date(t.due_at).getTime() < now);
+    if (isOverdue) {
+      overdueTasksCount += 1;
+    }
+
+    const activeRoundPending = (t.task_evidence ?? []).filter(
+      (ev) =>
+        ev.evidence_round === t.evidence_round &&
+        ev.review_status === "pending",
+    );
+    if (activeRoundPending.length > 0) {
+      pendingEvidenceSubmissionsCount += activeRoundPending.length;
+      tasksWithPendingEvidenceCount += 1;
+      if (urgentItems.filter((i) => i.kind === "review_evidence").length < 3) {
+        urgentItems.push({
+          kind: "review_evidence",
+          id: t.id,
+          reference: t.reports?.public_reference ?? "Tugas",
+          title: t.title,
+          subtitle: `${activeRoundPending.length} bukti kader menunggu pemeriksaan`,
+          ageLabel: t.reports?.location_note ?? "Wilayah kelola",
+          href: `/pengelola/tugas/${t.id}`,
+          actionLabel: "Tinjau bukti",
+          tone: "warning",
+        });
+      }
+    } else if (
+      isOverdue &&
+      urgentItems.filter((i) => i.kind === "overdue_task").length < 3
+    ) {
+      const overdueDays = Math.max(
+        1,
+        Math.ceil((now - new Date(t.due_at!).getTime()) / 86_400_000),
+      );
+      urgentItems.push({
+        kind: "overdue_task",
+        id: t.id,
+        reference: t.reports?.public_reference ?? "Tugas",
+        title: t.title,
+        subtitle: t.reports?.location_note ?? "Melewati tenggat penyelesaian",
+        ageLabel: `Terlambat ${overdueDays} hari`,
+        href: `/pengelola/tugas/${t.id}`,
+        actionLabel: "Pantau tugas",
+        tone: "danger",
+      });
+    }
+  }
+
+  return {
+    data: {
+      pendingVerificationCount,
+      needsInformationCount,
+      verifiedWithoutTaskCount,
+      overdueTasksCount,
+      pendingEvidenceSubmissionsCount,
+      tasksWithPendingEvidenceCount,
+      urgentItems: urgentItems.slice(0, 8),
+    },
+    error: null,
+  };
+}
+
+export type DailyTrendPoint = {
+  date: string;
+  submitted: number;
+  resolved: number;
+};
+
+export async function getManagerDailyTrend(query: SummaryQuery) {
+  const client = await createClient();
+  const startIso = new Date(`${query.from}T00:00:00+07:00`).toISOString();
+  const endDate = new Date(`${query.to}T00:00:00+07:00`);
+  const endIso = new Date(endDate.getTime() + 86_400_000).toISOString();
+
+  let submittedQuery = client
+    .from("reports")
+    .select("submitted_at")
+    .gte("submitted_at", startIso)
+    .lt("submitted_at", endIso);
+
+  let resolvedQuery = client
+    .from("reports")
+    .select("resolved_at")
+    .eq("status", "resolved")
+    .not("resolved_at", "is", null)
+    .gte("resolved_at", startIso)
+    .lt("resolved_at", endIso);
+
+  if (query.areaId) {
+    submittedQuery = submittedQuery.eq("area_id", query.areaId);
+    resolvedQuery = resolvedQuery.eq("area_id", query.areaId);
+  }
+
+  const [subRes, resRes] = await Promise.all([submittedQuery, resolvedQuery]);
+  if (subRes.error || resRes.error) {
+    return { data: null, error: subRes.error ?? resRes.error };
+  }
+
+  const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" });
+  const submittedByDay = new Map<string, number>();
+  const resolvedByDay = new Map<string, number>();
+
+  for (const row of (subRes.data ?? []) as { submitted_at: string }[]) {
+    const day = fmt.format(new Date(row.submitted_at));
+    submittedByDay.set(day, (submittedByDay.get(day) ?? 0) + 1);
+  }
+  for (const row of (resRes.data ?? []) as { resolved_at: string }[]) {
+    if (!row.resolved_at) continue;
+    const day = fmt.format(new Date(row.resolved_at));
+    resolvedByDay.set(day, (resolvedByDay.get(day) ?? 0) + 1);
+  }
+
+  const series: DailyTrendPoint[] = [];
+  const cursor = new Date(`${query.from}T00:00:00Z`);
+  const stop = new Date(`${query.to}T00:00:00Z`);
+  while (cursor.getTime() <= stop.getTime()) {
+    const d = cursor.toISOString().slice(0, 10);
+    series.push({
+      date: d,
+      submitted: submittedByDay.get(d) ?? 0,
+      resolved: resolvedByDay.get(d) ?? 0,
+    });
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  return { data: series, error: null };
+}

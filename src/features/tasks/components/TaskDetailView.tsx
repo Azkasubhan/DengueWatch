@@ -52,6 +52,13 @@ export function TaskDetailView({
     (assignee) => assignee.evidenceStatus === "approved",
   ).length;
   const mine = task.assignees.find((assignee) => assignee.isMe);
+  const myLatestRevision = task.evidence.findLast(
+    (item) =>
+      item.submittedByMe &&
+      item.currentRound &&
+      item.reviewStatus === "revision_required" &&
+      Boolean(item.reviewReason),
+  );
   return (
     <>
       <PageHeader
@@ -183,6 +190,22 @@ export function TaskDetailView({
               </div>
             ) : null}
           </dl>
+          {role === "cadre" &&
+          mine?.evidenceStatus === "revision_required" &&
+          myLatestRevision?.reviewReason ? (
+            <div
+              role="region"
+              aria-label="Catatan perbaikan bukti dari pengelola"
+              className="rounded-[var(--radius-card)] border border-[var(--danger)] bg-[var(--danger-subtle)] p-4"
+            >
+              <p className="text-xs font-bold tracking-wider text-[var(--danger)] uppercase">
+                Perlu Perbaikan Bukti Anda
+              </p>
+              <p className="mt-1 text-sm font-medium text-[var(--foreground)] whitespace-pre-wrap break-words">
+                {myLatestRevision.reviewReason}
+              </p>
+            </div>
+          ) : null}
           <TaskActions
             role={role}
             taskId={task.id}

@@ -1,5 +1,6 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/integrations/supabase/server";
 import { getSafeRedirect } from "@/lib/auth/safeRedirect";
@@ -55,7 +56,9 @@ export async function loginAction(
     return configurationError();
   }
 
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
+  const { data: authData, error } = await supabase.auth.signInWithPassword(
+    parsed.data,
+  );
   if (error) {
     return {
       status: "error",
@@ -63,12 +66,33 @@ export async function loginAction(
     };
   }
 
-  const target = getSafeRedirect(next);
-  const redirectUrl = target.includes("?")
-    ? `${target}&auth=login_success`
-    : `${target}?auth=login_success`;
+  let target = getSafeRedirect(next);
+  if (target === "/app/beranda" && authData?.user?.id) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", authData.user.id)
+      .maybeSingle();
 
-  redirect(redirectUrl);
+    if (profile?.role === "manager") {
+      target = "/pengelola/ringkasan";
+    } else if (profile?.role === "cadre") {
+      target = "/kader/ringkasan";
+    }
+  }
+
+  try {
+    const cookieStore = await cookies();
+    cookieStore.set("dw_toast", "login_success", {
+      maxAge: 10,
+      path: "/",
+      sameSite: "lax",
+    });
+  } catch {
+    // Cookie setting fallback if headers cannot be written
+  }
+
+  redirect(target);
 }
 
 export async function registerAction(
@@ -220,5 +244,15 @@ export async function logoutAction(returnTo: string) {
   if (failed) {
     redirect(`${safeReturn}?logout=failed`);
   }
-  redirect("/");
+  try {
+    const cookieStore = await cookies();
+    cookieStore.set("dw_toast", "logged_out", {
+      maxAge: 10,
+      path: "/",
+      sameSite: "lax",
+    });
+  } catch {
+    // Cookie setting fallback if headers cannot be written
+  }
+  redirect("/login?auth=logged_out");
 }

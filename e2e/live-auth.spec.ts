@@ -117,7 +117,7 @@ test.describe("live Supabase authentication", () => {
     if (await confirmLogout.isVisible()) {
       await confirmLogout.click();
     }
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/login(?:\?auth=logged_out)?$/);
     await page.goto("/app/beranda");
     await expect(page).toHaveURL(
       /\/login\?next=(?:%2F|\/)app(?:%2F|\/)beranda$/,

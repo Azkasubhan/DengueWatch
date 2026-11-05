@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   ListChecks,
   LogOut,
+  MapPin,
   Menu,
   User,
   X,
@@ -45,6 +46,7 @@ const navItemsByRole: Record<
       icon: ClipboardCheck,
     },
     { href: "/pengelola/tugas", label: "Tugas wilayah", icon: ListChecks },
+    { href: "/pengelola/peta", label: "Peta temuan", icon: MapPin },
   ],
 };
 

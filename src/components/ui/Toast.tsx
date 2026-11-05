@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { AlertCircle, CheckCircle2, Info, X } from "lucide-react";
 
 export type ToastType = "success" | "error" | "info";
@@ -14,19 +14,41 @@ export type ToastItem = {
 
 const TOAST_EVENT = "denguewatch:toast";
 
-function dispatchToast(type: ToastType, message: string) {
+type Listener = (toast: ToastItem) => void;
+const listeners = new Set<Listener>();
+const pendingQueue: ToastItem[] = [];
+
+export function showToast(type: ToastType, message: string) {
   if (typeof window === "undefined") return;
-  const id = crypto.randomUUID();
-  window.dispatchEvent(
-    new CustomEvent(TOAST_EVENT, { detail: { id, message, type } }),
-  );
+  const id =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random()}`;
+  const item: ToastItem = { id, message, type };
+
+  if (listeners.size === 0) {
+    pendingQueue.push(item);
+  } else {
+    listeners.forEach((listener) => listener(item));
+  }
+
+  window.dispatchEvent(new CustomEvent(TOAST_EVENT, { detail: item }));
 }
 
 export const toast = {
-  error: (message: string) => dispatchToast("error", message),
-  info: (message: string) => dispatchToast("info", message),
-  success: (message: string) => dispatchToast("success", message),
+  error: (message: string) => showToast("error", message),
+  info: (message: string) => showToast("info", message),
+  success: (message: string) => showToast("success", message),
 };
+
+function readAndClearCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
+  if (!match || !match[1]) return null;
+  const value = decodeURIComponent(match[1]);
+  document.cookie = `${name}=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+  return value;
+}
 
 function ToastQueryListener() {
   const searchParams = useSearchParams();
@@ -38,14 +60,20 @@ function ToastQueryListener() {
     const toastParam = searchParams.get("toast");
     const keputusan = searchParams.get("keputusan");
     const informasi = searchParams.get("informasi");
+    const logoutParam = searchParams.get("logout");
 
     let message: string | null = null;
-    const type: ToastType = "success";
+    let type: ToastType = "success";
 
     if (auth === "login_success") {
       message = "Berhasil masuk! Mengalihkan ke dasbor...";
     } else if (auth === "registered") {
       message = "Pendaftaran berhasil! Akun Anda telah dibuat.";
+    } else if (auth === "logged_out") {
+      message = "Anda telah berhasil keluar dari akun.";
+    } else if (logoutParam === "failed") {
+      message = "Gagal keluar akun. Silakan coba kembali.";
+      type = "error";
     } else if (keputusan === "tersimpan") {
       message = "Keputusan verifikasi berhasil disimpan.";
     } else if (informasi === "terkirim") {
@@ -59,14 +87,14 @@ function ToastQueryListener() {
     }
 
     if (message) {
-      dispatchToast(type, message);
+      showToast(type, message);
 
-      // Clean search parameters without triggering a full page reload
       const newParams = new URLSearchParams(searchParams.toString());
       newParams.delete("auth");
       newParams.delete("toast");
       newParams.delete("keputusan");
       newParams.delete("informasi");
+      newParams.delete("logout");
 
       const query = newParams.toString();
       const newUrl = query
@@ -82,23 +110,58 @@ function ToastQueryListener() {
 
 export function ToastProvider() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const pathname = usePathname();
 
   useEffect(() => {
-    function handleToast(e: Event) {
-      const customEvent = e as CustomEvent<ToastItem>;
-      if (!customEvent.detail) return;
-      const newToast = customEvent.detail;
-
-      setToasts((prev) => [...prev, newToast]);
+    const handleToastItem: Listener = (newToast) => {
+      setToasts((prev) => {
+        if (prev.some((item) => item.message === newToast.message)) {
+          return prev;
+        }
+        return [...prev, newToast];
+      });
 
       setTimeout(() => {
         setToasts((prev) => prev.filter((item) => item.id !== newToast.id));
-      }, 3500);
+      }, 4000);
+    };
+
+    listeners.add(handleToastItem);
+
+    if (pendingQueue.length > 0) {
+      const queue = [...pendingQueue];
+      pendingQueue.length = 0;
+      queue.forEach((item) => handleToastItem(item));
     }
 
-    window.addEventListener(TOAST_EVENT, handleToast);
-    return () => window.removeEventListener(TOAST_EVENT, handleToast);
+    const handleCustomEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<ToastItem>;
+      if (customEvent.detail) {
+        handleToastItem(customEvent.detail);
+      }
+    };
+
+    window.addEventListener(TOAST_EVENT, handleCustomEvent);
+
+    return () => {
+      listeners.delete(handleToastItem);
+      window.removeEventListener(TOAST_EVENT, handleCustomEvent);
+    };
   }, []);
+
+  // Check for cookie toasts on mount and route changes
+  useEffect(() => {
+    const toastCookie = readAndClearCookie("dw_toast");
+    if (!toastCookie) return;
+
+    if (toastCookie === "login_success") {
+      showToast("success", "Berhasil masuk! Mengalihkan ke dasbor...");
+    } else if (toastCookie === "logged_out") {
+      showToast("success", "Anda telah berhasil keluar dari akun.");
+    } else if (toastCookie === "registered") {
+      showToast("success", "Pendaftaran berhasil! Akun Anda telah dibuat.");
+    }
+  }, [pathname]);
 
   const removeToast = (id: string) => {
     setToasts((prev) => prev.filter((item) => item.id !== id));
@@ -122,7 +185,7 @@ export function ToastProvider() {
             {item.type === "success" ? (
               <CheckCircle2
                 aria-hidden="true"
-                className="size-5 shrink-0 text-emerald-600"
+                className="size-5 shrink-0 text-[var(--primary)]"
               />
             ) : item.type === "error" ? (
               <AlertCircle

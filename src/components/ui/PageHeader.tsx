@@ -19,32 +19,34 @@ export function PageHeader({
   back,
 }: PageHeaderProps) {
   return (
-    <div className="mb-6">
+    <div className="mb-5 border-b border-[var(--border)]/70 pb-4">
       {back ? (
         <Link
-          className="mb-2 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+          className="mb-1.5 inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
           href={back.href}
         >
           <ArrowLeft aria-hidden="true" className="size-4" />
           {back.label}
         </Link>
       ) : null}
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0 max-w-3xl">
-          <h1 className="text-3xl font-bold tracking-[-0.03em] break-words sm:text-4xl">
+          <h1 className="text-2xl font-bold tracking-[-0.025em] break-words sm:text-3xl">
             {title}
           </h1>
           {meta ? (
-            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-[var(--muted-foreground)]">
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-[var(--muted-foreground)]">
               {meta}
             </div>
           ) : null}
           {description ? (
-            <p className="mt-3 text-[var(--muted-foreground)]">{description}</p>
+            <p className="mt-1.5 text-sm text-[var(--muted-foreground)]">
+              {description}
+            </p>
           ) : null}
         </div>
         {actions ? (
-          <div className="flex flex-wrap items-center gap-3">{actions}</div>
+          <div className="flex flex-wrap items-center gap-2.5">{actions}</div>
         ) : null}
       </div>
     </div>

@@ -231,3 +231,232 @@ export async function listAreaCadres(areaId: string) {
     error: result.error,
   };
 }
+
+type RichTaskRow = TaskRow & {
+  reports: {
+    public_reference: string;
+    location_note: string | null;
+    category: string;
+  } | null;
+  task_evidence?: {
+    id: string;
+    submitted_by: string;
+    review_status: "pending" | "approved" | "revision_required";
+    evidence_round: number;
+    review_reason: string | null;
+    created_at: string;
+  }[];
+};
+
+const richTaskColumns = (assignees: string) =>
+  `id,report_id,area_id,title,description,${assignees}(profile_id),created_by,status,is_mandatory,due_at,completed_at,version,evidence_round,created_at,updated_at,reports(public_reference,location_note,category),task_evidence(id,submitted_by,review_status,evidence_round,review_reason,created_at)`;
+
+export function toTaskListRow(
+  row: RichTaskRow,
+  userId: string,
+  now = Date.now(),
+) {
+  const base = toTask(row, userId);
+  const round = row.evidence_round;
+  const latestByAssignee = new Map<
+    string,
+    NonNullable<RichTaskRow["task_evidence"]>[number]
+  >();
+
+  // Sort evidence by created_at ascending so the last one in the round wins
+  const sortedEvidence = [...(row.task_evidence ?? [])].sort((a, b) =>
+    a.created_at.localeCompare(b.created_at),
+  );
+  for (const ev of sortedEvidence) {
+    if (ev.evidence_round === round) {
+      latestByAssignee.set(ev.submitted_by, ev);
+    }
+  }
+
+  let approvedAssigneeCount = 0;
+  let pendingEvidenceCount = 0;
+  for (const assignee of row.action_task_assignees) {
+    const ev = latestByAssignee.get(assignee.profile_id);
+    if (ev?.review_status === "approved") approvedAssigneeCount += 1;
+    else if (ev?.review_status === "pending") pendingEvidenceCount += 1;
+  }
+
+  const myLatest = latestByAssignee.get(userId);
+  const myEvidenceStatus: EvidenceStatus = myLatest?.review_status ?? "missing";
+  const myRevisionReason =
+    myEvidenceStatus === "revision_required"
+      ? (myLatest?.review_reason ?? null)
+      : null;
+
+  const isTerminal = row.status === "completed" || row.status === "cancelled";
+  const dueMs = row.due_at ? new Date(row.due_at).getTime() : null;
+  const isOverdue = Boolean(!isTerminal && dueMs !== null && dueMs < now);
+  const isDueSoon = Boolean(
+    !isTerminal &&
+    !isOverdue &&
+    dueMs !== null &&
+    dueMs <= now + 2 * 86_400_000,
+  );
+
+  return {
+    ...base,
+    reportLocationNote: row.reports?.location_note ?? null,
+    reportCategory: row.reports?.category ?? null,
+    evidenceRound: round,
+    assigneeCount: row.action_task_assignees.length,
+    approvedAssigneeCount,
+    pendingEvidenceCount,
+    myEvidenceStatus,
+    myRevisionReason,
+    isOverdue,
+    isDueSoon,
+  };
+}
+
+export type TaskListRow = ReturnType<typeof toTaskListRow>;
+
+export async function listTaskRows(
+  page: number,
+  limit: number,
+  filters: TaskListFilters,
+  userId: string,
+) {
+  const client = await createUserClient();
+  const nowIso = new Date().toISOString();
+  const soonIso = new Date(Date.now() + 2 * 86_400_000).toISOString();
+
+  let query = client
+    .from("action_tasks")
+    .select(
+      richTaskColumns(
+        filters.assignee === "me"
+          ? "action_task_assignees!inner"
+          : "action_task_assignees",
+      ),
+      { count: "exact" },
+    );
+
+  if (filters.status) query = query.in("status", filters.status);
+  if (filters.reportId) query = query.eq("report_id", filters.reportId);
+  if (filters.areaId) query = query.eq("area_id", filters.areaId);
+  if (filters.assignee === "me")
+    query = query.eq("action_task_assignees.profile_id", userId);
+
+  if (filters.due === "overdue") {
+    query = query
+      .not("status", "in", "(completed,cancelled)")
+      .not("due_at", "is", null)
+      .lt("due_at", nowIso);
+  } else if (filters.due === "due_soon") {
+    query = query
+      .not("status", "in", "(completed,cancelled)")
+      .not("due_at", "is", null)
+      .gte("due_at", nowIso)
+      .lte("due_at", soonIso);
+  }
+
+  if (filters.q) {
+    const escaped = filters.q.replace(/[%_,()]/g, "").trim();
+    if (escaped) {
+      query = query.or(
+        `title.ilike.%${escaped}%,description.ilike.%${escaped}%`,
+      );
+    }
+  }
+
+  if (filters.needsReview) {
+    query = query.eq("status", "awaiting_review");
+  }
+
+  if (filters.sort === "due_asc") {
+    query = query
+      .order("due_at", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
+  } else {
+    query = query
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
+  }
+
+  const result = await query
+    .range((page - 1) * limit, page * limit - 1)
+    .overrideTypes<RichTaskRow[], { merge: false }>();
+
+  return {
+    data: result.data?.map((row) => toTaskListRow(row, userId)) ?? null,
+    count: result.count,
+    error: result.error,
+  };
+}
+
+export async function getCadreSummary(userId: string, areaId?: string) {
+  const client = await createUserClient();
+  let query = client
+    .from("action_tasks")
+    .select(richTaskColumns("action_task_assignees!inner"))
+    .eq("action_task_assignees.profile_id", userId)
+    .order("due_at", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: false });
+
+  if (areaId) query = query.eq("area_id", areaId);
+
+  const result = await query.overrideTypes<RichTaskRow[], { merge: false }>();
+  if (result.error || !result.data) {
+    return { data: null, error: result.error };
+  }
+
+  const rows = result.data.map((row) => toTaskListRow(row, userId));
+  const activeRows = rows.filter(
+    (t) => t.status !== "completed" && t.status !== "cancelled",
+  );
+
+  let overdueCount = 0;
+  let dueSoonCount = 0;
+  let myPendingEvidenceCount = 0;
+  let myRevisionRequiredCount = 0;
+
+  for (const t of activeRows) {
+    if (t.isOverdue) overdueCount += 1;
+    else if (t.isDueSoon) dueSoonCount += 1;
+    if (t.myEvidenceStatus === "pending") myPendingEvidenceCount += 1;
+    if (t.myEvidenceStatus === "revision_required")
+      myRevisionRequiredCount += 1;
+  }
+
+  const priorityRank = (t: TaskListRow) => {
+    if (t.myEvidenceStatus === "revision_required") return 0;
+    if (t.isOverdue && t.myEvidenceStatus === "missing") return 1;
+    if (t.status === "assigned" || t.status === "reopened") return 2;
+    if (t.myEvidenceStatus === "missing") return 3;
+    if (t.isOverdue) return 4;
+    if (t.myEvidenceStatus === "pending") return 5;
+    return 6;
+  };
+
+  const prioritizedTasks = [...activeRows].sort((a, b) => {
+    const rankDiff = priorityRank(a) - priorityRank(b);
+    if (rankDiff !== 0) return rankDiff;
+    const dueA = a.dueAt
+      ? new Date(a.dueAt).getTime()
+      : Number.MAX_SAFE_INTEGER;
+    const dueB = b.dueAt
+      ? new Date(b.dueAt).getTime()
+      : Number.MAX_SAFE_INTEGER;
+    return dueA - dueB;
+  });
+
+  return {
+    data: {
+      activeTasksCount: activeRows.length,
+      overdueCount,
+      dueSoonCount,
+      dueSoonOrOverdueCount: overdueCount + dueSoonCount,
+      myPendingEvidenceCount,
+      myRevisionRequiredCount,
+      completedCount: rows.filter((t) => t.status === "completed").length,
+      prioritizedTasks,
+    },
+    error: null,
+  };
+}

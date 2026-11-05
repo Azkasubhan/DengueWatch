@@ -8,6 +8,8 @@ export const reportCategorySchema = z.enum([
   "other",
 ]);
 
+export const reportCategories = reportCategorySchema.options;
+
 const safeText = (max: number) =>
   z
     .string()
@@ -67,6 +69,8 @@ export const reportStatusSchema = z.enum([
   "resolved",
 ]);
 
+export const reportStatuses = reportStatusSchema.options;
+
 const dateOnly = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -110,6 +114,11 @@ export const reportListQuerySchema = z
     areaId: z.uuid().optional(),
     submittedFrom: dateOnly.optional(),
     submittedTo: dateOnly.optional(),
+    q: safeText(60).optional(),
+    sort: z.enum(["newest", "oldest", "waiting_longest"]).optional(),
+    tab: z
+      .enum(["all", "pending_verification", "needs_information", "needs_task"])
+      .optional(),
   })
   .strict()
   .refine(

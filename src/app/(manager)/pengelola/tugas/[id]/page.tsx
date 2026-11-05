@@ -3,7 +3,13 @@ import { z } from "zod";
 import { PendingArea } from "@/components/feedback/PendingArea";
 import { ServiceUnavailable } from "@/components/feedback/ServiceUnavailable";
 import { AppShell } from "@/components/layout/AppShell";
+import { cardClass } from "@/components/ui/Card";
 import { decidePortalAccess, getVerifiedAreas } from "@/features/areas/access";
+import {
+  ReportFactsCard,
+  ReportPhotos,
+} from "@/features/reports/components/ReportDetailView";
+import { getReportDetail } from "@/features/reports/data";
 import { TaskDetailView } from "@/features/tasks/components/TaskDetailView";
 import { getTaskDetail } from "@/features/tasks/data";
 import { getAccessContext } from "@/lib/auth/context";
@@ -36,16 +42,29 @@ export default async function ManagerTaskDetailPage({
   if (decision.kind === "pending") return shell(<PendingArea />);
   if (!z.uuid().safeParse(id).success) notFound();
   let task;
+  let detail;
   try {
     task = await getTaskDetail(id, access.context.userId);
+    detail = task ? await getReportDetail(task.reportId) : null;
   } catch {
     return <ServiceUnavailable />;
   }
   if (!task) notFound();
+  const report = detail?.report.data;
 
   return shell(
     <TaskDetailView
       backLink={{ href: "/pengelola/tugas", label: "Tugas wilayah" }}
+      report={
+        report && detail?.images?.data ? (
+          <section aria-label="Pembanding laporan warga" className="grid gap-4">
+            <ReportPhotos images={detail.images.data} />
+            <ReportFactsCard report={report} />
+          </section>
+        ) : (
+          <p className={cardClass}>Laporan terkait belum dapat dimuat.</p>
+        )
+      }
       reportHref={`/pengelola/verifikasi/${task.reportId}`}
       role="manager"
       task={task}

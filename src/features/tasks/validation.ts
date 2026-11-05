@@ -101,6 +101,10 @@ export const taskListQuerySchema = z
     reportId: z.uuid().optional(),
     areaId: z.uuid().optional(),
     assignee: z.literal("me").optional(),
+    due: z.enum(["all", "overdue", "due_soon"]).optional(),
+    needsReview: z.enum(["1", "true"]).optional(),
+    q: safeText(1, 60, "Pencarian tidak valid.").optional(),
+    sort: z.enum(["newest", "due_asc"]).optional(),
   })
   .strict();
 
