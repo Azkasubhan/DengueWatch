@@ -15,9 +15,10 @@ const groups = [
   {
     title: "Bantuan",
     links: [
+      { href: "/daftar", label: "Daftar sebagai warga" },
+      { href: "/login", label: "Masuk" },
       { href: "/kebijakan-privasi", label: "Kebijakan privasi" },
       { href: "/syarat-layanan", label: "Syarat layanan" },
-      { href: "/login", label: "Masuk" },
     ],
   },
 ];

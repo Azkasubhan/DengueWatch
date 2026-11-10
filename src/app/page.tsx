@@ -54,14 +54,6 @@ const roles = [
   },
 ];
 
-const boundaries = [
-  "Tidak mendiagnosis penyakit atau memprediksi wabah.",
-  "Tidak menyimpan data pasien.",
-  "Isian AI hanya draf; keputusan tetap di tangan warga dan pengelola.",
-  "Foto disimpan privat, dan metadata lokasinya dihapus otomatis.",
-  "Akses data dibatasi sesuai peran dan wilayah tugas.",
-];
-
 function PhotoPill({ src }: { src: StaticImageData }) {
   return (
     <span className="relative mx-1 inline-block h-[0.85em] w-[1.9em] overflow-hidden rounded-full align-[-0.08em]">
@@ -242,30 +234,6 @@ export default function HomePage() {
                   </div>
                 ))}
               </dl>
-            </Container>
-          </section>
-
-          {/* Batasan (Judul di tengah) */}
-          <section
-            className="bg-[var(--forest)] py-16 text-[var(--forest-foreground)] sm:py-28"
-            id="batasan"
-          >
-            <Container>
-              <div className="mx-auto max-w-3xl text-center">
-                <h2 className="reveal text-3xl font-bold tracking-[-0.03em] sm:text-5xl">
-                  Dirancang dengan batas yang jelas
-                </h2>
-              </div>
-              <ul className="mx-auto mt-10 max-w-3xl border-t border-white/15">
-                {boundaries.map((item) => (
-                  <li
-                    className="reveal border-b border-white/15 py-4 text-center sm:text-lg"
-                    key={item}
-                  >
-                    {item}
-                  </li>
-                ))}
-              </ul>
             </Container>
           </section>
 
