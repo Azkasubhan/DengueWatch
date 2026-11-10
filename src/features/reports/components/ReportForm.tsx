@@ -180,19 +180,20 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
 
   async function uploadPhoto(file: File, signal?: AbortSignal) {
     const body = new FormData();
-    body.set("file", file);
+    body.set("photo", file);
     const response = await fetch("/api/v1/report-uploads", {
       method: "POST",
       body,
       signal,
     });
     const payload = await response.json().catch(() => null);
-    if (!response.ok || !payload?.data?.id) {
+    const uploadData = (payload?.data ?? payload) as UploadedPhoto | undefined;
+    if (!response.ok || !uploadData?.id) {
       throw new Error(
         payload?.error?.message ?? "Foto belum dapat diunggah. Coba lagi.",
       );
     }
-    return payload.data as UploadedPhoto;
+    return uploadData as UploadedPhoto;
   }
 
   async function analyzeFirstPhoto(file: File, existingUpload?: UploadedPhoto) {
@@ -229,7 +230,8 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
       if (!response.ok || !suggestion) {
         setAiStatus("unavailable");
         setAiNotice(
-          "Analisis AI belum tersedia. Silakan pilih kategori dan tulis keterangan secara manual.",
+          payload?.error?.message ??
+            "Analisis AI belum tersedia. Silakan pilih kategori dan tulis keterangan secara manual.",
         );
         return;
       }
@@ -283,7 +285,7 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
           ? "AI mengisi bagian yang masih kosong. Kolom yang sudah Anda isi tidak diubah."
           : "AI mengisi draf kategori dan keterangan dari foto pertama. Silakan periksa sebelum mengirim.",
       );
-    } catch {
+    } catch (err) {
       if (analysisRunRef.current !== run) return;
       if (controller.signal.aborted) {
         setAiStatus("unavailable");
@@ -294,7 +296,9 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
       }
       setAiStatus("unavailable");
       setAiNotice(
-        "Analisis AI belum tersedia. Silakan pilih kategori dan tulis keterangan secara manual.",
+        err instanceof Error && err.message
+          ? err.message
+          : "Analisis AI belum tersedia. Silakan pilih kategori dan tulis keterangan secara manual.",
       );
     }
   }
@@ -529,7 +533,6 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
   }
 
   const errorEntries = Object.entries(errors);
-  const singleArea = areas.length === 1 ? areas[0] : null;
 
   return (
     <form
@@ -613,9 +616,9 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
         </div>
 
         {/* Area unggah / tambah foto */}
-        <div className="mt-3.5 rounded-xl border-2 border-dashed border-[var(--control-border)] bg-[var(--background)] p-4 transition hover:border-[var(--primary)]">
-          <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-            <div className="flex items-start gap-3">
+        <div className="mt-3.5 rounded-xl border-2 border-dashed border-[var(--control-border)] bg-[var(--background)] p-4 sm:p-5 transition hover:border-[var(--primary)]">
+          <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+            <div className="flex min-w-0 flex-1 items-start gap-3">
               <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--primary-subtle)] text-[var(--primary)]">
                 <ImagePlus aria-hidden="true" className="size-5" />
               </span>
@@ -638,7 +641,7 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
             </div>
 
             {photos.length < 3 ? (
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2.5 sm:ml-auto">
                 <input
                   id="photos"
                   name="photos"
@@ -656,10 +659,10 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
                 />
                 <label
                   htmlFor="photos"
-                  className="inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--primary)] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[var(--primary-hover)] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--primary)]"
+                  className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--primary)] px-4 py-2 text-xs font-semibold text-white shadow-2xs transition hover:bg-[var(--primary-hover)] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--primary)]"
                 >
-                  <ImagePlus aria-hidden="true" className="size-4" />
-                  Pilih foto
+                  <ImagePlus aria-hidden="true" className="size-4 shrink-0" />
+                  <span>Pilih foto</span>
                 </label>
 
                 <input
@@ -672,13 +675,13 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
                 />
                 <label
                   htmlFor="camera-photo"
-                  className="inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] px-3.5 py-2 text-xs font-semibold text-[var(--foreground)] transition hover:border-[var(--primary)] peer-focus-visible/camera:outline-2 peer-focus-visible/camera:outline-offset-2 peer-focus-visible/camera:outline-[var(--primary)]"
+                  className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] px-4 py-2 text-xs font-semibold text-[var(--foreground)] shadow-2xs transition hover:border-[var(--primary)] hover:text-[var(--primary)] peer-focus-visible/camera:outline-2 peer-focus-visible/camera:outline-offset-2 peer-focus-visible/camera:outline-[var(--primary)]"
                 >
                   <Camera
                     aria-hidden="true"
-                    className="size-4 text-[var(--primary)]"
+                    className="size-4 shrink-0 text-[var(--primary)]"
                   />
-                  Ambil foto
+                  <span>Ambil foto</span>
                 </label>
               </div>
             ) : null}
@@ -832,75 +835,51 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
           ) : null}
         </div>
 
-        <div
-          id="category"
-          role="radiogroup"
-          aria-labelledby="section-category-title"
-          aria-describedby={
-            errors.category ? "category-help category-error" : "category-help"
-          }
-          aria-invalid={Boolean(errors.category)}
-          className="mt-3.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3"
-        >
-          {reportCategories.map((item) => {
-            const Icon = categoryMeta[item].icon;
-            const isSelected = category === item;
-            return (
-              <label
-                key={item}
-                className={`group relative flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--primary)] ${
-                  isSelected
-                    ? "border-[var(--primary)] bg-[var(--primary-subtle)]/65 shadow-2xs ring-1 ring-[var(--primary)]"
-                    : "border-[var(--border)] bg-[var(--background)] hover:border-[var(--primary)]/60"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="category"
-                  value={item}
-                  checked={isSelected}
-                  onChange={() => {
-                    resetAttemptKey();
-                    setCategory(item);
-                    setAiFilledFields((curr) => ({ ...curr, category: false }));
-                    setErrors((curr) => {
-                      const next = { ...curr };
-                      delete next.category;
-                      return next;
-                    });
-                  }}
-                  className="sr-only"
-                />
-                <span
-                  className={`inline-flex size-9 shrink-0 items-center justify-center rounded-lg transition ${
-                    isSelected
-                      ? "bg-[var(--primary)] text-white"
-                      : "bg-[var(--surface)] text-[var(--primary)] border border-[var(--border)]"
-                  }`}
-                >
-                  <Icon aria-hidden="true" className="size-4" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-bold text-[var(--foreground)]">
-                    {reportCategoryLabels[item]}
-                  </span>
-                  <span className="mt-0.5 block text-xs leading-snug text-[var(--muted-foreground)]">
-                    {categoryMeta[item].hint}
-                  </span>
-                </span>
-              </label>
-            );
-          })}
-        </div>
+        <div className="mt-3.5 max-w-xl">
+          <CustomSelect
+            id="category"
+            name="category"
+            value={category}
+            size="md"
+            placeholder="Pilih kategori temuan…"
+            aria-invalid={Boolean(errors.category)}
+            aria-describedby={
+              errors.category ? "category-help category-error" : "category-help"
+            }
+            onChange={(val) => {
+              resetAttemptKey();
+              setCategory(val as ReportCategory);
+              setAiFilledFields((curr) => ({ ...curr, category: false }));
+              setErrors((curr) => {
+                const next = { ...curr };
+                delete next.category;
+                return next;
+              });
+            }}
+            options={reportCategories.map((item) => ({
+              value: item,
+              label: `${reportCategoryLabels[item]} — ${categoryMeta[item].hint}`,
+            }))}
+          />
 
-        {errors.category ? (
-          <p
-            id="category-error"
-            className="mt-2 text-xs font-semibold text-[var(--danger)]"
-          >
-            {errors.category}
-          </p>
-        ) : null}
+          {category ? (
+            <p className="mt-2 text-xs text-[var(--muted-foreground)]">
+              Keterangan:{" "}
+              <span className="font-medium text-[var(--foreground)]">
+                {categoryMeta[category].hint}
+              </span>
+            </p>
+          ) : null}
+
+          {errors.category ? (
+            <p
+              id="category-error"
+              className="mt-1.5 text-xs font-semibold text-[var(--danger)]"
+            >
+              {errors.category}
+            </p>
+          ) : null}
+        </div>
       </section>
 
       {/* C. KETERANGAN TEMUAN */}
@@ -989,45 +968,41 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
 
         <div className="mt-3.5 grid gap-4">
           {/* Wilayah */}
-          {singleArea ? (
-            <input id="areaId" name="areaId" type="hidden" value={areaId} />
-          ) : (
-            <div>
-              <label
-                htmlFor="areaId"
-                className="block text-xs font-semibold text-[var(--foreground)]"
-              >
-                Wilayah pelaporan <span aria-hidden="true">*</span>
-              </label>
-              <div className="mt-1.5">
-                <CustomSelect
-                  id="areaId"
-                  name="areaId"
-                  value={areaId}
-                  size="md"
-                  placeholder="Pilih wilayah…"
-                  aria-invalid={Boolean(errors.areaId)}
-                  aria-describedby={errors.areaId ? "areaId-error" : undefined}
-                  onChange={(val) => {
-                    resetAttemptKey();
-                    setAreaId(val);
-                  }}
-                  options={areas.map((area) => ({
-                    value: area.id,
-                    label: area.name,
-                  }))}
-                />
-              </div>
-              {errors.areaId ? (
-                <p
-                  id="areaId-error"
-                  className="mt-1.5 text-xs font-semibold text-[var(--danger)]"
-                >
-                  {errors.areaId}
-                </p>
-              ) : null}
+          <div>
+            <label
+              htmlFor="areaId"
+              className="block text-xs font-semibold text-[var(--foreground)]"
+            >
+              Wilayah pelaporan <span aria-hidden="true">*</span>
+            </label>
+            <div className="mt-1.5">
+              <CustomSelect
+                id="areaId"
+                name="areaId"
+                value={areaId}
+                size="md"
+                placeholder="Pilih wilayah…"
+                aria-invalid={Boolean(errors.areaId)}
+                aria-describedby={errors.areaId ? "areaId-error" : undefined}
+                onChange={(val) => {
+                  resetAttemptKey();
+                  setAreaId(val);
+                }}
+                options={areas.map((area) => ({
+                  value: area.id,
+                  label: area.name,
+                }))}
+              />
             </div>
-          )}
+            {errors.areaId ? (
+              <p
+                id="areaId-error"
+                className="mt-1.5 text-xs font-semibold text-[var(--danger)]"
+              >
+                {errors.areaId}
+              </p>
+            ) : null}
+          </div>
 
           {/* Patokan / Petunjuk lokasi */}
           <div>

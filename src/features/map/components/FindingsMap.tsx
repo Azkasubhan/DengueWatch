@@ -808,9 +808,6 @@ export function FindingsMap({
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-xs">
         {mode === "points" ? (
           <div className="flex flex-wrap items-center gap-3">
-            <span className="font-semibold text-[var(--foreground)]">
-              Legenda:
-            </span>
             <span className="inline-flex items-center gap-1.5">
               <span className="size-2.5 rounded-full bg-[var(--warning)]" />
               Perlu verifikasi / info
@@ -826,9 +823,6 @@ export function FindingsMap({
           </div>
         ) : (
           <div className="flex flex-wrap items-center gap-3">
-            <span className="font-semibold text-[var(--foreground)]">
-              Kepadatan laporan lingkungan valid:
-            </span>
             <span className="inline-flex items-center gap-1.5">
               <span className="size-2.5 rounded-full bg-[var(--primary)]" />1
               laporan
