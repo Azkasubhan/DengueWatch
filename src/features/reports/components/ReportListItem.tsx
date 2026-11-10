@@ -110,22 +110,20 @@ export function ReportTable({
       <DataTable caption={caption}>
         <DataTableHeader>
           <RowNumberHeader />
-          <DataTableHeadCell className="min-w-[180px]">
-            Laporan
-          </DataTableHeadCell>
-          <DataTableHeadCell className="hidden min-w-[150px] md:table-cell">
+          <DataTableHeadCell>Laporan</DataTableHeadCell>
+          <DataTableHeadCell className="hidden md:table-cell">
             Lokasi
           </DataTableHeadCell>
           <DataTableHeadCell className="hidden whitespace-nowrap md:table-cell">
-            {role === "manager" ? "Dikirim / Menunggu" : "Dikirim"}
+            Dikirim
           </DataTableHeadCell>
           <DataTableHeadCell className="hidden whitespace-nowrap md:table-cell">
             Status
           </DataTableHeadCell>
-          <DataTableHeadCell className="hidden whitespace-nowrap md:table-cell">
+          <DataTableHeadCell className="hidden whitespace-nowrap lg:table-cell">
             Foto
           </DataTableHeadCell>
-          <DataTableHeadCell className="w-[110px] whitespace-nowrap text-right pr-4 sm:pr-6">
+          <DataTableHeadCell className="w-[96px] whitespace-nowrap text-right pr-3 sm:pr-4">
             Tindakan
           </DataTableHeadCell>
         </DataTableHeader>
@@ -152,7 +150,7 @@ export function ReportTable({
                 <RowNumberCell number={rowNumber} />
 
                 {/* Kolom 2: Laporan (Kategori + 1 baris deskripsi dengan ellipsis) */}
-                <DataTableCell className="max-w-[240px] sm:max-w-[280px]">
+                <DataTableCell className="max-w-[180px] md:w-[26%] md:max-w-0">
                   <div className="min-w-0">
                     <Link
                       href={`${baseHref}/${report.id}`}
@@ -220,25 +218,27 @@ export function ReportTable({
                 </DataTableCell>
 
                 {/* Kolom 3: Lokasi */}
-                <DataTableCell className="hidden max-w-[200px] lg:max-w-[240px] md:table-cell">
-                  <span
-                    className={`block truncate text-xs ${
-                      isLocationMissing
-                        ? "italic text-[var(--muted-foreground)]"
-                        : "font-medium text-[var(--foreground)]"
-                    }`}
-                    title={locationText}
-                  >
-                    {locationText}
-                  </span>
-                  {areaName ? (
+                <DataTableCell className="hidden md:table-cell md:w-[20%] md:max-w-0">
+                  <div className="min-w-0">
                     <span
-                      title={cleanSimulationText(areaName)}
-                      className="mt-0.5 block truncate text-[11px] text-[var(--muted-foreground)]"
+                      className={`block truncate text-xs ${
+                        isLocationMissing
+                          ? "italic text-[var(--muted-foreground)]"
+                          : "font-medium text-[var(--foreground)]"
+                      }`}
+                      title={locationText}
                     >
-                      {cleanSimulationText(areaName)}
+                      {locationText}
                     </span>
-                  ) : null}
+                    {areaName ? (
+                      <span
+                        title={cleanSimulationText(areaName)}
+                        className="mt-0.5 block truncate text-[11px] text-[var(--muted-foreground)]"
+                      >
+                        {cleanSimulationText(areaName)}
+                      </span>
+                    ) : null}
+                  </div>
                 </DataTableCell>
 
                 {/* Kolom 4: Dikirim / Menunggu */}
@@ -277,7 +277,7 @@ export function ReportTable({
                 </DataTableCell>
 
                 {/* Kolom 6: Foto */}
-                <DataTableCell className="hidden whitespace-nowrap md:table-cell">
+                <DataTableCell className="hidden whitespace-nowrap lg:table-cell">
                   <PhotoLightboxButton
                     count={photoCount}
                     fetchUrl={`/api/v1/reports/${report.id}/photos`}
@@ -288,10 +288,10 @@ export function ReportTable({
                 </DataTableCell>
 
                 {/* Kolom 7: Tindakan */}
-                <DataTableCell className="w-[110px] whitespace-nowrap text-right pr-4 sm:pr-6">
+                <DataTableCell className="w-[96px] whitespace-nowrap text-right pr-3 sm:pr-4">
                   <Link
                     href={action.href}
-                    className="inline-flex min-h-8 w-[92px] items-center justify-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--primary)] px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-white shadow-2xs transition hover:bg-[var(--primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+                    className="inline-flex min-h-8 w-[86px] items-center justify-center gap-1 rounded-[var(--radius-control)] bg-[var(--primary)] px-2 py-1 text-xs font-semibold whitespace-nowrap text-white shadow-2xs transition hover:bg-[var(--primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
                   >
                     <span>{action.label}</span>
                     <ArrowRight

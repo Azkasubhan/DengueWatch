@@ -60,7 +60,7 @@ export function DataTableHeadCell({
   return (
     <th
       scope="col"
-      className={`px-3 py-2.5 font-bold whitespace-nowrap sm:px-4 ${alignClass} ${className}`}
+      className={`px-2.5 py-2.5 font-bold whitespace-nowrap sm:px-3 ${alignClass} ${className}`}
       {...props}
     >
       {children}
@@ -108,7 +108,7 @@ export function DataTableCell({
         : "text-left";
   return (
     <td
-      className={`px-3 py-3 align-middle sm:px-4 sm:py-3.5 ${alignClass} ${className}`}
+      className={`px-2.5 py-3 align-middle sm:px-3 sm:py-3.5 ${alignClass} ${className}`}
       {...props}
     >
       {children}
@@ -118,7 +118,7 @@ export function DataTableCell({
 
 export function RowNumberHeader() {
   return (
-    <DataTableHeadCell align="left" className="w-12 pl-3.5 sm:pl-4">
+    <DataTableHeadCell align="left" className="w-10 pl-3 pr-1.5 sm:pl-3.5">
       No.
     </DataTableHeadCell>
   );
@@ -128,7 +128,7 @@ export function RowNumberCell({ number }: { number: number }) {
   return (
     <DataTableCell
       align="left"
-      className="w-12 pl-3.5 whitespace-nowrap sm:pl-4"
+      className="w-10 pl-3 pr-1.5 whitespace-nowrap sm:pl-3.5"
     >
       <span className="inline-flex size-6 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--background)] font-mono text-xs font-bold tabular-nums text-[var(--foreground)]">
         {number}

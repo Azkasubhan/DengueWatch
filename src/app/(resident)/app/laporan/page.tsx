@@ -74,57 +74,6 @@ export default async function MyReportsPage({
   const area = getVerifiedAreas(access.context, "resident")[0];
   const hasActiveFilter = Boolean(status || q || sort !== "newest");
 
-  const statusTabs: {
-    key: ReportStatus | "all";
-    label: string;
-    count: number;
-  }[] = [
-    { key: "all", label: "Semua", count: statusCounts.all },
-    {
-      key: "needs_information",
-      label: reportStatusLabels.needs_information,
-      count: statusCounts.needs_information,
-    },
-    {
-      key: "pending_verification",
-      label: reportStatusLabels.pending_verification,
-      count: statusCounts.pending_verification,
-    },
-    {
-      key: "verified",
-      label: reportStatusLabels.verified,
-      count: statusCounts.verified,
-    },
-    {
-      key: "in_action",
-      label: reportStatusLabels.in_action,
-      count: statusCounts.in_action,
-    },
-    {
-      key: "resolved",
-      label: reportStatusLabels.resolved,
-      count: statusCounts.resolved,
-    },
-    ...(statusCounts.rejected > 0 || status === "rejected"
-      ? [
-          {
-            key: "rejected" as const,
-            label: reportStatusLabels.rejected,
-            count: statusCounts.rejected,
-          },
-        ]
-      : []),
-    ...(statusCounts.duplicate > 0 || status === "duplicate"
-      ? [
-          {
-            key: "duplicate" as const,
-            label: reportStatusLabels.duplicate,
-            count: statusCounts.duplicate,
-          },
-        ]
-      : []),
-  ];
-
   return (
     <AppShell
       area={area}
@@ -143,43 +92,6 @@ export default async function MyReportsPage({
           ) : null
         }
       />
-
-      {/* Ringkasan status ringkas melalui filter tab dengan jumlah item yang sinkron */}
-      <nav
-        aria-label="Filter status cepat"
-        className="mb-3 flex flex-wrap items-center gap-1.5"
-      >
-        {statusTabs.map((tab) => {
-          const isActive = tab.key === "all" ? !status : status === tab.key;
-          return (
-            <Link
-              key={tab.key}
-              href={buildQuery({
-                status: tab.key === "all" ? undefined : tab.key,
-                q,
-                sort,
-              })}
-              aria-current={isActive ? "page" : undefined}
-              className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                isActive
-                  ? "border-[var(--primary)] bg-[var(--primary)] text-white"
-                  : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:border-[var(--primary)]"
-              }`}
-            >
-              <span>{tab.label}</span>
-              <span
-                className={`rounded-full px-1.5 py-0.2 text-[11px] tabular-nums ${
-                  isActive
-                    ? "bg-white/20 text-white"
-                    : "bg-[var(--background)] text-[var(--muted-foreground)]"
-                }`}
-              >
-                {tab.count}
-              </span>
-            </Link>
-          );
-        })}
-      </nav>
 
       {/* Filter & pencarian server-side yang ringkas */}
       <form

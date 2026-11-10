@@ -8,15 +8,13 @@ const groups = [
     title: "Jelajahi",
     links: [
       { href: "/#cara-kerja", label: "Cara kerja" },
-      { href: "/#pencegahan", label: "Pencegahan" },
+      { href: "/#temuan", label: "Jenis temuan" },
       { href: "/#peran", label: "Peran" },
-      { href: "/#tim", label: "Tim" },
     ],
   },
   {
     title: "Bantuan",
     links: [
-      { href: "/#faq", label: "FAQ" },
       { href: "/kebijakan-privasi", label: "Kebijakan privasi" },
       { href: "/syarat-layanan", label: "Syarat layanan" },
       { href: "/login", label: "Masuk" },

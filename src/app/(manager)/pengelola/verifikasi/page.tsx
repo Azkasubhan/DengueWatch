@@ -11,10 +11,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { decidePortalAccess, getVerifiedAreas } from "@/features/areas/access";
 import { ReportTable } from "@/features/reports/components/ReportListItem";
-import {
-  getVerificationQueueCounts,
-  listReportRows,
-} from "@/features/reports/data";
+import { listReportRows } from "@/features/reports/data";
 import {
   reportCategoryLabels,
   reportListQuerySchema,
@@ -71,10 +68,18 @@ export default async function VerificationQueuePage({
     const value = params[key];
     if (typeof value === "string" && value.trim()) values[key] = value.trim();
   }
-  const activeTab = values.tab;
-  const selectedStatus =
-    activeTab === "needs_task" ? "verified" : (values.status ?? queueStatus);
-  const query: Record<string, string> = { ...values, status: selectedStatus };
+  const isNeedsTask =
+    values.tab === "needs_task" || values.status === "needs_task";
+  const selectedStatus = isNeedsTask
+    ? "needs_task"
+    : (values.status ?? queueStatus);
+  const queryStatus = isNeedsTask ? "verified" : selectedStatus;
+  const query: Record<string, string> = {
+    ...values,
+    status: queryStatus,
+    ...(isNeedsTask ? { tab: "needs_task" } : {}),
+  };
+  if (!isNeedsTask) delete query.tab;
   if (query.status === "all") delete query.status;
   const parsed = reportListQuerySchema.safeParse({
     ...query,
@@ -83,9 +88,9 @@ export default async function VerificationQueuePage({
   const areaAllowed =
     !values.areaId || areas.some((area) => area.id === values.areaId);
 
-  const [result, queueCounts] = await Promise.all([
+  const result =
     parsed.success && areaAllowed
-      ? listReportRows(parsed.data.page, pageSize, {
+      ? await listReportRows(parsed.data.page, pageSize, {
           category: parsed.data.category,
           status: parsed.data.status,
           areaId: parsed.data.areaId,
@@ -95,15 +100,7 @@ export default async function VerificationQueuePage({
           sort: parsed.data.sort,
           tab: parsed.data.tab,
         })
-      : Promise.resolve(null),
-    areaAllowed
-      ? getVerificationQueueCounts(values.areaId)
-      : Promise.resolve({
-          pendingVerification: 0,
-          needsInformation: 0,
-          needsTask: 0,
-        }),
-  ]);
+      : null;
 
   const page = parsed.success ? parsed.data.page : 1;
   const total = result?.count ?? 0;
@@ -113,20 +110,8 @@ export default async function VerificationQueuePage({
       status: selectedStatus,
       page: String(target),
     });
+    if (!isNeedsTask) search.delete("tab");
     return `/pengelola/verifikasi?${search.toString()}`;
-  };
-  const tabHref = (overrides: Record<string, string | undefined>) => {
-    const next = new URLSearchParams();
-    const merged: Record<string, string | undefined> = {
-      ...values,
-      ...overrides,
-    };
-    delete merged.page;
-    for (const [k, v] of Object.entries(merged)) {
-      if (v && v.trim()) next.set(k, v);
-    }
-    const qs = next.toString();
-    return qs ? `/pengelola/verifikasi?${qs}` : "/pengelola/verifikasi";
   };
   const areaNameMap = new Map(
     areas.map((area) => [area.id, cleanSimulationText(area.name)]),
@@ -145,75 +130,12 @@ export default async function VerificationQueuePage({
         description="Periksa temuan lingkungan dari warga, minta keterangan tambahan, atau tugaskan kader pada laporan terverifikasi."
       />
 
-      {/* Tab pemisah antrean operasional */}
-      <div
-        className="mb-4 flex flex-wrap items-center gap-2"
-        role="group"
-        aria-label="Kategori antrean verifikasi"
-      >
-        <Link
-          href={tabHref({ status: undefined, tab: undefined })}
-          className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
-            selectedStatus === queueStatus && activeTab !== "needs_task"
-              ? "border-[var(--primary)] bg-[var(--primary)] text-white"
-              : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:border-[var(--primary)]"
-          }`}
-        >
-          Semua antrean (
-          {queueCounts.pendingVerification + queueCounts.needsInformation})
-        </Link>
-        <Link
-          href={tabHref({ status: "pending_verification", tab: undefined })}
-          className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
-            selectedStatus === "pending_verification" &&
-            activeTab !== "needs_task"
-              ? "border-[var(--primary)] bg-[var(--primary)] text-white"
-              : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:border-[var(--primary)]"
-          }`}
-        >
-          Menunggu keputusan pengelola ({queueCounts.pendingVerification})
-        </Link>
-        <Link
-          href={tabHref({ status: "needs_information", tab: undefined })}
-          className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
-            selectedStatus === "needs_information" && activeTab !== "needs_task"
-              ? "border-[var(--primary)] bg-[var(--primary)] text-white"
-              : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:border-[var(--primary)]"
-          }`}
-        >
-          Menunggu informasi warga ({queueCounts.needsInformation})
-        </Link>
-        <Link
-          href={tabHref({ status: "verified", tab: "needs_task" })}
-          className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
-            activeTab === "needs_task"
-              ? "border-[var(--primary)] bg-[var(--primary)] text-white"
-              : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:border-[var(--primary)]"
-          }`}
-        >
-          Perlu penugasan kader ({queueCounts.needsTask})
-        </Link>
-        <Link
-          href={tabHref({ status: "all", tab: undefined })}
-          className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
-            selectedStatus === "all" && activeTab !== "needs_task"
-              ? "border-[var(--primary)] bg-[var(--primary)] text-white"
-              : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:border-[var(--primary)]"
-          }`}
-        >
-          Semua status
-        </Link>
-      </div>
-
       <form
         action="/pengelola/verifikasi"
         method="get"
         aria-label="Filter antrean"
         className="mb-4 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-3.5"
       >
-        {activeTab === "needs_task" ? (
-          <input type="hidden" name="tab" value="needs_task" />
-        ) : null}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
           <div className="grid gap-1 lg:col-span-5">
             <label
@@ -251,6 +173,7 @@ export default async function VerificationQueuePage({
               size="sm"
               options={[
                 { value: queueStatus, label: "Perlu pemeriksaan" },
+                { value: "needs_task", label: "Perlu penugasan kader" },
                 ...Object.entries(reportStatusLabels).map(([value, label]) => ({
                   value,
                   label,

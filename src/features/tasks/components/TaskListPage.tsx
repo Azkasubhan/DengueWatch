@@ -1,11 +1,5 @@
 import Link from "next/link";
-import {
-  AlertTriangle,
-  ArrowRight,
-  CalendarClock,
-  ListChecks,
-  Search,
-} from "lucide-react";
+import { ArrowRight, ListChecks, Search } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import {
@@ -145,7 +139,7 @@ export function CadreTaskTable({
                 <RowNumberCell number={rowNumber} />
 
                 {/* 2. Tugas */}
-                <DataTableCell className="max-w-[240px] sm:max-w-[280px]">
+                <DataTableCell className="max-w-[180px] md:w-[28%] md:max-w-0">
                   <div className="min-w-0">
                     <Link
                       href={href}
@@ -236,7 +230,7 @@ export function CadreTaskTable({
                 </DataTableCell>
 
                 {/* 3. Lokasi */}
-                <DataTableCell className="hidden max-w-[200px] lg:max-w-[240px] md:table-cell">
+                <DataTableCell className="hidden md:table-cell md:w-[22%] md:max-w-0">
                   {locationNote ? (
                     <span
                       title={locationNote}
@@ -349,8 +343,20 @@ export async function TaskListPage({
     const value = params[key];
     if (typeof value === "string" && value.trim()) values[key] = value.trim();
   }
-  const selectedStatus = values.status ?? openStatus;
-  const query: Record<string, string> = { ...values, status: selectedStatus };
+  const isNeedsReview =
+    values.needsReview === "1" ||
+    values.needsReview === "true" ||
+    values.status === "needs_review";
+  const selectedStatus = isNeedsReview
+    ? "needs_review"
+    : (values.status ?? openStatus);
+  const queryStatus = isNeedsReview ? openStatus : selectedStatus;
+  const query: Record<string, string> = {
+    ...values,
+    status: queryStatus,
+    ...(isNeedsReview ? { needsReview: "1" } : {}),
+  };
+  if (!isNeedsReview) delete query.needsReview;
   if (query.status === "all") delete query.status;
   const parsed = taskListQuerySchema.safeParse({
     ...query,
@@ -381,115 +387,22 @@ export async function TaskListPage({
       : null;
   const page = parsed.success ? parsed.data.page : 1;
   const total = result?.count ?? 0;
-  const pageHref = (target: number) =>
-    `${basePath}?${new URLSearchParams({ ...values, status: selectedStatus, page: String(target) })}`;
-  const quickFilterHref = (overrides: Record<string, string | undefined>) => {
-    const next = new URLSearchParams();
-    const merged: Record<string, string | undefined> = {
+  const pageHref = (target: number) => {
+    const search = new URLSearchParams({
       ...values,
       status: selectedStatus,
-      ...overrides,
-    };
-    delete merged.page;
-    for (const [k, v] of Object.entries(merged)) {
-      if (v && v.trim()) next.set(k, v);
-    }
-    const qs = next.toString();
-    return qs ? `${basePath}?${qs}` : basePath;
+      page: String(target),
+    });
+    if (!isNeedsReview) search.delete("needsReview");
+    return `${basePath}?${search.toString()}`;
   };
   const areaName = (id: string) =>
     cleanSimulationText(
       areas.find((area) => area.id === id)?.name ?? "Wilayah",
     );
 
-  const isOverdueActive = values.due === "overdue";
-  const isDueSoonActive = values.due === "due_soon";
-  const isNeedsReviewActive =
-    values.needsReview === "1" || values.needsReview === "true";
-
   return (
     <>
-      {/* Quick Filter Pills */}
-      <div
-        className="mb-3 flex flex-wrap items-center gap-2"
-        role="group"
-        aria-label="Filter cepat tugas"
-      >
-        <Link
-          href={basePath}
-          className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
-            selectedStatus === openStatus &&
-            !isOverdueActive &&
-            !isDueSoonActive &&
-            !isNeedsReviewActive
-              ? "border-[var(--primary)] bg-[var(--primary)] text-white"
-              : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:border-[var(--primary)]"
-          }`}
-        >
-          Tugas aktif
-        </Link>
-        {showAssignees ? (
-          <Link
-            href={quickFilterHref({
-              status: openStatus,
-              needsReview: isNeedsReviewActive ? undefined : "1",
-              due: undefined,
-            })}
-            className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
-              isNeedsReviewActive
-                ? "border-[var(--primary)] bg-[var(--primary)] text-white"
-                : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:border-[var(--primary)]"
-            }`}
-          >
-            <AlertTriangle aria-hidden="true" className="size-3.5" />
-            Bukti perlu diperiksa
-          </Link>
-        ) : null}
-        <Link
-          href={quickFilterHref({
-            status: openStatus,
-            due: isOverdueActive ? undefined : "overdue",
-            needsReview: undefined,
-          })}
-          className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
-            isOverdueActive
-              ? "border-[var(--primary)] bg-[var(--primary)] text-white"
-              : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:border-[var(--primary)]"
-          }`}
-        >
-          <CalendarClock aria-hidden="true" className="size-3.5" />
-          Melewati tenggat
-        </Link>
-        <Link
-          href={quickFilterHref({
-            status: openStatus,
-            due: isDueSoonActive ? undefined : "due_soon",
-            needsReview: undefined,
-          })}
-          className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
-            isDueSoonActive
-              ? "border-[var(--primary)] bg-[var(--primary)] text-white"
-              : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:border-[var(--primary)]"
-          }`}
-        >
-          Mendekati tenggat
-        </Link>
-        <Link
-          href={quickFilterHref({
-            status: "all",
-            due: undefined,
-            needsReview: undefined,
-          })}
-          className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
-            selectedStatus === "all"
-              ? "border-[var(--primary)] bg-[var(--primary)] text-white"
-              : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:border-[var(--primary)]"
-          }`}
-        >
-          Semua status
-        </Link>
-      </div>
-
       <form
         action={basePath}
         method="get"
@@ -529,6 +442,9 @@ export async function TaskListPage({
             size="sm"
             options={[
               { value: openStatus, label: "Belum selesai" },
+              ...(showAssignees
+                ? [{ value: "needs_review", label: "Bukti perlu diperiksa" }]
+                : []),
               ...Object.entries(taskStatusLabels).map(([value, label]) => ({
                 value,
                 label,
@@ -641,19 +557,16 @@ export async function TaskListPage({
                   <DataTableHeadCell className="hidden md:table-cell">
                     Lokasi
                   </DataTableHeadCell>
-                  <DataTableHeadCell className="hidden lg:table-cell">
-                    Kader
+                  <DataTableHeadCell className="hidden md:table-cell">
+                    Kader & Bukti
                   </DataTableHeadCell>
                   <DataTableHeadCell className="hidden lg:table-cell">
                     Tenggat
                   </DataTableHeadCell>
-                  <DataTableHeadCell className="hidden md:table-cell">
-                    Progres bukti
-                  </DataTableHeadCell>
                   <DataTableHeadCell className="hidden sm:table-cell">
                     Status
                   </DataTableHeadCell>
-                  <DataTableHeadCell className="w-[110px] whitespace-nowrap text-right pr-4 sm:pr-6">
+                  <DataTableHeadCell className="w-[104px] whitespace-nowrap text-right pr-3.5 sm:pr-5">
                     Tindakan
                   </DataTableHeadCell>
                 </DataTableHeader>
@@ -677,7 +590,7 @@ export async function TaskListPage({
                         <RowNumberCell number={rowNumber} />
 
                         {/* 2. Tugas */}
-                        <DataTableCell className="max-w-[240px] sm:max-w-[280px]">
+                        <DataTableCell className="max-w-[180px] md:w-[25%] md:max-w-0">
                           <div className="min-w-0">
                             <Link
                               href={href}
@@ -770,32 +683,46 @@ export async function TaskListPage({
                         </DataTableCell>
 
                         {/* 3. Lokasi */}
-                        <DataTableCell className="hidden max-w-[200px] lg:max-w-[240px] md:table-cell">
-                          {locationNote ? (
-                            <span
-                              title={locationNote}
-                              className="block truncate text-xs text-[var(--foreground)]"
-                            >
-                              {locationNote}
-                            </span>
-                          ) : (
-                            <span className="block truncate text-xs italic text-[var(--muted-foreground)]">
-                              Belum dicantumkan
-                            </span>
-                          )}
-                          {areas.length > 1 ? (
-                            <span
-                              title={areaName(task.areaId)}
-                              className="mt-0.5 block truncate text-[11px] text-[var(--muted-foreground)]"
-                            >
-                              {areaName(task.areaId)}
-                            </span>
-                          ) : null}
+                        <DataTableCell className="hidden md:table-cell md:w-[18%] md:max-w-0">
+                          <div className="min-w-0">
+                            {locationNote ? (
+                              <span
+                                title={locationNote}
+                                className="block truncate text-xs text-[var(--foreground)]"
+                              >
+                                {locationNote}
+                              </span>
+                            ) : (
+                              <span className="block truncate text-xs italic text-[var(--muted-foreground)]">
+                                Belum dicantumkan
+                              </span>
+                            )}
+                            {areas.length > 1 ? (
+                              <span
+                                title={areaName(task.areaId)}
+                                className="mt-0.5 block truncate text-[11px] text-[var(--muted-foreground)]"
+                              >
+                                {areaName(task.areaId)}
+                              </span>
+                            ) : null}
+                          </div>
                         </DataTableCell>
 
-                        {/* 4. Kader */}
-                        <DataTableCell className="hidden max-w-[200px] lg:table-cell">
-                          <AssigneeListSummary names={assignedNames} />
+                        {/* 4. Kader & Progres Bukti */}
+                        <DataTableCell className="hidden md:table-cell md:w-[17%] md:max-w-0">
+                          <div className="min-w-0">
+                            <AssigneeListSummary names={assignedNames} />
+                            <p className="mt-0.5 truncate text-[11px] font-medium text-[var(--muted-foreground)]">
+                              {task.approvedAssigneeCount}/{task.assigneeCount}{" "}
+                              disetujui
+                              {task.pendingEvidenceCount > 0 ? (
+                                <span className="font-semibold text-[var(--warning)]">
+                                  {" "}
+                                  · {task.pendingEvidenceCount} tinjau
+                                </span>
+                              ) : null}
+                            </p>
+                          </div>
                         </DataTableCell>
 
                         {/* 5. Tenggat */}
@@ -818,33 +745,18 @@ export async function TaskListPage({
                           </div>
                         </DataTableCell>
 
-                        {/* 6. Progres bukti */}
-                        <DataTableCell className="hidden whitespace-nowrap md:table-cell">
-                          <div className="flex flex-col items-start gap-1">
-                            <span className="text-xs font-semibold text-[var(--foreground)]">
-                              {task.approvedAssigneeCount}/{task.assigneeCount}{" "}
-                              disetujui
-                            </span>
-                            {task.pendingEvidenceCount > 0 ? (
-                              <span className="rounded bg-[var(--warning-subtle)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--warning)]">
-                                {task.pendingEvidenceCount} menunggu tinjau
-                              </span>
-                            ) : null}
-                          </div>
-                        </DataTableCell>
-
-                        {/* 7. Status */}
+                        {/* 6. Status */}
                         <DataTableCell className="hidden whitespace-nowrap sm:table-cell">
                           <StatusBadge tone={taskStatusTone[task.status]}>
                             {taskStatusLabels[task.status]}
                           </StatusBadge>
                         </DataTableCell>
 
-                        {/* 8. Tindakan */}
-                        <DataTableCell className="w-[110px] whitespace-nowrap text-right pr-4 sm:pr-6">
+                        {/* 7. Tindakan */}
+                        <DataTableCell className="w-[104px] whitespace-nowrap text-right pr-3.5 sm:pr-5">
                           <Link
                             href={href}
-                            className="inline-flex min-h-8 w-[92px] items-center justify-center gap-1 rounded-[var(--radius-control)] bg-[var(--primary)] px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-white shadow-2xs transition hover:bg-[var(--primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+                            className="inline-flex min-h-8 w-[88px] items-center justify-center gap-1 rounded-[var(--radius-control)] bg-[var(--primary)] px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-white shadow-2xs transition hover:bg-[var(--primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
                           >
                             <span>{actionLabel}</span>
                             <ArrowRight

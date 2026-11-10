@@ -14,8 +14,7 @@ import {
 import { decidePortalAccess, getVerifiedAreas } from "@/features/areas/access";
 import {
   formatJakarta,
-  ReportFactsCard,
-  ReportPhotos,
+  ReportOverviewCard,
   ReportTimeline,
 } from "@/features/reports/components/ReportDetailView";
 import { ReviewDecisionForm } from "@/features/reports/components/ReviewDecisionForm";
@@ -159,130 +158,130 @@ export default async function VerificationDetailPage({
           </>
         }
       />
-      <div className="grid gap-7 lg:grid-cols-12 lg:items-start">
-        <div className="grid min-w-0 gap-6 lg:col-span-5">
-          <ReportPhotos images={detail.images.data} />
-        </div>
-        <div className="grid min-w-0 gap-6 lg:col-span-7">
-          {saved ? (
+
+      <div className="grid gap-5">
+        {saved ? (
+          <div>
+            <Alert title="Keputusan tersimpan">
+              Status terbaru: {reportStatusLabels[report.status]}.
+            </Alert>
+          </div>
+        ) : null}
+
+        {suggestion && aiUsed ? (
+          <p className="rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-xs text-[var(--muted-foreground)]">
+            <strong className="font-semibold text-[var(--foreground)]">
+              Diisi dengan bantuan AI
+              {aiUnchanged ? " · tidak diubah warga" : ""}
+            </strong>{" "}
+            — Analisis {formatJakarta(suggestion.analyzed_at)} WIB. Cocokkan
+            dengan foto sebelum memutuskan.
+          </p>
+        ) : null}
+
+        <ReportOverviewCard report={report} images={detail.images.data} />
+
+        {report.duplicateOfReportId ? (
+          <p className="text-sm">
+            Duplikat dari{" "}
+            <Link
+              href={`/pengelola/verifikasi/${report.duplicateOfReportId}`}
+              className="font-semibold text-[var(--primary)] underline underline-offset-2"
+            >
+              laporan rujukan
+            </Link>
+          </p>
+        ) : null}
+
+        {pending ? (
+          candidates?.error ? (
             <div>
-              <Alert title="Keputusan tersimpan">
-                Status terbaru: {reportStatusLabels[report.status]}.
+              <Alert variant="error" title="Form keputusan belum tersedia">
+                Muat ulang halaman untuk mencoba lagi.
               </Alert>
             </div>
-          ) : null}
-          {suggestion && aiUsed ? (
-            <p className="rounded-[var(--radius-control)] bg-[var(--info-subtle)] p-4 text-sm">
-              <span className="font-semibold">
-                Diisi dengan bantuan AI
-                {aiUnchanged ? " · tidak diubah warga" : ""}
-              </span>
-              <span className="block text-[var(--muted-foreground)]">
-                Analisis {formatJakarta(suggestion.analyzed_at)} WIB. Isian AI
-                bukan diagnosis; cocokkan dengan foto sebelum memutuskan.
-              </span>
-            </p>
-          ) : null}
-          <ReportFactsCard report={report} />
-          {report.duplicateOfReportId ? (
-            <p>
-              Duplikat dari{" "}
-              <Link
-                href={`/pengelola/verifikasi/${report.duplicateOfReportId}`}
-                className="font-semibold text-[var(--primary)] underline underline-offset-2"
-              >
-                laporan rujukan
-              </Link>
-            </p>
-          ) : null}
-          {pending ? (
-            candidates?.error ? (
-              <div>
-                <Alert variant="error" title="Form keputusan belum tersedia">
-                  Muat ulang halaman untuk mencoba lagi.
-                </Alert>
-              </div>
-            ) : (
-              <ReviewDecisionForm
-                reportId={report.id}
-                expectedVersion={report.version}
-                candidates={(candidates?.data ?? []).map((item) => ({
-                  id: item.id,
-                  label: `${item.publicReference} · ${reportCategoryLabels[item.category]} · ${formatJakarta(item.submittedAt, false)}`,
-                }))}
-              />
-            )
           ) : (
-            <p className="rounded-[var(--radius-control)] bg-[var(--primary-subtle)] p-4">
-              {decidedNotes[report.status] ?? "Laporan sudah diputuskan."}
-            </p>
-          )}
-          {actionable ? (
-            <section aria-labelledby="tasks-title" className={cardClass}>
-              <h2 id="tasks-title" className="text-lg font-bold">
-                Tugas tindak lanjut
-              </h2>
-              {tasks?.error ? (
-                <p role="alert" className="mt-3 text-[var(--danger)]">
-                  Daftar tugas belum dapat dimuat.
-                </p>
-              ) : !tasks?.data?.length ? (
-                <p className="mt-3 text-[var(--muted-foreground)]">
-                  Belum ada tugas untuk laporan ini.
-                </p>
-              ) : (
-                <ul className="mt-3 divide-y divide-[var(--border)] overflow-hidden rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)]">
-                  {tasks.data.map((task, index) => (
-                    <li key={task.id}>
-                      <Link
-                        href={`/pengelola/tugas/${task.id}`}
-                        className="flex items-center justify-between gap-3 px-3.5 py-3 transition hover:bg-[var(--background)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--primary)]"
-                      >
-                        <span className="flex min-w-0 flex-1 items-center gap-3">
-                          <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--background)] font-mono text-xs font-bold tabular-nums text-[var(--foreground)]">
-                            {index + 1}
+            <ReviewDecisionForm
+              reportId={report.id}
+              expectedVersion={report.version}
+              candidates={(candidates?.data ?? []).map((item) => ({
+                id: item.id,
+                label: `${item.publicReference} · ${reportCategoryLabels[item.category]} · ${formatJakarta(item.submittedAt, false)}`,
+              }))}
+            />
+          )
+        ) : (
+          <p className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
+            {decidedNotes[report.status] ?? "Laporan sudah diputuskan."}
+          </p>
+        )}
+
+        {actionable ? (
+          <section aria-labelledby="tasks-title" className={cardClass}>
+            <h2 id="tasks-title" className="text-lg font-bold">
+              Tugas tindak lanjut
+            </h2>
+            {tasks?.error ? (
+              <p role="alert" className="mt-3 text-[var(--danger)]">
+                Daftar tugas belum dapat dimuat.
+              </p>
+            ) : !tasks?.data?.length ? (
+              <p className="mt-3 text-[var(--muted-foreground)]">
+                Belum ada tugas untuk laporan ini.
+              </p>
+            ) : (
+              <ul className="mt-3 divide-y divide-[var(--border)] overflow-hidden rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)]">
+                {tasks.data.map((task, index) => (
+                  <li key={task.id}>
+                    <Link
+                      href={`/pengelola/tugas/${task.id}`}
+                      className="flex items-center justify-between gap-3 px-3.5 py-3 transition hover:bg-[var(--background)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--primary)]"
+                    >
+                      <span className="flex min-w-0 flex-1 items-center gap-3">
+                        <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--background)] font-mono text-xs font-bold tabular-nums text-[var(--foreground)]">
+                          {index + 1}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span
+                            title={task.title}
+                            className="block truncate font-semibold text-[var(--foreground)]"
+                          >
+                            {task.title}
+                            {task.isMandatory ? "" : " (opsional)"}
                           </span>
-                          <span className="min-w-0 flex-1">
-                            <span
-                              title={task.title}
-                              className="block truncate font-semibold text-[var(--foreground)]"
-                            >
-                              {task.title}
-                              {task.isMandatory ? "" : " (opsional)"}
-                            </span>
-                            <span className="block truncate text-xs text-[var(--muted-foreground)]">
-                              {assignees.data.get(task.id)?.join(", ") ??
-                                "Kader belum dapat dimuat"}
-                            </span>
+                          <span className="block truncate text-xs text-[var(--muted-foreground)]">
+                            {assignees.data.get(task.id)?.join(", ") ??
+                              "Kader belum dapat dimuat"}
                           </span>
                         </span>
-                        <StatusBadge tone={taskStatusTone[task.status]}>
-                          {taskStatusLabels[task.status]}
-                        </StatusBadge>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {!canAssign ? (
-                <p className="mt-4 rounded-[var(--radius-control)] bg-[var(--primary-subtle)] p-4">
-                  Laporan sudah tuntas. Buka kembali tugas yang selesai bila
-                  masalah muncul lagi.
-                </p>
-              ) : cadres?.error ? (
-                <p role="alert" className="mt-4 text-[var(--danger)]">
-                  Daftar kader belum dapat dimuat. Muat ulang halaman.
-                </p>
-              ) : (
-                <CreateTaskForm
-                  reportId={report.id}
-                  cadres={cadres?.data ?? []}
-                />
-              )}
-            </section>
-          ) : null}
-          <ReportTimeline events={detail.events.data} />
-        </div>
+                      </span>
+                      <StatusBadge tone={taskStatusTone[task.status]}>
+                        {taskStatusLabels[task.status]}
+                      </StatusBadge>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {!canAssign ? (
+              <p className="mt-4 rounded-[var(--radius-control)] bg-[var(--primary-subtle)] p-4">
+                Laporan sudah tuntas. Buka kembali tugas yang selesai bila
+                masalah muncul lagi.
+              </p>
+            ) : cadres?.error ? (
+              <p role="alert" className="mt-4 text-[var(--danger)]">
+                Daftar kader belum dapat dimuat. Muat ulang halaman.
+              </p>
+            ) : (
+              <CreateTaskForm
+                reportId={report.id}
+                cadres={cadres?.data ?? []}
+              />
+            )}
+          </section>
+        ) : null}
+
+        <ReportTimeline events={detail.events.data} />
       </div>
     </>,
     areas.find((area) => area.id === report.areaId),

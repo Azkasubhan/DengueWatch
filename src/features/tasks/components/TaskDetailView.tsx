@@ -87,242 +87,263 @@ export function TaskDetailView({
           </>
         }
       />
-      <div className="grid gap-7 lg:grid-cols-12 lg:items-start">
-        <div className="grid min-w-0 gap-6 lg:col-span-5">{report}</div>
-        <div className="grid min-w-0 gap-6 lg:col-span-7">
-          <dl className={`grid gap-5 sm:grid-cols-2 ${cardClass}`}>
-            <div className="sm:col-span-2">
-              <dt className="text-sm font-semibold">Deskripsi</dt>
-              <dd className="mt-1 whitespace-pre-wrap break-words">
+      <div className="grid min-w-0 gap-5">
+        <section
+          aria-label="Ringkasan penugasan"
+          className={`${cardClass} grid min-w-0 gap-5 lg:grid-cols-12`}
+        >
+          <dl className="grid min-w-0 content-between gap-4 lg:col-span-7">
+            <div>
+              <dt className="text-[11px] font-semibold tracking-wider text-[var(--muted-foreground)] uppercase">
+                Deskripsi tindakan
+              </dt>
+              <dd className="mt-1 text-sm leading-relaxed text-[var(--foreground)] whitespace-pre-wrap break-words">
                 {task.description}
               </dd>
             </div>
-            <div className="sm:col-span-2">
-              <dt className="text-sm font-semibold">
-                Kader pelaksana · {approvedCount} dari {task.assignees.length}{" "}
-                bukti disetujui
-              </dt>
-              <dd className="mt-2">
-                <ul className="grid gap-2">
-                  {task.assignees.map((assignee, index) => (
-                    <li
-                      key={index}
-                      className="flex flex-wrap items-center justify-between gap-2"
-                    >
-                      <span className="min-w-0 break-words">
-                        {assignee.name}
-                        {assignee.isMe ? " (Anda)" : ""}
-                      </span>
-                      <StatusBadge tone={progressTone[assignee.evidenceStatus]}>
-                        {progressLabels[assignee.evidenceStatus]}
-                      </StatusBadge>
-                    </li>
-                  ))}
-                </ul>
-              </dd>
-            </div>
-            <div>
-              <dt className="text-sm font-semibold">Tenggat</dt>
-              <dd className="mt-1">
-                {task.dueAt
-                  ? formatJakarta(task.dueAt, false)
-                  : "Tidak ditentukan"}
-              </dd>
-            </div>
-            {/* T28: every new task is mandatory; only legacy tasks can be optional. */}
-            {task.isMandatory ? null : (
+            <div className="grid gap-4 border-t border-[var(--border)] pt-3.5 sm:grid-cols-2">
               <div>
-                <dt className="text-sm font-semibold">Jenis</dt>
-                <dd className="mt-1">Opsional</dd>
-              </div>
-            )}
-            {reportHref ? (
-              <div>
-                <dt className="text-sm font-semibold">Laporan</dt>
-                <dd className="mt-1">
-                  <Link
-                    href={reportHref}
-                    className="font-semibold text-[var(--primary)] underline underline-offset-2"
-                  >
-                    Lihat laporan {task.reportReference}
-                  </Link>
+                <dt className="text-[11px] font-semibold tracking-wider text-[var(--muted-foreground)] uppercase">
+                  Tenggat
+                </dt>
+                <dd className="mt-1 text-sm font-semibold text-[var(--foreground)]">
+                  {task.dueAt
+                    ? formatJakarta(task.dueAt, false)
+                    : "Tidak ditentukan"}
                 </dd>
               </div>
-            ) : null}
+              {/* T28: every new task is mandatory; only legacy tasks can be optional. */}
+              {task.isMandatory ? null : (
+                <div>
+                  <dt className="text-[11px] font-semibold tracking-wider text-[var(--muted-foreground)] uppercase">
+                    Jenis
+                  </dt>
+                  <dd className="mt-1 text-sm font-medium text-[var(--foreground)]">
+                    Opsional
+                  </dd>
+                </div>
+              )}
+              {reportHref ? (
+                <div>
+                  <dt className="text-[11px] font-semibold tracking-wider text-[var(--muted-foreground)] uppercase">
+                    Laporan rujukan
+                  </dt>
+                  <dd className="mt-1 text-sm">
+                    <Link
+                      href={reportHref}
+                      className="font-semibold text-[var(--primary)] underline underline-offset-2"
+                    >
+                      Lihat laporan {task.reportReference}
+                    </Link>
+                  </dd>
+                </div>
+              ) : null}
+            </div>
           </dl>
 
-          <section aria-labelledby="evidence-title" className={cardClass}>
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 id="evidence-title" className="text-base font-bold">
-                Kiriman bukti lapangan
-              </h2>
-              <span className="text-xs text-[var(--muted-foreground)]">
-                {task.evidence.length} kiriman
-              </span>
-            </div>
-            {!task.evidence.length ? (
-              <p className="mt-3 text-sm text-[var(--muted-foreground)]">
-                Belum ada bukti yang dikirim.
-              </p>
-            ) : (
-              <div className="mt-3 w-full max-w-full overflow-x-auto rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)]">
-                <DataTable caption="Daftar kiriman bukti kader">
-                  <DataTableHeader>
-                    <RowNumberHeader />
-                    <DataTableHeadCell>Kader</DataTableHeadCell>
-                    <DataTableHeadCell className="hidden sm:table-cell">
-                      Putaran
-                    </DataTableHeadCell>
-                    <DataTableHeadCell className="hidden md:table-cell">
-                      Waktu
-                    </DataTableHeadCell>
-                    <DataTableHeadCell>Status</DataTableHeadCell>
-                    <DataTableHeadCell>Bukti</DataTableHeadCell>
-                  </DataTableHeader>
-                  <DataTableBody>
-                    {task.evidence.map((item, index) => {
-                      const submitterLabel = item.submittedByMe
-                        ? "Anda"
-                        : cleanSimulationText(item.submitterName);
-                      const cleanDescription = cleanSimulationText(
-                        item.description,
-                      );
-                      const cleanReviewReason = item.reviewReason
-                        ? cleanSimulationText(item.reviewReason)
-                        : null;
-                      return (
-                        <DataTableRow key={item.id}>
-                          {/* 1. No. (PALING KIRI) */}
-                          <RowNumberCell number={index + 1} />
+          <div className="min-w-0 border-t border-[var(--border)] pt-4 lg:col-span-5 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
+            <p className="text-[11px] font-semibold tracking-wider text-[var(--muted-foreground)] uppercase">
+              Kader pelaksana · {approvedCount} dari {task.assignees.length}{" "}
+              bukti disetujui
+            </p>
+            <ul className="mt-2.5 divide-y divide-[var(--border)]">
+              {task.assignees.map((assignee, index) => (
+                <li
+                  key={index}
+                  className="flex flex-wrap items-center justify-between gap-2 py-2 first:pt-0 last:pb-0"
+                >
+                  <span className="min-w-0 text-sm font-medium text-[var(--foreground)] break-words">
+                    {assignee.name}
+                    {assignee.isMe ? " (Anda)" : ""}
+                  </span>
+                  <StatusBadge tone={progressTone[assignee.evidenceStatus]}>
+                    {progressLabels[assignee.evidenceStatus]}
+                  </StatusBadge>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
 
-                          {/* 2. Kader & Keterangan */}
-                          <DataTableCell className="max-w-[220px] sm:max-w-[260px]">
-                            <div className="min-w-0">
+        <div className="min-w-0">{report}</div>
+
+        <section
+          aria-labelledby="evidence-title"
+          className={`${cardClass} min-w-0`}
+        >
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 id="evidence-title" className="text-base font-bold">
+              Kiriman bukti lapangan
+            </h2>
+            <span className="text-xs text-[var(--muted-foreground)]">
+              {task.evidence.length} kiriman
+            </span>
+          </div>
+          {!task.evidence.length ? (
+            <p className="mt-3 text-sm text-[var(--muted-foreground)]">
+              Belum ada bukti yang dikirim.
+            </p>
+          ) : (
+            <div className="mt-3 w-full max-w-full overflow-x-auto rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)]">
+              <DataTable caption="Daftar kiriman bukti kader">
+                <DataTableHeader>
+                  <RowNumberHeader />
+                  <DataTableHeadCell>Kader</DataTableHeadCell>
+                  <DataTableHeadCell className="hidden sm:table-cell">
+                    Putaran
+                  </DataTableHeadCell>
+                  <DataTableHeadCell className="hidden md:table-cell">
+                    Waktu
+                  </DataTableHeadCell>
+                  <DataTableHeadCell>Status</DataTableHeadCell>
+                  <DataTableHeadCell>Bukti</DataTableHeadCell>
+                </DataTableHeader>
+                <DataTableBody>
+                  {task.evidence.map((item, index) => {
+                    const submitterLabel = item.submittedByMe
+                      ? "Anda"
+                      : cleanSimulationText(item.submitterName);
+                    const cleanDescription = cleanSimulationText(
+                      item.description,
+                    );
+                    const cleanReviewReason = item.reviewReason
+                      ? cleanSimulationText(item.reviewReason)
+                      : null;
+                    return (
+                      <DataTableRow key={item.id}>
+                        {/* 1. No. (PALING KIRI) */}
+                        <RowNumberCell number={index + 1} />
+
+                        {/* 2. Kader & Keterangan */}
+                        <DataTableCell className="max-w-[240px] sm:max-w-[320px]">
+                          <div className="min-w-0">
+                            <p
+                              title={submitterLabel}
+                              className="block truncate font-semibold text-[var(--foreground)]"
+                            >
+                              {submitterLabel}
+                            </p>
+                            <p
+                              title={cleanDescription}
+                              className="mt-0.5 block truncate text-xs text-[var(--muted-foreground)]"
+                            >
+                              {cleanDescription}
+                            </p>
+                            {cleanReviewReason ? (
                               <p
-                                title={submitterLabel}
-                                className="block truncate font-semibold text-[var(--foreground)]"
+                                title={cleanReviewReason}
+                                className="mt-1 block truncate rounded bg-[var(--surface-muted)] px-2 py-0.5 text-[11px] font-medium text-[var(--foreground)]"
                               >
-                                {submitterLabel}
+                                Catatan pemeriksa: {cleanReviewReason}
                               </p>
-                              <p
-                                title={cleanDescription}
-                                className="mt-0.5 block truncate text-xs text-[var(--muted-foreground)]"
-                              >
-                                {cleanDescription}
-                              </p>
-                              {cleanReviewReason ? (
-                                <p
-                                  title={cleanReviewReason}
-                                  className="mt-1 block truncate rounded bg-[var(--surface-muted)] px-2 py-0.5 text-[11px] font-medium text-[var(--foreground)]"
-                                >
-                                  Catatan pemeriksa: {cleanReviewReason}
-                                </p>
-                              ) : null}
-                              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--muted-foreground)] md:hidden">
-                                <span>Putaran {item.evidenceRound}</span>
-                                <span>·</span>
-                                <span>{formatJakarta(item.createdAt)} WIB</span>
-                              </div>
+                            ) : null}
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--muted-foreground)] md:hidden">
+                              <span>Putaran {item.evidenceRound}</span>
+                              <span>·</span>
+                              <span>{formatJakarta(item.createdAt)} WIB</span>
                             </div>
-                          </DataTableCell>
+                          </div>
+                        </DataTableCell>
 
-                          {/* 3. Putaran */}
-                          <DataTableCell className="hidden whitespace-nowrap sm:table-cell">
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-xs font-medium text-[var(--foreground)]">
-                                Putaran {item.evidenceRound}
-                              </span>
-                              {!item.currentRound ? (
-                                <span className="text-[11px] text-[var(--muted-foreground)]">
-                                  Sebelum dibuka kembali
-                                </span>
-                              ) : null}
-                            </div>
-                          </DataTableCell>
-
-                          {/* 4. Waktu */}
-                          <DataTableCell className="hidden whitespace-nowrap md:table-cell">
-                            <span className="text-xs text-[var(--muted-foreground)]">
-                              {formatJakarta(item.createdAt)} WIB
+                        {/* 3. Putaran */}
+                        <DataTableCell className="hidden whitespace-nowrap sm:table-cell">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs font-medium text-[var(--foreground)]">
+                              Putaran {item.evidenceRound}
                             </span>
-                          </DataTableCell>
+                            {!item.currentRound ? (
+                              <span className="text-[11px] text-[var(--muted-foreground)]">
+                                Sebelum dibuka kembali
+                              </span>
+                            ) : null}
+                          </div>
+                        </DataTableCell>
 
-                          {/* 5. Status */}
-                          <DataTableCell className="whitespace-nowrap">
-                            <StatusBadge tone={progressTone[item.reviewStatus]}>
-                              {reviewLabels[item.reviewStatus]}
-                            </StatusBadge>
-                          </DataTableCell>
+                        {/* 4. Waktu */}
+                        <DataTableCell className="hidden whitespace-nowrap md:table-cell">
+                          <span className="text-xs text-[var(--muted-foreground)]">
+                            {formatJakarta(item.createdAt)} WIB
+                          </span>
+                        </DataTableCell>
 
-                          {/* 6. Bukti (Lightbox link + accessible sr-only image for E2E) */}
-                          <DataTableCell className="whitespace-nowrap">
-                            <PhotoLightboxButton
-                              count={1}
-                              fetchUrl={`/api/v1/tasks/${task.id}/evidence-photos?evidenceId=${item.id}`}
-                              labelType="bukti"
-                              title={`Bukti #${index + 1} · ${submitterLabel}`}
-                            />
-                            <Image
-                              unoptimized
-                              src={item.url}
-                              alt={`Foto bukti ${index + 1}`}
-                              width={1}
-                              height={1}
-                              className="sr-only"
-                            />
-                          </DataTableCell>
-                        </DataTableRow>
-                      );
-                    })}
-                  </DataTableBody>
-                </DataTable>
-              </div>
-            )}
-          </section>
-          {role === "cadre" &&
-          mine?.evidenceStatus === "revision_required" &&
-          myLatestRevision?.reviewReason ? (
-            <div
-              role="region"
-              aria-label="Catatan perbaikan bukti dari pengelola"
-              className="rounded-[var(--radius-card)] border border-[var(--danger)] bg-[var(--danger-subtle)] p-4"
-            >
-              <p className="text-xs font-bold tracking-wider text-[var(--danger)] uppercase">
-                Perlu Perbaikan Bukti Anda
-              </p>
-              <p className="mt-1 text-sm font-medium text-[var(--foreground)] whitespace-pre-wrap break-words">
-                {myLatestRevision.reviewReason}
-              </p>
+                        {/* 5. Status */}
+                        <DataTableCell className="whitespace-nowrap">
+                          <StatusBadge tone={progressTone[item.reviewStatus]}>
+                            {reviewLabels[item.reviewStatus]}
+                          </StatusBadge>
+                        </DataTableCell>
+
+                        {/* 6. Bukti (Lightbox link + accessible sr-only image for E2E) */}
+                        <DataTableCell className="whitespace-nowrap">
+                          <PhotoLightboxButton
+                            count={1}
+                            fetchUrl={`/api/v1/tasks/${task.id}/evidence-photos?evidenceId=${item.id}`}
+                            labelType="bukti"
+                            title={`Bukti #${index + 1} · ${submitterLabel}`}
+                          />
+                          <Image
+                            unoptimized
+                            src={item.url}
+                            alt={`Foto bukti ${index + 1}`}
+                            width={1}
+                            height={1}
+                            className="sr-only"
+                          />
+                        </DataTableCell>
+                      </DataTableRow>
+                    );
+                  })}
+                </DataTableBody>
+              </DataTable>
             </div>
-          ) : null}
-          <TaskActions
-            role={role}
-            taskId={task.id}
-            status={task.status}
-            version={task.version}
-            myEvidenceStatus={mine?.evidenceStatus ?? null}
-            pendingEvidence={task.evidence
-              .filter((item) => item.reviewStatus === "pending")
-              .map((item) => ({
-                id: item.id,
-                submitterName: item.submitterName,
-              }))}
-          />
-          <Timeline
-            id="task-history-title"
-            title="Riwayat tugas"
-            items={task.events.map((event) => ({
-              id: event.id,
-              label:
-                event.eventType === "task_evidence_approved" &&
-                event.newStatus === "completed"
-                  ? "Bukti semua kader disetujui, tugas selesai"
-                  : (taskEventLabels[event.eventType] ?? "Pembaruan tugas"),
-              reason: event.reason,
-              time: `${formatJakarta(event.createdAt)} WIB`,
+          )}
+        </section>
+
+        {role === "cadre" &&
+        mine?.evidenceStatus === "revision_required" &&
+        myLatestRevision?.reviewReason ? (
+          <div
+            role="region"
+            aria-label="Catatan perbaikan bukti dari pengelola"
+            className="rounded-[var(--radius-card)] border border-[var(--danger)] bg-[var(--danger-subtle)] p-4"
+          >
+            <p className="text-xs font-bold tracking-wider text-[var(--danger)] uppercase">
+              Perlu Perbaikan Bukti Anda
+            </p>
+            <p className="mt-1 text-sm font-medium text-[var(--foreground)] whitespace-pre-wrap break-words">
+              {myLatestRevision.reviewReason}
+            </p>
+          </div>
+        ) : null}
+
+        <TaskActions
+          role={role}
+          taskId={task.id}
+          status={task.status}
+          version={task.version}
+          myEvidenceStatus={mine?.evidenceStatus ?? null}
+          pendingEvidence={task.evidence
+            .filter((item) => item.reviewStatus === "pending")
+            .map((item) => ({
+              id: item.id,
+              submitterName: item.submitterName,
             }))}
-          />
-        </div>
+        />
+
+        <Timeline
+          id="task-history-title"
+          title="Riwayat tugas"
+          items={task.events.map((event) => ({
+            id: event.id,
+            label:
+              event.eventType === "task_evidence_approved" &&
+              event.newStatus === "completed"
+                ? "Bukti semua kader disetujui, tugas selesai"
+                : (taskEventLabels[event.eventType] ?? "Pembaruan tugas"),
+            reason: event.reason,
+            time: `${formatJakarta(event.createdAt)} WIB`,
+          }))}
+        />
       </div>
     </>
   );

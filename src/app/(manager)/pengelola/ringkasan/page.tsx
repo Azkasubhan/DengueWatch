@@ -170,15 +170,12 @@ export default async function ManagerSummaryPage({
   const initialMapMode = mode === "heatmap" ? "heatmap" : "points";
 
   const todayWib = jakartaToday();
-  const from7Days = shiftWibDate(todayWib, -6);
   const from30Days = shiftWibDate(todayWib, -29);
 
   const activeFrom = parsed?.success
     ? parsed.data.from
     : (values.from ?? from30Days);
   const activeTo = parsed?.success ? parsed.data.to : (values.to ?? todayWib);
-  const isPreset7Days = activeFrom === from7Days && activeTo === todayWib;
-  const isPreset30Days = activeFrom === from30Days && activeTo === todayWib;
 
   const [summary, operationalResult, trendResult, mapResult] =
     decision.kind === "allowed"
@@ -344,62 +341,17 @@ export default async function ManagerSummaryPage({
           >
             {/* Header & Toolbar Filter Peta + Periode */}
             <div className="border-b border-[var(--border)] bg-[var(--background)] px-4 py-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h2
-                    id="map-section-heading"
-                    className="text-base font-bold text-[var(--foreground)]"
-                  >
-                    Peta temuan
-                  </h2>
-                  <p className="text-xs text-[var(--muted-foreground)]">
-                    Periode memengaruhi peta, grafik, dan statistik periode.
-                    Antrean operasional tetap mencakup seluruh pekerjaan
-                    terbuka.
-                  </p>
-                </div>
-
-                {/* Pilihan periode cepat: 7 hari & 30 hari */}
-                <div
-                  role="group"
-                  aria-label="Pilihan periode cepat"
-                  className="inline-flex items-center rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] p-0.5 text-xs"
+              <div>
+                <h2
+                  id="map-section-heading"
+                  className="text-base font-bold text-[var(--foreground)]"
                 >
-                  <Link
-                    href={buildSummaryUrl({
-                      areaId: selectedAreaId,
-                      from: from7Days,
-                      to: todayWib,
-                      mapStatus: mapStatusInfo.key,
-                      mapCategory: selectedMapCategory,
-                      mode: initialMapMode,
-                    })}
-                    className={`rounded-md px-2.5 py-1 font-semibold transition ${
-                      isPreset7Days
-                        ? "bg-[var(--primary)] text-white"
-                        : "text-[var(--foreground)] hover:bg-[var(--background)]"
-                    }`}
-                  >
-                    7 hari
-                  </Link>
-                  <Link
-                    href={buildSummaryUrl({
-                      areaId: selectedAreaId,
-                      from: from30Days,
-                      to: todayWib,
-                      mapStatus: mapStatusInfo.key,
-                      mapCategory: selectedMapCategory,
-                      mode: initialMapMode,
-                    })}
-                    className={`rounded-md px-2.5 py-1 font-semibold transition ${
-                      isPreset30Days
-                        ? "bg-[var(--primary)] text-white"
-                        : "text-[var(--foreground)] hover:bg-[var(--background)]"
-                    }`}
-                  >
-                    30 hari
-                  </Link>
-                </div>
+                  Peta temuan
+                </h2>
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  Periode memengaruhi peta, grafik, dan statistik periode.
+                  Antrean operasional tetap mencakup seluruh pekerjaan terbuka.
+                </p>
               </div>
 
               <form
@@ -771,7 +723,7 @@ export default async function ManagerSummaryPage({
                             <RowNumberCell number={index + 1} />
 
                             {/* 2. Pekerjaan */}
-                            <DataTableCell className="max-w-[240px] sm:max-w-[280px]">
+                            <DataTableCell className="max-w-[180px] md:w-[30%] md:max-w-0">
                               <div className="min-w-0">
                                 <Link
                                   href={href}
@@ -810,7 +762,7 @@ export default async function ManagerSummaryPage({
                             </DataTableCell>
 
                             {/* 3. Lokasi */}
-                            <DataTableCell className="hidden max-w-[200px] lg:max-w-[240px] md:table-cell">
+                            <DataTableCell className="hidden md:table-cell md:w-[22%] md:max-w-0">
                               <span
                                 title={item.locationLabel}
                                 className="block truncate text-xs text-[var(--foreground)]"

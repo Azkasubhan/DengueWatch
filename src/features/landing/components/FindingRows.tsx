@@ -1,42 +1,34 @@
 import Image from "next/image";
-import Link from "next/link";
-import { ArrowRight, MapPin } from "lucide-react";
 import { Container } from "@/components/layout/Container";
 import { findings } from "@/features/landing/content";
 
 export function FindingRows() {
   return (
-    <section className="pb-16 sm:pb-24">
+    <section
+      className="border-t border-[var(--border)] py-16 sm:py-28"
+      id="temuan"
+    >
       <Container>
-        <div className="rounded-[2rem] bg-[var(--sand)] px-5 py-12 sm:px-10 sm:py-16">
-          <h2 className="text-center text-3xl font-bold tracking-[-0.03em] sm:text-5xl">
+        <div className="mx-auto max-w-3xl text-center">
+          <h2 className="reveal text-3xl font-bold tracking-[-0.03em] sm:text-5xl">
             Jenis temuan dan penanganannya
           </h2>
-          <ul className="mt-10">
-            {findings.map((item) => (
-              <li
-                className="grid gap-6 border-t border-[var(--border)] py-8 first:border-t-0 first:pt-0 md:grid-cols-12 md:items-center"
-                key={item.category}
-              >
-                <div className="md:col-span-3">
-                  <p className="inline-flex items-center gap-1.5 text-sm text-[var(--muted-foreground)]">
-                    <MapPin aria-hidden="true" className="size-4" />
-                    Sekitar rumah
-                  </p>
-                  <h3 className="mt-1 text-xl font-bold tracking-[-0.02em] text-[var(--primary)]">
-                    {item.category}
-                  </h3>
-                  <Link
-                    className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-semibold"
-                    href="/daftar"
-                  >
-                    Laporkan temuan
-                    <span className="grid size-6 place-items-center rounded-full bg-[var(--forest)] text-white">
-                      <ArrowRight aria-hidden="true" className="size-3.5" />
-                    </span>
-                  </Link>
-                </div>
-                <div className="relative aspect-[16/10] overflow-hidden rounded-2xl md:col-span-4">
+          <p className="reveal mt-4 text-[var(--muted-foreground)]">
+            Arahkan kursor pada kartu untuk melihat penjelasan singkat tiap
+            jenis temuan di lingkungan sekitar.
+          </p>
+        </div>
+
+        <ul className="mt-12 grid gap-6 md:grid-cols-3">
+          {findings.map((item, index) => (
+            <li
+              className="reveal group aspect-[4/5] [perspective:1200px]"
+              key={item.category}
+              tabIndex={0}
+            >
+              <div className="relative h-full w-full rounded-3xl transition-transform duration-700 ease-out [transform-style:preserve-3d] group-hover:[transform:rotateY(180deg)] group-focus-visible:[transform:rotateY(180deg)]">
+                {/* Sisi Depan: Foto & Judul Kategori */}
+                <div className="absolute inset-0 overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface)] [backface-visibility:hidden]">
                   <Image
                     alt={item.alt}
                     className="object-cover"
@@ -45,33 +37,35 @@ export function FindingRows() {
                     sizes="(min-width: 768px) 30vw, 100vw"
                     src={item.image}
                   />
+                  <div
+                    aria-hidden="true"
+                    className="absolute inset-x-0 bottom-0 h-2/5 bg-[linear-gradient(to_top,rgb(12_24_19/0.82)_0%,transparent_100%)]"
+                  />
+                  <div className="absolute inset-x-0 bottom-0 p-6 text-white">
+                    <h3 className="text-xl font-bold tracking-[-0.02em] sm:text-2xl">
+                      {item.category}
+                    </h3>
+                  </div>
                 </div>
-                <div className="md:col-span-5">
-                  <p className="text-[var(--muted-foreground)]">
-                    {item.description}
-                  </p>
-                  <dl className="mt-4 text-sm">
-                    {[
-                      ["Penanganan", item.handling],
-                      ["Dikerjakan oleh", item.by],
-                      ["Bukti selesai", item.proof],
-                    ].map(([term, value]) => (
-                      <div
-                        className="flex justify-between gap-4 border-t border-[var(--border)] py-2.5"
-                        key={term}
-                      >
-                        <dt className="text-[var(--muted-foreground)]">
-                          {term}
-                        </dt>
-                        <dd className="text-right font-semibold">{value}</dd>
-                      </div>
-                    ))}
-                  </dl>
+
+                {/* Sisi Belakang (Flip): Deskripsi */}
+                <div className="absolute inset-0 flex flex-col justify-between rounded-3xl bg-[var(--forest)] p-7 text-[var(--forest-foreground)] [backface-visibility:hidden] [transform:rotateY(180deg)] sm:p-8">
+                  <span className="font-mono text-sm font-semibold text-[var(--mint)]">
+                    0{index + 1}
+                  </span>
+                  <div>
+                    <h3 className="text-2xl font-bold tracking-[-0.02em]">
+                      {item.category}
+                    </h3>
+                    <p className="mt-3 text-base leading-relaxed text-[var(--forest-muted)]">
+                      {item.description}
+                    </p>
+                  </div>
                 </div>
-              </li>
-            ))}
-          </ul>
-        </div>
+              </div>
+            </li>
+          ))}
+        </ul>
       </Container>
     </section>
   );

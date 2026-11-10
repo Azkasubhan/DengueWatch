@@ -151,7 +151,109 @@ html:has([data-site-header]) {
   }
 }
 
+/* Landing motion. Entrance animations run once on load; scroll-linked effects use CSS
+   scroll-driven animations only where supported, so unsupported browsers just see
+   the static layout. */
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(1.75rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes hero-zoom {
+  from {
+    transform: scale(1.12);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes hero-exit {
+  to {
+    opacity: 0;
+    transform: translateY(-3rem) scale(0.97);
+  }
+}
+
+@keyframes hero-dim {
+  to {
+    opacity: 0.85;
+  }
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(2.25rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes parallax {
+  from {
+    transform: translateY(-7%) scale(1.16);
+  }
+  to {
+    transform: translateY(7%) scale(1.16);
+  }
+}
+
+@layer components {
+  .hero-rise {
+    animation: hero-rise 1s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation-delay: var(--d, 0ms);
+  }
+
+  .hero-zoom {
+    animation: hero-zoom 2.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+
+  @supports (animation-timeline: view()) {
+    .hero-exit {
+      animation: hero-exit linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 0 85svh;
+    }
+
+    .hero-dim {
+      animation: hero-dim linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 0 100svh;
+    }
+
+    .reveal {
+      animation: reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 55%;
+    }
+
+    .parallax-img {
+      animation: parallax linear both;
+      animation-timeline: view();
+      animation-range: cover;
+    }
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .hero-rise,
+  .hero-zoom,
+  .hero-exit,
+  .hero-dim,
+  .reveal,
+  .parallax-img {
+    animation: none !important;
+  }
+
   *,
   *::before,
   *::after {

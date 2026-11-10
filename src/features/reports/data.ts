@@ -465,7 +465,7 @@ export async function getResidentReportSummary() {
       reason: ev.reason,
       createdAt: ev.created_at,
     });
-    if (recentEvents.length >= 3) break;
+    if (recentEvents.length >= 5) break;
   }
 
   return {

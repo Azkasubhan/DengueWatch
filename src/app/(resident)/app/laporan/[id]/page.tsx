@@ -8,8 +8,7 @@ import { getDefaultPortal, getVerifiedAreas } from "@/features/areas/access";
 import { getReportDetail } from "@/features/reports/data";
 import { AddInformationForm } from "@/features/reports/components/AddInformationForm";
 import {
-  ReportFactsCard,
-  ReportPhotos,
+  ReportOverviewCard,
   ReportStatusOverview,
   ReportTimeline,
 } from "@/features/reports/components/ReportDetailView";
@@ -93,38 +92,36 @@ export default async function ReportDetailPage({
         </div>
       ) : null}
 
-      <ReportStatusOverview
-        status={report.status}
-        events={detail.events.data}
-      />
+      <div className="grid gap-5">
+        <ReportStatusOverview
+          status={report.status}
+          events={detail.events.data}
+        />
 
-      <div className="grid gap-6 lg:grid-cols-12 lg:items-start">
-        <div className="grid gap-5 lg:col-span-5">
-          <ReportPhotos images={detail.images.data} />
-        </div>
-        <div className="grid gap-5 lg:col-span-7">
-          {report.status === "needs_information" ? (
-            <section
-              aria-labelledby="information-title"
-              className="rounded-[var(--radius-card)] border border-[var(--warning)] bg-[var(--surface)] p-5 shadow-xs"
-            >
-              <h2 id="information-title" className="text-lg font-bold">
-                Pengelola meminta informasi tambahan
-              </h2>
-              {request?.reason ? (
-                <p className="mt-2 rounded-[var(--radius-control)] bg-[var(--warning-subtle)] p-3 text-sm whitespace-pre-wrap break-words">
-                  {request.reason}
-                </p>
-              ) : null}
-              <AddInformationForm
-                reportId={report.id}
-                expectedVersion={report.version}
-              />
-            </section>
-          ) : null}
-          <ReportFactsCard report={report} />
-          <ReportTimeline events={detail.events.data} />
-        </div>
+        {report.status === "needs_information" ? (
+          <section
+            id="tanggapan-warga"
+            aria-labelledby="information-title"
+            className="rounded-[var(--radius-card)] border border-[var(--warning)] bg-[var(--surface)] p-5 shadow-2xs"
+          >
+            <h2 id="information-title" className="text-lg font-bold">
+              Pengelola meminta informasi tambahan
+            </h2>
+            {request?.reason ? (
+              <p className="mt-2 rounded-[var(--radius-control)] bg-[var(--warning-subtle)] p-3 text-sm whitespace-pre-wrap break-words">
+                {request.reason}
+              </p>
+            ) : null}
+            <AddInformationForm
+              reportId={report.id}
+              expectedVersion={report.version}
+            />
+          </section>
+        ) : null}
+
+        <ReportOverviewCard report={report} images={detail.images.data} />
+
+        <ReportTimeline events={detail.events.data} />
       </div>
     </AppShell>
   );

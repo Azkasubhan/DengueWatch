@@ -1,12 +1,5 @@
 import Image from "next/image";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Clock,
-  Copy,
-  MapPin,
-  XCircle,
-} from "lucide-react";
+import { Check, MapPin, X } from "lucide-react";
 import { cardClass } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/LinkButton";
 import { Timeline } from "@/components/ui/Timeline";
@@ -20,6 +13,7 @@ import {
   reportEventLabels,
   type ReportStatus,
 } from "@/features/reports/validation";
+import { cleanSimulationText } from "@/lib/format/text";
 
 export function formatJakarta(value: string, withTime = true) {
   return new Intl.DateTimeFormat("id-ID", {
@@ -29,13 +23,23 @@ export function formatJakarta(value: string, withTime = true) {
   }).format(new Date(value));
 }
 
-// Left column on report pages: first photo large, others as thumbnails.
-export function ReportPhotos({ images }: { images: ReportImage[] }) {
+// Photo gallery: when only one photo exists, it stretches cleanly to match its container height.
+export function ReportPhotos({
+  images,
+  stretch = false,
+}: {
+  images: ReportImage[];
+  stretch?: boolean;
+}) {
   const validImages = (images ?? []).filter((img) => img.url && img.url.trim());
   const [first, ...rest] = validImages;
   if (!first) {
     return (
-      <div className="flex aspect-[4/3] w-full flex-col items-center justify-center rounded-[var(--radius-card)] border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-center text-xs text-[var(--muted-foreground)]">
+      <div
+        className={`flex w-full flex-col items-center justify-center rounded-[var(--radius-control)] border border-dashed border-[var(--border)] bg-[var(--background)] p-6 text-center text-xs text-[var(--muted-foreground)] ${
+          stretch ? "min-h-[260px] h-full" : "aspect-[4/3]"
+        }`}
+      >
         <p className="font-semibold text-[var(--foreground)]">
           Foto tidak tersedia
         </p>
@@ -45,6 +49,23 @@ export function ReportPhotos({ images }: { images: ReportImage[] }) {
       </div>
     );
   }
+
+  if (stretch && rest.length === 0) {
+    return (
+      <div className="relative aspect-[4/3] min-h-[260px] w-full overflow-hidden rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--background)] lg:aspect-auto lg:h-full">
+        <Image
+          unoptimized
+          loading="eager"
+          src={first.url}
+          alt="Foto laporan 1"
+          width={first.width}
+          height={first.height}
+          className="h-full w-full object-cover"
+        />
+      </div>
+    );
+  }
+
   const photo = (image: ReportImage, index: number, large: boolean) => (
     <Image
       unoptimized
@@ -54,9 +75,12 @@ export function ReportPhotos({ images }: { images: ReportImage[] }) {
       alt={`Foto laporan ${index + 1}`}
       width={image.width}
       height={image.height}
-      className={`w-full rounded-[var(--radius-card)] border border-[var(--border)] object-cover ${large ? "aspect-[4/3]" : "aspect-square"}`}
+      className={`w-full rounded-[var(--radius-control)] border border-[var(--border)] object-cover ${
+        large ? "aspect-[4/3]" : "aspect-square"
+      }`}
     />
   );
+
   return (
     <div className="grid gap-3">
       {photo(first, 0, true)}
@@ -69,76 +93,135 @@ export function ReportPhotos({ images }: { images: ReportImage[] }) {
   );
 }
 
-export function ReportFactsCard({ report }: { report: ReportDetail }) {
+export function ReportFactsList({ report }: { report: ReportDetail }) {
+  const cleanDescription = cleanSimulationText(report.description);
+  const cleanLocation = report.locationNote
+    ? cleanSimulationText(report.locationNote)
+    : null;
+
   return (
-    <dl className={`grid gap-5 sm:grid-cols-2 ${cardClass}`}>
-      <div>
-        <dt className="text-sm font-semibold">Kategori</dt>
-        <dd className="mt-1">{reportCategoryLabels[report.category]}</dd>
+    <dl className="flex h-full flex-col justify-between divide-y divide-[var(--border)] text-sm">
+      <div className="grid grid-cols-2 gap-4 pb-4">
+        <div>
+          <dt className="text-xs font-semibold tracking-wide text-[var(--muted-foreground)] uppercase">
+            Kategori
+          </dt>
+          <dd className="mt-1 font-bold text-[var(--foreground)]">
+            {reportCategoryLabels[report.category]}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs font-semibold tracking-wide text-[var(--muted-foreground)] uppercase">
+            Dikirim
+          </dt>
+          <dd className="mt-1 font-medium text-[var(--foreground)]">
+            {formatJakarta(report.submittedAt)} WIB
+          </dd>
+        </div>
       </div>
-      <div>
-        <dt className="text-sm font-semibold">Dikirim</dt>
-        <dd className="mt-1">{formatJakarta(report.submittedAt)} WIB</dd>
-      </div>
-      <div className="sm:col-span-2">
-        <dt className="text-sm font-semibold">Keterangan temuan</dt>
-        <dd className="mt-1 whitespace-pre-wrap break-words">
-          {report.description}
+
+      <div className="py-4">
+        <dt className="text-xs font-semibold tracking-wide text-[var(--muted-foreground)] uppercase">
+          Keterangan temuan
+        </dt>
+        <dd className="mt-1.5 leading-relaxed whitespace-pre-wrap break-words text-[var(--foreground)]">
+          {cleanDescription}
         </dd>
       </div>
-      {report.visibleObjects ? (
-        <div className="sm:col-span-2">
-          <dt className="text-sm font-semibold">Ringkasan objek pada foto</dt>
-          <dd className="mt-1 break-words text-sm text-[var(--muted-foreground)]">
-            {report.visibleObjects}
-          </dd>
-        </div>
-      ) : null}
-      {report.preventionAdvice ? (
-        <div className="rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--background)] p-3.5 sm:col-span-2">
-          <dt className="text-xs font-semibold text-[var(--muted-foreground)]">
-            Panduan pencegahan awal (informasi sistem/AI · bukan pengganti
-            verifikasi petugas)
-          </dt>
-          <dd className="mt-1 break-words text-sm text-[var(--foreground)]">
-            {report.preventionAdvice}
-          </dd>
-        </div>
-      ) : null}
-      <div className="rounded-[var(--radius-control)] bg-[var(--background)] p-4 sm:col-span-2">
-        <dt className="text-sm font-semibold">Lokasi</dt>
-        <dd className="mt-1 grid gap-3">
-          <p className="break-words">
-            {report.locationNote || "Pelapor tidak menulis petunjuk lokasi."}
-          </p>
-          {report.latitude != null && report.longitude != null ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] pt-3">
-              <p className="text-sm text-[var(--muted-foreground)]">
-                Titik GPS dari perangkat pelapor
-                <span className="block tabular-nums text-[var(--foreground)]">
-                  {report.latitude.toFixed(5)}, {report.longitude.toFixed(5)}
-                </span>
-              </p>
-              {/* Coordinates leave DengueWatch only when an authorized viewer opens the map themselves. */}
-              <LinkButton
-                href={`https://www.google.com/maps/search/?api=1&query=${report.latitude},${report.longitude}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                variant="secondary"
-              >
-                <MapPin aria-hidden="true" size={16} />
-                Buka di Google Maps
-                <span className="sr-only">(tab baru)</span>
-              </LinkButton>
+
+      {report.visibleObjects || report.preventionAdvice ? (
+        <div className="grid gap-4 py-4 sm:grid-cols-2">
+          {report.visibleObjects ? (
+            <div>
+              <dt className="text-xs font-semibold tracking-wide text-[var(--muted-foreground)] uppercase">
+                Ringkasan objek pada foto
+              </dt>
+              <dd className="mt-1 break-words text-[var(--foreground)]">
+                {report.visibleObjects}
+              </dd>
             </div>
-          ) : (
-            <p className="text-sm text-[var(--muted-foreground)]">
-              Titik GPS tidak diberikan.
+          ) : null}
+          {report.preventionAdvice ? (
+            <div>
+              <dt className="text-xs font-semibold tracking-wide text-[var(--muted-foreground)] uppercase">
+                Panduan pencegahan awal
+              </dt>
+              <dd className="mt-1 break-words text-[var(--foreground)]">
+                {report.preventionAdvice}
+              </dd>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="pt-4">
+        <dt className="text-xs font-semibold tracking-wide text-[var(--muted-foreground)] uppercase">
+          Lokasi
+        </dt>
+        <dd className="mt-1.5 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-medium break-words text-[var(--foreground)]">
+              {cleanLocation || "Pelapor tidak menulis petunjuk lokasi."}
             </p>
-          )}
+            {report.latitude != null && report.longitude != null ? (
+              <p className="mt-0.5 font-mono text-xs tabular-nums text-[var(--muted-foreground)]">
+                GPS: {report.latitude.toFixed(5)}, {report.longitude.toFixed(5)}
+              </p>
+            ) : (
+              <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
+                Titik GPS tidak diberikan.
+              </p>
+            )}
+          </div>
+          {report.latitude != null && report.longitude != null ? (
+            <LinkButton
+              href={`https://www.google.com/maps/search/?api=1&query=${report.latitude},${report.longitude}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              variant="secondary"
+              size="sm"
+            >
+              <MapPin aria-hidden="true" size={14} />
+              Buka di Google Maps
+              <span className="sr-only">(tab baru)</span>
+            </LinkButton>
+          ) : null}
         </dd>
       </div>
     </dl>
+  );
+}
+
+export function ReportFactsCard({ report }: { report: ReportDetail }) {
+  return (
+    <div className={cardClass}>
+      <ReportFactsList report={report} />
+    </div>
+  );
+}
+
+// Unified card pairing photos on the left with structured facts on the right so there is never dead space below the photo.
+export function ReportOverviewCard({
+  report,
+  images,
+}: {
+  report: ReportDetail;
+  images: ReportImage[];
+}) {
+  return (
+    <section
+      aria-label="Rincian laporan dan foto temuan"
+      className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-2xs sm:p-6"
+    >
+      <div className="grid gap-6 lg:grid-cols-12 lg:items-stretch">
+        <div className="flex flex-col lg:col-span-5">
+          <ReportPhotos images={images} stretch />
+        </div>
+        <div className="flex flex-col lg:col-span-7">
+          <ReportFactsList report={report} />
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -183,75 +266,91 @@ export function ReportStatusOverview({
   const latestEvent = events[events.length - 1];
   const isTerminalNonAction = status === "rejected" || status === "duplicate";
 
-  const normalSteps: Array<{
+  const steps: Array<{
     key: string;
     title: string;
     subtitle: string;
-    state: "done" | "current" | "warning" | "upcoming";
-  }> = [
-    {
-      key: "submitted",
-      title: "1. Dikirim",
-      subtitle: "Laporan tercatat",
-      state: "done",
-    },
-    {
-      key: "review",
-      title: "2. Diperiksa",
-      subtitle:
-        status === "needs_information"
-          ? "Perlu keterangan warga"
-          : status === "pending_verification"
-            ? "Dalam antrean pengelola"
-            : "Telah diverifikasi",
-      state:
-        status === "needs_information"
-          ? "warning"
-          : status === "pending_verification"
-            ? "current"
-            : "done",
-    },
-    {
-      key: "action",
-      title: "3. Ditangani",
-      subtitle:
-        status === "resolved"
-          ? "Tindak lanjut selesai"
-          : status === "in_action"
-            ? "Kader bertugas"
-            : status === "verified"
-              ? "Menunggu penugasan"
-              : "Menunggu verifikasi",
-      state:
-        status === "resolved"
-          ? "done"
-          : status === "in_action" || status === "verified"
-            ? "current"
-            : "upcoming",
-    },
-    {
-      key: "resolved",
-      title: "4. Selesai",
-      subtitle:
-        status === "resolved" ? "Bukti disetujui" : "Menunggu penyelesaian",
-      state: status === "resolved" ? "done" : "upcoming",
-    },
-  ];
+    state: "done" | "current" | "warning" | "danger" | "upcoming";
+  }> = isTerminalNonAction
+    ? [
+        {
+          key: "submitted",
+          title: "Dikirim",
+          subtitle: "Laporan diterima",
+          state: "done",
+        },
+        {
+          key: "closed",
+          title:
+            status === "rejected"
+              ? "Ditutup saat pemeriksaan"
+              : "Digabungkan (Duplikat)",
+          subtitle:
+            status === "rejected"
+              ? "Lihat alasan pada riwayat"
+              : "Mengikuti laporan terdahulu",
+          state: status === "rejected" ? "danger" : "current",
+        },
+      ]
+    : [
+        {
+          key: "submitted",
+          title: "Dikirim",
+          subtitle: "Laporan tercatat",
+          state: "done",
+        },
+        {
+          key: "review",
+          title: "Diperiksa",
+          subtitle:
+            status === "needs_information"
+              ? "Perlu keterangan warga"
+              : status === "pending_verification"
+                ? "Dalam antrean pengelola"
+                : "Telah diverifikasi",
+          state:
+            status === "needs_information"
+              ? "warning"
+              : status === "pending_verification"
+                ? "current"
+                : "done",
+        },
+        {
+          key: "action",
+          title: "Ditangani",
+          subtitle:
+            status === "resolved"
+              ? "Tindak lanjut selesai"
+              : status === "in_action"
+                ? "Kader bertugas"
+                : status === "verified"
+                  ? "Menunggu penugasan"
+                  : "Menunggu verifikasi",
+          state:
+            status === "resolved"
+              ? "done"
+              : status === "in_action" || status === "verified"
+                ? "current"
+                : "upcoming",
+        },
+        {
+          key: "resolved",
+          title: "Selesai",
+          subtitle:
+            status === "resolved" ? "Bukti disetujui" : "Menunggu penyelesaian",
+          state: status === "resolved" ? "done" : "upcoming",
+        },
+      ];
 
   return (
     <section
       aria-label="Progres status laporan"
-      className="mb-6 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5"
+      className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] px-4 py-4 shadow-2xs sm:px-6"
     >
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--border)] pb-3.5">
-        <div>
-          <p className="text-xs font-semibold tracking-wider text-[var(--muted-foreground)] uppercase">
-            Pembaruan terakhir
-          </p>
-          <p className="mt-1 text-sm font-medium text-[var(--foreground)]">
-            {statusNotes[status]}
-          </p>
-        </div>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--border)] pb-3">
+        <p className="text-sm font-medium text-[var(--foreground)]">
+          {statusNotes[status]}
+        </p>
         {latestEvent ? (
           <p className="text-xs text-[var(--muted-foreground)]">
             Diperbarui {formatJakarta(latestEvent.createdAt)} WIB
@@ -259,95 +358,68 @@ export function ReportStatusOverview({
         ) : null}
       </div>
 
-      {isTerminalNonAction ? (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <div className="flex items-center gap-3 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--background)] p-3">
-            <CheckCircle2
-              aria-hidden="true"
-              className="size-5 shrink-0 text-[var(--primary)]"
-            />
-            <div>
-              <p className="text-sm font-bold text-[var(--foreground)]">
-                1. Dikirim
-              </p>
-              <p className="text-xs text-[var(--muted-foreground)]">
-                Laporan diterima sistem
-              </p>
-            </div>
-          </div>
-          <div
-            className={`flex items-center gap-3 rounded-[var(--radius-control)] border p-3 ${
-              status === "rejected"
-                ? "border-[var(--danger)] bg-[var(--danger-subtle)]"
-                : "border-[var(--info)] bg-[var(--info-subtle)]"
-            }`}
-          >
-            {status === "rejected" ? (
-              <XCircle
-                aria-hidden="true"
-                className="size-5 shrink-0 text-[var(--danger)]"
-              />
-            ) : (
-              <Copy
-                aria-hidden="true"
-                className="size-5 shrink-0 text-[var(--info)]"
-              />
-            )}
-            <div>
-              <p className="text-sm font-bold text-[var(--foreground)]">
-                {status === "rejected"
-                  ? "2. Ditutup tanpa penugasan"
-                  : "2. Digabungkan (Duplikat)"}
-              </p>
-              <p className="text-xs text-[var(--muted-foreground)]">
-                {status === "rejected"
-                  ? "Lihat catatan alasan pengelola pada riwayat"
-                  : "Mengikuti penanganan laporan terdahulu"}
-              </p>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <ol className="mt-4 grid gap-2.5 sm:grid-cols-4">
-          {normalSteps.map((step) => {
-            const style =
-              step.state === "done"
-                ? "border-[var(--primary)] bg-[var(--primary-subtle)] text-[var(--foreground)]"
+      <ol
+        className={`mt-5 grid w-full ${
+          isTerminalNonAction ? "grid-cols-2" : "grid-cols-4"
+        }`}
+      >
+        {steps.map((step, index) => {
+          const isLast = index === steps.length - 1;
+          const circleClass =
+            step.state === "done"
+              ? "border-[var(--primary)] bg-[var(--primary)] text-white"
+              : step.state === "current"
+                ? "border-2 border-[var(--primary)] bg-[var(--primary-subtle)] text-[var(--primary)]"
                 : step.state === "warning"
-                  ? "border-[var(--warning)] bg-[var(--warning-subtle)] text-[var(--foreground)]"
-                  : step.state === "current"
-                    ? "border-[var(--primary)] bg-[var(--surface)] text-[var(--foreground)] ring-1 ring-[var(--primary)]"
-                    : "border-[var(--border)] bg-[var(--background)] text-[var(--muted-foreground)]";
-            return (
-              <li
-                key={step.key}
-                className={`flex items-start gap-2.5 rounded-[var(--radius-control)] border p-3 ${style}`}
+                  ? "border-2 border-[var(--warning)] bg-[var(--warning-subtle)] text-[var(--warning)]"
+                  : step.state === "danger"
+                    ? "border-2 border-[var(--danger)] bg-[var(--danger-subtle)] text-[var(--danger)]"
+                    : "border border-[var(--border)] bg-[var(--background)] text-[var(--muted-foreground)]";
+
+          const lineClass =
+            step.state === "done"
+              ? "bg-[var(--primary)]"
+              : "bg-[var(--border)]";
+
+          return (
+            <li
+              key={step.key}
+              className="relative flex min-w-0 flex-col items-center px-2 text-center"
+            >
+              {!isLast ? (
+                <span
+                  aria-hidden="true"
+                  className={`absolute top-3.5 left-1/2 h-0.5 w-full -translate-y-1/2 ${lineClass}`}
+                />
+              ) : null}
+              <span
+                aria-hidden="true"
+                className={`relative z-10 inline-flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums ring-4 ring-[var(--surface)] ${circleClass}`}
               >
                 {step.state === "done" ? (
-                  <CheckCircle2
-                    aria-hidden="true"
-                    className="mt-0.5 size-4 shrink-0 text-[var(--primary)]"
-                  />
-                ) : step.state === "warning" ? (
-                  <AlertTriangle
-                    aria-hidden="true"
-                    className="mt-0.5 size-4 shrink-0 text-[var(--warning)]"
-                  />
+                  <Check className="size-3.5 stroke-[2.5]" />
+                ) : step.state === "danger" ? (
+                  <X className="size-3.5 stroke-[2.5]" />
                 ) : (
-                  <Clock
-                    aria-hidden="true"
-                    className="mt-0.5 size-4 shrink-0"
-                  />
+                  index + 1
                 )}
-                <div className="min-w-0">
-                  <p className="text-xs font-bold">{step.title}</p>
-                  <p className="mt-0.5 text-xs opacity-85">{step.subtitle}</p>
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-      )}
+              </span>
+              <p
+                className={`mt-2 w-full truncate text-xs font-bold ${
+                  step.state === "upcoming"
+                    ? "text-[var(--muted-foreground)]"
+                    : "text-[var(--foreground)]"
+                }`}
+              >
+                {step.title}
+              </p>
+              <p className="mt-0.5 hidden w-full truncate text-[11px] text-[var(--muted-foreground)] sm:block">
+                {step.subtitle}
+              </p>
+            </li>
+          );
+        })}
+      </ol>
     </section>
   );
 }

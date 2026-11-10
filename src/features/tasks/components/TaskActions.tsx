@@ -420,40 +420,42 @@ export function TaskActions({
             <legend className="mb-2 font-semibold">
               Pemeriksaan bukti {reviewed?.submitterName}
             </legend>
-            {(
-              [
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(
                 [
-                  "approve",
-                  "Setujui bukti",
-                  "Tugas selesai setelah bukti semua kader disetujui.",
-                ],
-                [
-                  "request_revision",
-                  "Minta perbaikan",
-                  "Kader ini mengirim ulang buktinya.",
-                ],
-              ] as const
-            ).map(([value, label, hint]) => (
-              <label
-                key={value}
-                className="flex min-h-11 cursor-pointer gap-3 rounded-[var(--radius-control)] border border-[var(--border)] p-4 has-[:checked]:border-[var(--primary)] has-[:checked]:bg-[var(--primary-subtle)] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--primary)]"
-              >
-                <input
-                  type="radio"
-                  name="evidence-decision"
-                  value={value}
-                  checked={decision === value}
-                  onChange={() => setDecision(value)}
-                  className="mt-1 size-4 accent-[var(--primary)]"
-                />
-                <span>
-                  <span className="block font-semibold">{label}</span>
-                  <span className="block text-sm text-[var(--muted-foreground)]">
-                    {hint}
+                  [
+                    "approve",
+                    "Setujui bukti",
+                    "Tugas selesai setelah bukti semua kader disetujui.",
+                  ],
+                  [
+                    "request_revision",
+                    "Minta perbaikan",
+                    "Kader ini mengirim ulang buktinya.",
+                  ],
+                ] as const
+              ).map(([value, label, hint]) => (
+                <label
+                  key={value}
+                  className="flex min-h-11 cursor-pointer gap-3 rounded-[var(--radius-control)] border border-[var(--border)] p-4 has-[:checked]:border-[var(--primary)] has-[:checked]:bg-[var(--primary-subtle)] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--primary)]"
+                >
+                  <input
+                    type="radio"
+                    name="evidence-decision"
+                    value={value}
+                    checked={decision === value}
+                    onChange={() => setDecision(value)}
+                    className="mt-1 size-4 accent-[var(--primary)]"
+                  />
+                  <span>
+                    <span className="block font-semibold">{label}</span>
+                    <span className="block text-sm text-[var(--muted-foreground)]">
+                      {hint}
+                    </span>
                   </span>
-                </span>
-              </label>
-            ))}
+                </label>
+              ))}
+            </div>
           </fieldset>
           <div className="grid gap-2">
             <label htmlFor="review-reason" className="font-semibold">

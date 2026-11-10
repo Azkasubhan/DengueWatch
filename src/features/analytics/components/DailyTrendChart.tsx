@@ -53,7 +53,7 @@ export function DailyTrendChart({
     return (
       <section
         aria-labelledby="daily-trend-heading"
-        className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5"
+        className="flex h-full flex-col rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-2xs sm:p-5"
       >
         <h2
           id="daily-trend-heading"
@@ -138,7 +138,7 @@ export function DailyTrendChart({
   return (
     <section
       aria-labelledby="daily-trend-heading"
-      className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5"
+      className="flex h-full flex-col justify-between rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-2xs sm:p-5"
     >
       <div className="flex flex-wrap items-start justify-between gap-2 border-b border-[var(--border)] pb-3">
         <div>

@@ -151,11 +151,11 @@ export function ReviewDecisionForm({
         <legend className="mb-3 font-semibold">
           Pilih keputusan <span aria-hidden="true">*</span>
         </legend>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {decisions.map((option) => (
             <label
               key={option.value}
-              className="flex min-h-11 cursor-pointer gap-3 rounded-[var(--radius-control)] border border-[var(--border)] p-4 has-[:checked]:border-[var(--primary)] has-[:checked]:bg-[var(--primary-subtle)] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--primary)]"
+              className="flex min-h-11 cursor-pointer gap-3 rounded-[var(--radius-control)] border border-[var(--border)] p-3.5 transition has-[:checked]:border-[var(--primary)] has-[:checked]:bg-[var(--primary-subtle)] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--primary)]"
             >
               <input
                 type="radio"
@@ -166,11 +166,13 @@ export function ReviewDecisionForm({
                   setDecision(option.value);
                   setErrors({});
                 }}
-                className="mt-1 size-4 accent-[var(--primary)]"
+                className="mt-0.5 size-4 shrink-0 accent-[var(--primary)]"
               />
-              <span>
-                <span className="block font-semibold">{option.label}</span>
-                <span className="block text-sm text-[var(--muted-foreground)]">
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">
+                  {option.label}
+                </span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-[var(--muted-foreground)]">
                   {option.hint}
                 </span>
               </span>
@@ -225,7 +227,7 @@ export function ReviewDecisionForm({
           ref={reasonRef}
           id="reason"
           value={reason}
-          rows={4}
+          rows={3}
           maxLength={500}
           aria-required={reasonRequired}
           aria-invalid={Boolean(errors.reason)}

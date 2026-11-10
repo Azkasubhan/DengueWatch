@@ -5,10 +5,7 @@ import { ServiceUnavailable } from "@/components/feedback/ServiceUnavailable";
 import { AppShell } from "@/components/layout/AppShell";
 import { cardClass } from "@/components/ui/Card";
 import { decidePortalAccess, getVerifiedAreas } from "@/features/areas/access";
-import {
-  ReportFactsCard,
-  ReportPhotos,
-} from "@/features/reports/components/ReportDetailView";
+import { ReportOverviewCard } from "@/features/reports/components/ReportDetailView";
 import { getReportDetail } from "@/features/reports/data";
 import { TaskDetailView } from "@/features/tasks/components/TaskDetailView";
 import { getTaskDetail } from "@/features/tasks/data";
@@ -53,10 +50,7 @@ export default async function CadreTaskDetailPage({
       report={
         // Assigned cadres read the report (photos and private location) through RLS.
         report && detail?.images?.data ? (
-          <section aria-label="Laporan warga" className="grid gap-4">
-            <ReportPhotos images={detail.images.data} />
-            <ReportFactsCard report={report} />
-          </section>
+          <ReportOverviewCard report={report} images={detail.images.data} />
         ) : (
           <p className={cardClass}>Laporan terkait belum dapat dimuat.</p>
         )

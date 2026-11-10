@@ -93,9 +93,7 @@ export function FindingsMap({
   );
 
   const [mode, setMode] = useState<"points" | "heatmap">(initialMode);
-  const [selectedId, setSelectedId] = useState<string | null>(
-    reports[0]?.id ?? null,
-  );
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tileError, setTileError] = useState(false);
 
   const viewportRef = useRef<HTMLDivElement>(null);
