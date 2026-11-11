@@ -253,7 +253,7 @@ export default async function ManagerSummaryPage({
       {decision.kind === "pending" ? (
         <PendingArea />
       ) : (
-        <div className="grid gap-5">
+        <div className="grid grid-cols-1 gap-5">
           {/* 1. HEADER RINGKAS */}
           <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--border)] pb-3.5">
             <div>

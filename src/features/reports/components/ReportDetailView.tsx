@@ -52,7 +52,7 @@ export function ReportPhotos({
 
   if (stretch && rest.length === 0) {
     return (
-      <div className="relative aspect-[4/3] min-h-[260px] w-full overflow-hidden rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--background)] lg:aspect-auto lg:h-full">
+      <div className="relative aspect-[4/3] w-full lg:min-h-[260px] overflow-hidden rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--background)] lg:aspect-auto lg:h-full">
         <Image
           unoptimized
           loading="eager"
@@ -100,8 +100,8 @@ export function ReportFactsList({ report }: { report: ReportDetail }) {
     : null;
 
   return (
-    <dl className="flex h-full flex-col justify-between divide-y divide-[var(--border)] text-sm">
-      <div className="grid grid-cols-2 gap-4 pb-4">
+    <div className="flex h-full flex-col justify-between divide-y divide-[var(--border)] text-sm">
+      <dl className="grid grid-cols-2 gap-4 pb-4">
         <div>
           <dt className="text-xs font-semibold tracking-wide text-[var(--muted-foreground)] uppercase">
             Kategori
@@ -118,19 +118,19 @@ export function ReportFactsList({ report }: { report: ReportDetail }) {
             {formatJakarta(report.submittedAt)} WIB
           </dd>
         </div>
-      </div>
+      </dl>
 
-      <div className="py-4">
+      <dl className="py-4">
         <dt className="text-xs font-semibold tracking-wide text-[var(--muted-foreground)] uppercase">
           Keterangan temuan
         </dt>
         <dd className="mt-1.5 leading-relaxed whitespace-pre-wrap break-words text-[var(--foreground)]">
           {cleanDescription}
         </dd>
-      </div>
+      </dl>
 
       {report.visibleObjects || report.preventionAdvice ? (
-        <div className="grid gap-4 py-4 sm:grid-cols-2">
+        <dl className="grid gap-4 py-4 sm:grid-cols-2">
           {report.visibleObjects ? (
             <div>
               <dt className="text-xs font-semibold tracking-wide text-[var(--muted-foreground)] uppercase">
@@ -151,10 +151,10 @@ export function ReportFactsList({ report }: { report: ReportDetail }) {
               </dd>
             </div>
           ) : null}
-        </div>
+        </dl>
       ) : null}
 
-      <div className="pt-4">
+      <dl className="pt-4">
         <dt className="text-xs font-semibold tracking-wide text-[var(--muted-foreground)] uppercase">
           Lokasi
         </dt>
@@ -187,8 +187,8 @@ export function ReportFactsList({ report }: { report: ReportDetail }) {
             </LinkButton>
           ) : null}
         </dd>
-      </div>
-    </dl>
+      </dl>
+    </div>
   );
 }
 

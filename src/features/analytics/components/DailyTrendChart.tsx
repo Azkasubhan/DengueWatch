@@ -219,7 +219,14 @@ export function DailyTrendChart({
                   className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-dashed border-[var(--border)]/80"
                 />
 
-                {displayPoints.map((point) => {
+                {displayPoints.map((point, index) => {
+                  // Edge tooltips align inward so they never extend past the chart.
+                  const tooltipPosition =
+                    index === 0
+                      ? "left-0"
+                      : index === displayPoints.length - 1
+                        ? "right-0"
+                        : "left-1/2 -translate-x-1/2";
                   // Proporsional murni: nilai 0 = 0px (tidak digambar sebagai batang positif)
                   const subHeightPx =
                     point.submitted > 0
@@ -236,23 +243,26 @@ export function DailyTrendChart({
                     <div
                       key={point.key}
                       tabIndex={0}
+                      role="img"
                       aria-label={`${point.fullLabel}: ${point.submitted} laporan masuk, ${point.resolved} laporan selesai`}
                       title={`${point.fullLabel}: ${point.submitted} masuk, ${point.resolved} selesai`}
-                      className="group relative flex h-full flex-1 items-end justify-center gap-0.5 rounded-t-xs focus-visible:outline-2 focus-visible:outline-[var(--primary)] sm:gap-1"
+                      className="group relative flex h-full min-w-0 flex-1 items-end justify-center gap-0.5 rounded-t-xs focus-visible:outline-2 focus-visible:outline-[var(--primary)] sm:gap-1"
                     >
                       {/* Tooltip saat hover / focus */}
-                      <div className="pointer-events-none invisible absolute -top-8 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded bg-[var(--foreground)] px-2 py-0.5 text-[10px] font-semibold text-[var(--surface)] shadow-xs group-hover:visible group-focus-visible:visible">
+                      <div
+                        className={`pointer-events-none hidden absolute -top-8 ${tooltipPosition} z-20 whitespace-nowrap rounded bg-[var(--foreground)] px-2 py-0.5 text-[10px] font-semibold text-[var(--surface)] shadow-xs group-hover:block group-focus-visible:block`}
+                      >
                         {point.shortLabel}: {point.submitted} masuk ·{" "}
                         {point.resolved} selesai
                       </div>
 
                       <div
                         style={{ height: `${subHeightPx}px` }}
-                        className="w-2 rounded-t-xs bg-[var(--primary)] transition-all sm:w-2.5"
+                        className="w-full max-w-2 rounded-t-xs bg-[var(--primary)] transition-all sm:max-w-2.5"
                       />
                       <div
                         style={{ height: `${resHeightPx}px` }}
-                        className="w-2 rounded-t-xs bg-[var(--info)] transition-all sm:w-2.5"
+                        className="w-full max-w-2 rounded-t-xs bg-[var(--info)] transition-all sm:max-w-2.5"
                       />
                     </div>
                   );
@@ -276,7 +286,13 @@ export function DailyTrendChart({
                   return (
                     <div
                       key={point.key}
-                      className="flex-1 text-center text-[10px] leading-tight tabular-nums text-[var(--muted-foreground)]"
+                      className={`flex min-w-0 flex-1 ${
+                        index === 0
+                          ? "justify-start"
+                          : index === displayPoints.length - 1
+                            ? "justify-end"
+                            : "justify-center"
+                      } text-[10px] leading-tight tabular-nums text-[var(--muted-foreground)]`}
                     >
                       {showLabel ? (
                         <span className="inline-block truncate max-w-[4.5rem]">

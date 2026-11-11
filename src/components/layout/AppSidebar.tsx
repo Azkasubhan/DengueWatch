@@ -158,7 +158,6 @@ export function AppSidebar({
             setMobileOpen(false);
             setShowLogoutModal(true);
           }}
-          aria-label="Keluar"
           className="group flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-[var(--muted-foreground)] transition-colors hover:bg-[var(--danger-subtle)] hover:text-[var(--danger)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
         >
           <LogOut
@@ -181,7 +180,7 @@ export function AppSidebar({
           aria-expanded={mobileOpen}
           aria-label={mobileOpen ? "Tutup menu navigasi" : "Buka menu navigasi"}
           onClick={() => setMobileOpen(!mobileOpen)}
-          className="flex size-10 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] transition-colors hover:bg-[var(--sand)] focus-visible:outline-2 focus-visible:outline-[var(--focus)]"
+          className="flex size-11 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] transition-colors hover:bg-[var(--sand)] focus-visible:outline-2 focus-visible:outline-[var(--focus)]"
         >
           {mobileOpen ? (
             <X aria-hidden="true" className="size-5" />

@@ -92,16 +92,16 @@ export function TaskDetailView({
           aria-label="Ringkasan penugasan"
           className={`${cardClass} grid min-w-0 gap-5 lg:grid-cols-12`}
         >
-          <dl className="grid min-w-0 content-between gap-4 lg:col-span-7">
-            <div>
+          <div className="grid min-w-0 content-between gap-4 lg:col-span-7">
+            <dl>
               <dt className="text-[11px] font-semibold tracking-wider text-[var(--muted-foreground)] uppercase">
                 Deskripsi tindakan
               </dt>
               <dd className="mt-1 text-sm leading-relaxed text-[var(--foreground)] whitespace-pre-wrap break-words">
                 {task.description}
               </dd>
-            </div>
-            <div className="grid gap-4 border-t border-[var(--border)] pt-3.5 sm:grid-cols-2">
+            </dl>
+            <dl className="grid gap-4 border-t border-[var(--border)] pt-3.5 sm:grid-cols-2">
               <div>
                 <dt className="text-[11px] font-semibold tracking-wider text-[var(--muted-foreground)] uppercase">
                   Tenggat
@@ -138,8 +138,8 @@ export function TaskDetailView({
                   </dd>
                 </div>
               ) : null}
-            </div>
-          </dl>
+            </dl>
+          </div>
 
           <div className="min-w-0 border-t border-[var(--border)] pt-4 lg:col-span-5 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
             <p className="text-[11px] font-semibold tracking-wider text-[var(--muted-foreground)] uppercase">
@@ -274,7 +274,8 @@ export function TaskDetailView({
                         </DataTableCell>
 
                         {/* 6. Bukti (Lightbox link + accessible sr-only image for E2E) */}
-                        <DataTableCell className="whitespace-nowrap">
+                        {/* relative keeps the absolutely positioned sr-only image inside the scroll container. */}
+                        <DataTableCell className="relative whitespace-nowrap">
                           <PhotoLightboxButton
                             count={1}
                             fetchUrl={`/api/v1/tasks/${task.id}/evidence-photos?evidenceId=${item.id}`}

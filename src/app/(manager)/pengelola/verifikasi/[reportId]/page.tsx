@@ -159,7 +159,7 @@ export default async function VerificationDetailPage({
         }
       />
 
-      <div className="grid gap-5">
+      <div className="grid grid-cols-1 gap-5">
         {saved ? (
           <div>
             <Alert title="Keputusan tersimpan">

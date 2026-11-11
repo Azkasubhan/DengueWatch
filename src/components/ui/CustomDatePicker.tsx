@@ -205,6 +205,9 @@ export function CustomDatePicker({
 
   const heightClass = size === "sm" ? "min-h-9 text-xs" : "min-h-10 text-sm";
   const paddingClass = size === "sm" ? "px-3 py-1.5" : "px-3.5 py-2";
+  const displayText = currentValue
+    ? formatIndonesianDate(currentValue)
+    : placeholder;
 
   return (
     <div
@@ -226,34 +229,33 @@ export function CustomDatePicker({
         id={id}
         type="button"
         disabled={disabled}
-        aria-label={ariaLabel}
+        // WCAG 2.5.3: the accessible name must include the visible text.
+        aria-label={ariaLabel ? `${ariaLabel}, ${displayText}` : undefined}
         aria-describedby={ariaDescribedBy}
         aria-expanded={isOpen}
         onClick={toggleCalendar}
-        className={`flex w-full items-center justify-between gap-2 rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] ${paddingClass} ${heightClass} font-medium text-[var(--foreground)] shadow-2xs transition hover:border-[var(--primary)] focus-visible:border-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--primary)] disabled:cursor-not-allowed disabled:opacity-60`}
+        className={`flex w-full items-center justify-between gap-2 rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] ${paddingClass} ${heightClass} ${currentValue && !disabled ? "pr-9" : ""} font-medium text-[var(--foreground)] shadow-2xs transition hover:border-[var(--primary)] focus-visible:border-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--primary)] disabled:cursor-not-allowed disabled:opacity-60`}
       >
         <span className="flex min-w-0 items-center gap-2 truncate">
           <CalendarIcon
             aria-hidden="true"
             className="size-3.5 shrink-0 text-[var(--primary)]"
           />
-          <span className="truncate">
-            {currentValue ? formatIndonesianDate(currentValue) : placeholder}
-          </span>
+          <span className="truncate">{displayText}</span>
         </span>
-
-        {currentValue && !disabled ? (
-          <span
-            role="button"
-            tabIndex={-1}
-            onClick={handleClear}
-            aria-label="Hapus tanggal"
-            className="rounded p-0.5 text-[var(--muted-foreground)] hover:text-[var(--danger)]"
-          >
-            <X aria-hidden="true" className="size-3.5" />
-          </span>
-        ) : null}
       </button>
+
+      {/* A sibling, not a child: interactive controls must not nest inside the trigger button. */}
+      {currentValue && !disabled ? (
+        <button
+          type="button"
+          onClick={handleClear}
+          aria-label="Hapus tanggal"
+          className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-0.5 text-[var(--muted-foreground)] hover:text-[var(--danger)] focus-visible:outline-2 focus-visible:outline-[var(--primary)]"
+        >
+          <X aria-hidden="true" className="size-3.5" />
+        </button>
+      ) : null}
 
       {isOpen ? (
         <div

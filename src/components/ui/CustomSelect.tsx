@@ -168,7 +168,7 @@ export function CustomSelect({
         onClick={toggleDropdown}
         className={`flex w-full items-center justify-between gap-2 rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] ${paddingClass} ${heightClass} font-medium text-[var(--foreground)] shadow-2xs transition hover:border-[var(--primary)] focus-visible:border-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--primary)] disabled:cursor-not-allowed disabled:opacity-60`}
       >
-        <span className="truncate">
+        <span className="min-w-0 truncate">
           {selectedOption ? selectedOption.label : placeholder}
         </span>
         <ChevronDown
@@ -207,7 +207,7 @@ export function CustomSelect({
                       : "text-[var(--foreground)]"
                 }`}
               >
-                <span className="truncate">{option.label}</span>
+                <span className="min-w-0 truncate">{option.label}</span>
                 {isSelected ? (
                   <Check
                     aria-hidden="true"

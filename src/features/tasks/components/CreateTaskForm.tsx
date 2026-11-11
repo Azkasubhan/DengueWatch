@@ -102,6 +102,11 @@ export function CreateTaskForm({
   const [pending, setPending] = useState(false);
   const [today] = useState(jakartaToday);
   const pickers = useRef<(HTMLElement | null)[]>([]);
+  // The ref holds the wrapper div; focus the CustomSelect combobox inside it.
+  const focusPicker = (index: number) =>
+    pickers.current[index]
+      ?.querySelector<HTMLElement>('[role="combobox"]')
+      ?.focus();
 
   function update<K extends keyof Fields>(key: K, value: Fields[K]) {
     setFields((current) => ({ ...current, [key]: value }));
@@ -119,7 +124,7 @@ export function CreateTaskForm({
   function addAssignee() {
     const index = fields.assignees.length;
     update("assignees", [...fields.assignees, ""]);
-    requestAnimationFrame(() => pickers.current[index]?.focus());
+    requestAnimationFrame(() => focusPicker(index));
   }
 
   function removeAssignee(index: number) {
@@ -127,9 +132,7 @@ export function CreateTaskForm({
       "assignees",
       fields.assignees.filter((_, i) => i !== index),
     );
-    requestAnimationFrame(() =>
-      pickers.current[Math.max(0, index - 1)]?.focus(),
-    );
+    requestAnimationFrame(() => focusPicker(Math.max(0, index - 1)));
   }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
