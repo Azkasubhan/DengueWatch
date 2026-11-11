@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { openOptions } from "./support/customSelect";
 
 type Actor = {
   email: string;
@@ -544,13 +545,22 @@ test.describe("live manager verification (M5, T27)", () => {
     await reviewer.goto(`/pengelola/verifikasi/${reports.duplicate}`);
     await reviewer.getByRole("radio", { name: /Tandai duplikat/ }).check();
     const target = reviewer.locator("#duplicateOfReportId");
-    await expect(target.locator(`option[value="${reports.main}"]`)).toHaveCount(
+    // CustomSelect options carry the public reference, not the report ID.
+    const refs = await admin
+      .from("reports")
+      .select("id, public_reference")
+      .in("id", [reports.main, reports.info]);
+    expect(refs.error).toBeNull();
+    const refOf = (id: string) =>
+      `${refs.data!.find((row) => row.id === id)!.public_reference} ·`;
+    const options = await openOptions(target);
+    await expect(options.filter({ hasText: refOf(reports.main) })).toHaveCount(
       1,
     );
-    await expect(target.locator(`option[value="${reports.info}"]`)).toHaveCount(
+    await expect(options.filter({ hasText: refOf(reports.info) })).toHaveCount(
       0,
     );
-    await target.selectOption(reports.main);
+    await options.filter({ hasText: refOf(reports.main) }).click();
     await reviewer
       .locator("#reason")
       .fill("Objek sama dengan laporan balai sebelumnya.");

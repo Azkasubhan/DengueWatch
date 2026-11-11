@@ -92,15 +92,15 @@ test("real Gemini analyzes one synthetic private photo and resident submits thro
 
   const edited = `Foto simulasi lingkungan perlu pemeriksaan lanjutan. Catatan warga ${randomUUID().slice(0, 8)}.`;
   await page.locator("#description").fill(edited);
-  await page.getByRole("button", { name: "Tinjau laporan" }).click();
-  await expect(page.getByText(edited, { exact: false })).toBeVisible();
-  await page.getByRole("button", { name: "Konfirmasi dan kirim" }).click();
-  await expect(page).toHaveURL(/\/app\/laporan\/[0-9a-f-]{36}$/);
+  await page.getByRole("button", { name: "Kirim laporan" }).click();
+  await expect(page).toHaveURL(
+    /\/app\/laporan\/[0-9a-f-]{36}\?status=terkirim$/,
+  );
   await expect(
     page.getByText("Menunggu Pemeriksaan", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText(edited, { exact: false })).toBeVisible();
-  const reportId = page.url().split("/").at(-1)!;
+  const reportId = new URL(page.url()).pathname.split("/").at(-1)!;
   const [report, linked] = await Promise.all([
     admin
       .from("reports")

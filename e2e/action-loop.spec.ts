@@ -10,6 +10,7 @@ import {
   type Page,
 } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { openOptions } from "./support/customSelect";
 
 type ActorKey = "resident" | "cadreA1" | "cadreA2" | "cadreB" | "manager";
 type Actor = { email: string; id: string; page: Page; context: BrowserContext };
@@ -297,16 +298,24 @@ test.describe("live verified ActionLoop (M6, T27 manager-led)", () => {
       .fill("Kuras dan tutup wadah air di balai warga.");
     // Only verified cadres of the report area are offered.
     const firstPicker = page.locator("#task-assignee-0");
+    const firstOptions = await openOptions(firstPicker);
     await expect(
-      firstPicker.locator("option", { hasText: `M6 cadreB ${run}` }),
+      firstOptions.filter({ hasText: `M6 cadreA1 ${run}` }),
+    ).toHaveCount(1);
+    await expect(
+      firstOptions.filter({ hasText: `M6 cadreB ${run}` }),
     ).toHaveCount(0);
-    await firstPicker.selectOption({ label: `M6 cadreA1 ${run}` });
+    await firstOptions.filter({ hasText: `M6 cadreA1 ${run}` }).click();
     // "Tambah kader" adds a picker without the cadres already chosen; rows can be removed.
     await page.getByRole("button", { name: "Tambah kader" }).click();
     const secondPicker = page.locator("#task-assignee-1");
     await expect(secondPicker).toBeFocused();
+    const secondOptions = await openOptions(secondPicker);
+    await expect(secondOptions.filter({ hasText: "Pilih kader" })).toHaveCount(
+      1,
+    );
     await expect(
-      secondPicker.locator("option", { hasText: `M6 cadreA1 ${run}` }),
+      secondOptions.filter({ hasText: `M6 cadreA1 ${run}` }),
     ).toHaveCount(0);
     await page.getByRole("button", { name: "Buat tugas" }).click();
     await expect(
@@ -322,7 +331,14 @@ test.describe("live verified ActionLoop (M6, T27 manager-led)", () => {
       "aria-pressed",
       "true",
     );
-    await expect(page.locator("#task-dueDate")).toHaveValue(tomorrow);
+    // CustomDatePicker shows the chosen date as "DD Mmm YYYY" on its trigger button.
+    const [dueYear, dueMonth, dueDay] = tomorrow.split("-");
+    const monthsId = "Jan Feb Mar Apr Mei Jun Jul Agu Sep Okt Nov Des".split(
+      " ",
+    );
+    await expect(page.locator("#task-dueDate")).toContainText(
+      `${dueDay} ${monthsId[Number(dueMonth) - 1]} ${dueYear}`,
+    );
     await expect(page.getByText(/· besok$/)).toBeVisible();
     await page.getByRole("button", { name: "Buat tugas" }).click();
     await expect(
@@ -542,9 +558,12 @@ test.describe("live verified ActionLoop (M6, T27 manager-led)", () => {
     await reviewer.getByRole("radio", { name: /Setujui bukti/ }).check();
     await reviewer.getByRole("button", { name: "Simpan pemeriksaan" }).click();
     await expect(
-      reviewer.getByText(
-        "Bukti disetujui. Bukti semua kader lengkap, tugas selesai.",
-      ),
+      // The same message is also announced by the global toast outside <main>.
+      reviewer
+        .getByRole("main")
+        .getByText(
+          "Bukti disetujui. Bukti semua kader lengkap, tugas selesai.",
+        ),
     ).toBeVisible();
     expect(await task(ids.task1)).toMatchObject({
       status: "completed",
@@ -589,7 +608,13 @@ test.describe("live verified ActionLoop (M6, T27 manager-led)", () => {
     const resident = actors.resident.page;
     await resident.setViewportSize({ width: 390, height: 844 });
     await resident.goto(`/app/laporan/${ids.main}`);
-    await expect(resident.getByText("Selesai", { exact: true })).toBeVisible();
+    // Both the status badge and the progress stepper show "Selesai".
+    await expect(
+      resident
+        .getByRole("region", { name: "Progres status laporan" })
+        .getByText("Selesai", { exact: true }),
+    ).toBeVisible();
+    await expect(resident.getByText("Selesai", { exact: true })).toHaveCount(2);
     await expect(resident.getByText("Penanganan dimulai")).toBeVisible();
     await expect(
       resident.getByText("Penanganan selesai diverifikasi"),
@@ -869,9 +894,12 @@ test.describe("live verified ActionLoop (M6, T27 manager-led)", () => {
     await reviewer.getByRole("radio", { name: /Setujui bukti/ }).check();
     await reviewer.getByRole("button", { name: "Simpan pemeriksaan" }).click();
     await expect(
-      reviewer.getByText(
-        "Bukti disetujui. Bukti semua kader lengkap, tugas selesai.",
-      ),
+      // The same message is also announced by the global toast outside <main>.
+      reviewer
+        .getByRole("main")
+        .getByText(
+          "Bukti disetujui. Bukti semua kader lengkap, tugas selesai.",
+        ),
     ).toBeVisible();
     await expect(reviewer.getByText("2 dari 2 bukti disetujui")).toBeVisible();
     expect(await task(shared)).toMatchObject({ status: "completed" });
@@ -1101,14 +1129,14 @@ test.describe("live verified ActionLoop (M6, T27 manager-led)", () => {
     await manager.setViewportSize({ width: 1440, height: 900 });
     await manager.goto("/pengelola/ringkasan");
     await expect(
-      manager.getByRole("heading", { name: "Ringkasan laporan wilayah" }),
+      manager.getByRole("heading", { name: "Dasbor wilayah" }),
     ).toBeVisible();
     await expect(manager.getByText("80%")).toBeVisible();
     await expect(
-      manager.getByText("4 dari 5 laporan tervalidasi", { exact: false }),
+      manager.getByText("4/5 laporan valid", { exact: true }),
     ).toBeVisible();
     await expect(
-      manager.getByRole("heading", { name: "Ringkasan laporan wilayah" }),
+      manager.getByRole("heading", { name: "Dasbor wilayah" }),
     ).toBeVisible();
     await expectAccessible(manager);
     for (const width of [320, 390, 768, 1440]) {
@@ -1138,7 +1166,7 @@ test.describe("live verified ActionLoop (M6, T27 manager-led)", () => {
     await manager.reload();
     await expect(manager.getByText("60%")).toBeVisible();
     await expect(
-      manager.getByText("3 dari 5 laporan tervalidasi", { exact: false }),
+      manager.getByText("3/5 laporan valid", { exact: true }),
     ).toBeVisible();
   });
 

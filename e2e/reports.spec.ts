@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import { chooseOption, selectedValue } from "./support/customSelect";
 import { createClient } from "@supabase/supabase-js";
 
 test.describe("live environmental reports", () => {
@@ -42,18 +43,6 @@ test.describe("live environmental reports", () => {
   }
 
   // Waits for the AI step to settle, then fills the T29 fields by hand.
-  async function fillObservations(page: Page) {
-    await expect(
-      page
-        .getByRole("alert")
-        .filter({ hasText: "Silakan isi kolom secara manual" }),
-    ).toBeVisible();
-    await page.locator("#visibleObjects").fill("Wadah terbuka berisi air");
-    await page
-      .locator("#preventionAdvice")
-      .fill("Tutup wadah dan kuras seminggu sekali.");
-  }
-
   test.beforeAll(() => {
     expect(password.length).toBeGreaterThan(8);
     const url = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "");
@@ -69,25 +58,21 @@ test.describe("live environmental reports", () => {
     await expect(
       page.getByRole("heading", { name: "Buat laporan lingkungan" }),
     ).toBeVisible();
-    reportAreaId = await page.locator("#areaId").inputValue();
+    reportAreaId = await selectedValue(page, "areaId");
     await page.locator("#photos").setInputFiles(samplePath);
     await expect(page.getByAltText("Pratinjau foto 1")).toBeVisible();
-    await page.locator("#category").selectOption("water_container");
+    await chooseOption(page.locator("#category"), "Wadah air terbuka");
     const description = `Wadah air terlihat di area bersama. Uji laporan ${randomUUID()}.`;
     await page.locator("#description").fill(description);
-    await fillObservations(page);
-    await page.getByRole("button", { name: "Tinjau laporan" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Tinjau sebelum kirim" }),
-    ).toBeVisible();
-    await expect(page.getByText(description)).toBeVisible();
     await page.screenshot({
-      path: testInfo.outputPath("report-preview-mobile.png"),
+      path: testInfo.outputPath("report-form-mobile.png"),
       fullPage: true,
     });
-    await page.getByRole("button", { name: "Konfirmasi dan kirim" }).click();
-    await expect(page).toHaveURL(/\/app\/laporan\/[0-9a-f-]{36}$/);
-    createdReportId = page.url().split("/").at(-1)!;
+    await page.getByRole("button", { name: "Kirim laporan" }).click();
+    await expect(page).toHaveURL(
+      /\/app\/laporan\/[0-9a-f-]{36}\?status=terkirim$/,
+    );
+    createdReportId = new URL(page.url()).pathname.split("/").at(-1)!;
     await expect(
       page.getByText("Menunggu Pemeriksaan", { exact: true }),
     ).toBeVisible();
@@ -113,7 +98,8 @@ test.describe("live environmental reports", () => {
     await expect(
       page.getByRole("heading", { name: "Laporan saya" }),
     ).toBeVisible();
-    await expect(page.getByText(description)).toBeVisible();
+    // The list shows a truncated line with the full text in its title (plus an sr-only copy).
+    await expect(page.getByTitle(description)).toBeVisible();
   });
 
   test("form validation keeps input and file API rejects disguised files", async ({
@@ -122,25 +108,27 @@ test.describe("live environmental reports", () => {
     await login(page);
     await page.goto("/app/laporan/buat");
     await page.locator("#description").fill("Pendek");
-    await page.getByRole("button", { name: "Tinjau laporan" }).click();
+    await page.getByRole("button", { name: "Kirim laporan" }).click();
     await expect(page.locator("#photos-error")).toBeVisible();
     await expect(page.locator("#description")).toHaveValue("Pendek");
     await page.locator("#photos").setInputFiles({
       name: "fake.png",
       mimeType: "image/png",
-      buffer: Buffer.from("%PDF-1.7"),
+      buffer: Buffer.from("%PDF-1.7 disguised as a PNG photo"),
     });
-    await page.locator("#category").selectOption("other");
+    await chooseOption(page.locator("#category"), "Temuan lain");
     await page
       .locator("#description")
       .fill("Temuan lain pada area bersama yang perlu diperiksa.");
-    await fillObservations(page);
-    await page.getByRole("button", { name: "Tinjau laporan" }).click();
-    await page.getByRole("button", { name: "Konfirmasi dan kirim" }).click();
+    await page.getByRole("button", { name: "Kirim laporan" }).click();
+    // The server rejects the disguised file; the form keeps every input.
     await expect(
-      page.getByRole("alert").filter({ hasText: "Gunakan foto JPG" }),
+      page
+        .getByRole("alert")
+        .filter({ hasText: "Isian dan foto Anda tetap tersimpan" })
+        .filter({ hasText: "Gunakan foto JPG" }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Ubah laporan" }).click();
+    await expect(page).toHaveURL(/\/app\/laporan\/buat$/);
     await expect(page.locator("#description")).toHaveValue(
       "Temuan lain pada area bersama yang perlu diperiksa.",
     );
@@ -152,7 +140,7 @@ test.describe("live environmental reports", () => {
     await page.setViewportSize({ width: 320, height: 900 });
     await login(page);
     await page.goto("/app/laporan/buat");
-    await page.getByRole("button", { name: "Tinjau laporan" }).click();
+    await page.getByRole("button", { name: "Kirim laporan" }).click();
     const summary = page.locator('[aria-labelledby="report-errors-title"]');
     await expect(summary).toBeFocused();
     await expect(
@@ -166,9 +154,10 @@ test.describe("live environmental reports", () => {
       "aria-invalid",
       "true",
     );
+    // The help text stays referenced next to the error message.
     await expect(page.locator("#category")).toHaveAttribute(
       "aria-describedby",
-      "category-error",
+      "category-help category-error",
     );
     await page.screenshot({
       path: testInfo.outputPath("ui-errors-320.png"),
@@ -176,7 +165,9 @@ test.describe("live environmental reports", () => {
     });
     await expect(page.getByText("Pilih foto", { exact: true })).toBeVisible();
     await page.locator("#photos").setInputFiles(samplePath);
-    await expect(page.locator("#photos-selected")).toHaveText("1 foto dipilih");
+    await expect(page.locator("#photos-selected")).toHaveText(
+      "1/3 foto dipilih",
+    );
     await page.getByRole("button", { name: "Hapus foto 1" }).click();
     const chooserReady = page.waitForEvent("filechooser");
     await page.getByText("Pilih foto", { exact: true }).click();
@@ -198,10 +189,14 @@ test.describe("live environmental reports", () => {
         .locator("#photos")
         .evaluate((input) => input.matches(":focus-visible")),
     ).toBe(true);
-    const focusedOutline = await page
-      .locator('label[for="photos"]')
-      .evaluate((label) => getComputedStyle(label).outlineColor);
-    expect(focusedOutline).toBe("rgb(15, 118, 110)");
+    // The label's `transition` animates outline-color, so wait for it to settle.
+    await expect
+      .poll(() =>
+        page
+          .locator('label[for="photos"]')
+          .evaluate((label) => getComputedStyle(label).outlineColor),
+      )
+      .toBe("rgb(15, 118, 110)");
   });
 
   test("upload retry resumes after the first successful photo", async ({
@@ -215,15 +210,18 @@ test.describe("live environmental reports", () => {
         samplePath,
         resolve("assets/demo-reports/discarded-tire.png"),
       ]);
-    await page.locator("#category").selectOption("other");
+    await chooseOption(page.locator("#category"), "Temuan lain");
     await page
       .locator("#description")
       .fill(
         `Dua foto lingkungan untuk uji pemulihan unggahan ${randomUUID()}.`,
       );
-    // The AI step already uploaded the first photo privately.
-    await fillObservations(page);
-    await page.getByRole("button", { name: "Tinjau laporan" }).click();
+    // The AI step already uploaded the first photo privately before failing.
+    await expect(
+      page
+        .getByRole("alert")
+        .filter({ hasText: "Analisis AI tidak tersedia." }),
+    ).toBeVisible();
     let uploads = 0;
     await page.route("**/api/v1/report-uploads", async (route) => {
       if (route.request().method() !== "POST") return route.continue();
@@ -238,15 +236,17 @@ test.describe("live environmental reports", () => {
         await route.continue();
       }
     });
-    await page.getByRole("button", { name: "Konfirmasi dan kirim" }).click();
+    await page.getByRole("button", { name: "Kirim laporan" }).click();
     await expect(
       page.getByRole("alert").filter({ hasText: "Unggahan kedua gagal." }),
     ).toBeVisible();
     await expect(
-      page.getByText("Isian Anda tetap tersedia.", { exact: false }),
+      page.getByText("Isian dan foto Anda tetap tersimpan", { exact: false }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Konfirmasi dan kirim" }).click();
-    await expect(page).toHaveURL(/\/app\/laporan\/[0-9a-f-]{36}$/);
+    await page.getByRole("button", { name: "Kirim laporan" }).click();
+    await expect(page).toHaveURL(
+      /\/app\/laporan\/[0-9a-f-]{36}\?status=terkirim$/,
+    );
     await expect(page.getByAltText("Foto laporan 2")).toBeVisible();
     expect(uploads).toBe(2);
   });
@@ -592,8 +592,8 @@ test.describe("live environmental reports", () => {
     await login(page);
     await page.goto("/app/laporan");
     const detailHref = await page
-      .locator('a[href^="/app/laporan/"]')
-      .filter({ hasText: /DW-/ })
+      // Report detail links; the list no longer prints the DW- reference.
+      .locator('a[href^="/app/laporan/"]:not([href$="/buat"])')
       .first()
       .getAttribute("href");
     expect(detailHref).toBeTruthy();
@@ -636,9 +636,10 @@ test.describe("live environmental reports", () => {
     await page.goto("/app/laporan/buat");
     for (const selector of [
       'label[for="photos"]',
-      'a[href="/app/laporan"]',
-      'button:has-text("Gunakan lokasi perangkat")',
-      'button:has-text("Tinjau laporan")',
+      'label[for="camera-photo"]',
+      'button[aria-label="Buka menu navigasi"]',
+      'button:has-text("Gunakan lokasi saya")',
+      'button:has-text("Kirim laporan")',
     ]) {
       const height = await page
         .locator(selector)
@@ -656,7 +657,7 @@ test.describe("live environmental reports", () => {
       ),
     ).toBe(true);
     const duration = await page
-      .getByRole("button", { name: "Tinjau laporan" })
+      .getByRole("button", { name: "Kirim laporan" })
       .evaluate((button) => getComputedStyle(button).transitionDuration);
     expect(Number.parseFloat(duration)).toBeLessThanOrEqual(0.001);
     await page.evaluate(() => {
