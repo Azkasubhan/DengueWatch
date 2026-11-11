@@ -95,31 +95,15 @@ Pipeline Privasi Foto & Gemini SmartSpot:
 
 ## Arsitektur Sistem (_System Architecture Overview_)
 
-```mermaid
-flowchart TB
-  subgraph Clients["Portal Pengguna (Next.js 16 App Router)"]
-    R["Portal Warga\n(/app/beranda, /app/laporan)"]
-    C["Portal Kader\n(/kader/ringkasan, /kader/tugas)"]
-    M["Portal Pengelola Wilayah\n(/pengelola/ringkasan, /verifikasi, /tugas, /peta)"]
-  end
-
-  subgraph Server["Lapisan Aplikasi & API Server-Only (/api/v1/*)"]
-    AuthSSR["Supabase Auth SSR & Area Access Guard"]
-    ImgPipe["Sharp Image Sanitizer\n(Validasi, Strip EXIF, Konversi WebP)"]
-    AI["Gemini SmartSpot Adapter\n(@google/genai + Zod Structured Schema)"]
-  end
-
-  subgraph Data["Lapisan Data & Penyimpanan (Supabase / PostgreSQL)"]
-    RLS["PostgreSQL + Row-Level Security (RLS)\n& Transaksional RPC (ActionLoop)"]
-    Storage["Private Storage Bucket\n(report-photos · Signed URLs)"]
-  end
-
-  R & C & M --> AuthSSR
-  AuthSSR --> ImgPipe
-  ImgPipe --> Storage
-  ImgPipe --> AI
-  AuthSSR --> RLS
-```
+<br>
+<div align="center">
+  <img
+    src="public/Arsitektur%20sistem.png"
+    alt="Arsitektur Sistem DengueWatch"
+    style="width:100%; max-width:960px; border-radius:12px; box-shadow: 0 4px 20px rgba(0,0,0,0.06);"
+  />
+</div>
+<br>
 
 ---
 
