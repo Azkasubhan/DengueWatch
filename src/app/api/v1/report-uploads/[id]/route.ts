@@ -28,27 +28,23 @@ export async function DELETE(
       "Penyimpanan foto belum tersedia.",
     );
   }
-  const row = await admin
-    .from("report_uploads")
-    .select("storage_path,consumed_at")
-    .eq("id", id)
-    .eq("created_by", auth.context!.userId)
-    .maybeSingle();
-  if (row.error)
-    return reportError(503, "SERVICE_UNAVAILABLE", "Foto belum dapat dihapus.");
-  if (!row.data || row.data.consumed_at)
-    return reportError(404, "NOT_FOUND", "Foto tidak ditemukan.");
-  const removed = await admin.storage
-    .from(reportBucket)
-    .remove([row.data.storage_path]);
-  if (removed.error)
-    return reportError(503, "SERVICE_UNAVAILABLE", "Foto belum dapat dihapus.");
+  // Delete the row first, conditionally. create_environmental_report locks upload rows
+  // `for update`, so a concurrent submit either consumes the upload first (this matches no
+  // row and the photo stays) or finds the row gone and fails with a 409 conflict.
   const deleted = await admin
     .from("report_uploads")
     .delete()
     .eq("id", id)
-    .is("consumed_at", null);
+    .eq("created_by", auth.context!.userId)
+    .is("consumed_at", null)
+    .select("storage_path");
   if (deleted.error)
     return reportError(503, "SERVICE_UNAVAILABLE", "Foto belum dapat dihapus.");
+  const storagePath = deleted.data?.[0]?.storage_path;
+  if (!storagePath)
+    return reportError(404, "NOT_FOUND", "Foto tidak ditemukan.");
+  // The lease is already released; a failed object removal only leaves a private,
+  // unreferenced object behind, so the release is still reported as done.
+  await admin.storage.from(reportBucket).remove([storagePath]);
   return reportJson({ deleted: true });
 }

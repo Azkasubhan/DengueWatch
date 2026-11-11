@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import "@fontsource-variable/plus-jakarta-sans";
 import "@/styles/globals.css";
 import { ToastProvider } from "@/components/ui/Toast";
+import { appOrigin } from "@/lib/http/requestOrigin";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.APP_BASE_URL || "http://localhost:3000"),
+  // appOrigin() validates APP_BASE_URL; an invalid value must not crash every page.
+  metadataBase: new URL(appOrigin() ?? "http://localhost:3000"),
   title: {
     default: "DengueWatch",
     template: "%s | DengueWatch",

@@ -50,6 +50,9 @@ export async function analyzeReportPhoto(input: {
   let inputHash: string | null = null;
   let inputTokens: number | null = null;
   let outputTokens: number | null = null;
+  // Input or infrastructure failures (expired upload, invalid image, storage outage) happen
+  // before the model runs; they keep their own code instead of being reported as unsafe AI output.
+  let requestError: AiRequestError | null = null;
   try {
     const upload = await admin
       .from("report_uploads")
@@ -125,7 +128,8 @@ export async function analyzeReportPhoto(input: {
             : "error";
       errorCode = error.code;
     } else if (error instanceof AiRequestError) {
-      status = "rejected";
+      requestError = error;
+      status = "error";
       errorCode = error.code;
     } else {
       status = "error";
@@ -152,6 +156,7 @@ export async function analyzeReportPhoto(input: {
     throw new AiRequestError(503, "AI_UNAVAILABLE");
   if (status === "success" && resultJson)
     return { analysisId, suggestion: resultJson };
+  if (requestError) throw requestError;
   if (errorCode === "RATE_LIMIT") throw new AiRequestError(429, "RATE_LIMIT");
   if (errorCode === "TIMEOUT") throw new AiRequestError(503, "AI_TIMEOUT");
   if (status === "rejected") throw new AiRequestError(502, "AI_INVALID_OUTPUT");
