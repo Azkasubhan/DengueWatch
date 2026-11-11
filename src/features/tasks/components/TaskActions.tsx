@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { toast } from "@/components/ui/Toast";
 import {
+  PhotoPreparationError,
+  prepareUploadPhoto,
+} from "@/lib/image/prepareUploadPhoto";
+import {
   controlClass,
   postReportAction,
   reasonError,
@@ -109,8 +113,21 @@ export function TaskActions({
   async function uploadPhoto(photo: File): Promise<ReportActionResult> {
     if (uploadRef.current?.file === photo)
       return { kind: "ok", data: { id: uploadRef.current.id } };
+    // Downscale large camera photos so the upload stays under the platform body limit.
+    let prepared: File;
+    try {
+      prepared = await prepareUploadPhoto(photo);
+    } catch (error) {
+      return {
+        kind: "error",
+        message:
+          error instanceof PhotoPreparationError
+            ? error.message
+            : "Foto bukti belum dapat disiapkan.",
+      };
+    }
     const form = new FormData();
-    form.append("photo", photo);
+    form.append("photo", prepared);
     let response: Response;
     try {
       response = await fetch(`${base}/evidence-uploads`, {
@@ -124,7 +141,11 @@ export function TaskActions({
     if (!response.ok)
       return {
         kind: response.status === 409 ? "conflict" : "error",
-        message: payload?.error?.message ?? "Foto bukti belum dapat diunggah.",
+        message:
+          payload?.error?.message ??
+          (response.status === 413
+            ? "Foto bukti terlalu besar untuk diunggah. Gunakan foto lain."
+            : "Foto bukti belum dapat diunggah."),
       };
     uploadRef.current = { file: photo, id: payload.data.id };
     return { kind: "ok", data: { id: payload.data.id } };
@@ -343,8 +364,8 @@ export function TaskActions({
               id="evidence-photo-help"
               className="text-sm text-[var(--muted-foreground)]"
             >
-              Satu foto JPG, PNG, atau WebP, maksimal 5 MiB. Metadata lokasi
-              dihapus otomatis dan foto disimpan privat.
+              Satu foto JPG, PNG, atau WebP; foto besar dikecilkan otomatis.
+              Metadata lokasi dihapus otomatis dan foto disimpan privat.
             </p>
             {fieldError("evidence-photo")}
           </div>

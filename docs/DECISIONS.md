@@ -14,7 +14,9 @@
 ## T02 — Next.js Proxy
 
 - **Status:** accepted.
-- **Keputusan:** menggunakan root `proxy.ts`, bukan `middleware.ts`.
+- **Keputusan:** menggunakan `src/proxy.ts`, bukan `middleware.ts`. File harus berada di
+  `src/` karena aplikasi memakai `src/app`; `proxy.ts` di root tidak dikompilasi (diperbaiki
+  11 November 2026).
 - **Alasan:** Next.js 16 mengganti convention Middleware menjadi Proxy. Proxy hanya refresh
   token dan header cache; authorization tetap di server DAL dan RLS.
 
@@ -402,3 +404,22 @@
 - **Risiko yang diterima:** kader yang kehilangan akses area menahan task terbuka; pengelola
   dapat membatalkan task lalu membuat task baru. Task lama yang sudah `completed` tidak dihitung
   ulang.
+
+## T34 — Deployment Vercel dan berhenti mengirim teks AI tersembunyi
+
+- **Status:** diputuskan product owner, 11 November 2026. Menambah target Vercel di samping
+  T22 (VPS tetap didukung) dan mengubah sebagian T29.
+- **AI:** formulir warga tidak lagi mengirim `visibleObjects`/`preventionAdvice` dari AI yang
+  tidak pernah ditampilkan atau diedit warga. AI hanya mengisi kategori dan keterangan yang
+  terlihat dan dapat diedit; kolom observasi laporan baru bernilai `NULL`.
+- **Foto:** browser mengecilkan foto di atas 3,5 MiB (sisi terpanjang maks. 3000 px, JPEG)
+  sebelum diunggah karena Vercel Functions menolak body di atas 4,5 MB. Foto asli boleh sampai
+  25 MiB; server tetap memvalidasi, menghapus metadata, dan mengonversi ke WebP (batas 5 MiB).
+- **Origin:** di Vercel hanya host deployment ini sendiri (`VERCEL_URL`, `VERCEL_BRANCH_URL`,
+  `VERCEL_PROJECT_PRODUCTION_URL`) yang diterima selain `APP_BASE_URL`; wildcard
+  `*.vercel.app` tidak dipakai karena proyek Vercel lain dapat melakukan CSRF. Tanpa
+  `APP_BASE_URL`, deployment memakai host-nya sendiri sebagai origin kanonik.
+- **Cleanup:** Vercel Cron memanggil `GET /api/cron/cleanup` setiap hari 02.00 WIB dengan
+  `Authorization: Bearer $CRON_SECRET` (min. 32 karakter; tanpa secret endpoint menolak).
+  Baris lease kedaluwarsa dihapus kondisional sebelum objeknya; catatan AI > 30 hari dihapus.
+- **Tetap berlaku:** RLS, RPC atomik, bucket privat, dan validasi server tidak dilonggarkan.

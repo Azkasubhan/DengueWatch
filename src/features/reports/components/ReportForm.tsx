@@ -28,6 +28,10 @@ import type { LucideIcon } from "lucide-react";
 import type { AreaSummary } from "@/features/areas/types";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { toast } from "@/components/ui/Toast";
+import {
+  PhotoPreparationError,
+  prepareUploadPhoto,
+} from "@/lib/image/prepareUploadPhoto";
 import { controlClass } from "@/features/reports/components/reportAction";
 import {
   reportCategories,
@@ -53,11 +57,6 @@ type UploadedPhoto = {
 
 type AiStatus =
   "idle" | "uploading" | "analyzing" | "succeeded" | "unavailable";
-
-type AiMetadata = {
-  visibleObjects: string | null;
-  preventionAdvice: string | null;
-};
 
 const categoryMeta: Record<ReportCategory, { icon: LucideIcon; hint: string }> =
   {
@@ -124,10 +123,7 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
     category?: boolean;
     description?: boolean;
   }>({});
-  const [aiMetadata, setAiMetadata] = useState<AiMetadata>({
-    visibleObjects: null,
-    preventionAdvice: null,
-  });
+  const [preparingPhotos, setPreparingPhotos] = useState(false);
 
   const idempotencyKey = useRef<string | null>(null);
   const uploadedByFileRef = useRef<Map<File, UploadedPhoto>>(new Map());
@@ -190,7 +186,10 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
     const uploadData = (payload?.data ?? payload) as UploadedPhoto | undefined;
     if (!response.ok || !uploadData?.id) {
       throw new Error(
-        payload?.error?.message ?? "Foto belum dapat diunggah. Coba lagi.",
+        payload?.error?.message ??
+          (response.status === 413
+            ? "Foto terlalu besar untuk diunggah. Gunakan foto lain."
+            : "Foto belum dapat diunggah. Coba lagi."),
       );
     }
     return uploadData as UploadedPhoto;
@@ -257,20 +256,6 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
       } else if (current.description.trim()) {
         preservedUserEdits = true;
       }
-
-      const visibleStr = Array.isArray(suggestion.visibleObjects)
-        ? singleLine(suggestion.visibleObjects.join(", ")).trim()
-        : "";
-      const adviceStr = singleLine(
-        String(suggestion.suggestedPrecaution ?? ""),
-      ).trim();
-
-      setAiMetadata({
-        visibleObjects:
-          visibleStr.length >= 5 ? visibleStr.slice(0, 500) : null,
-        preventionAdvice:
-          adviceStr.length >= 10 ? adviceStr.slice(0, 500) : null,
-      });
 
       setAiFilledFields(nextAi);
       setErrors((currentErrors) => {
@@ -343,15 +328,44 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
     return Object.keys(next).length === 0;
   }
 
-  function onPhotoChange(event: ChangeEvent<HTMLInputElement>) {
-    const incoming = Array.from(event.target.files ?? []);
+  async function onPhotoChange(event: ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(event.target.files ?? []);
     event.target.value = "";
-    if (incoming.length === 0) return;
+    if (selected.length === 0) return;
 
     resetAttemptKey();
     setSubmitError(null);
 
-    const combined = [...photos, ...incoming];
+    if (photos.length + selected.length > 3) {
+      setErrors((current) => ({
+        ...current,
+        photos:
+          "Maksimal 3 foto per laporan. Hapus salah satu foto jika ingin menggantinya.",
+      }));
+      return;
+    }
+
+    // Large camera photos are downscaled in the browser so uploads stay under the
+    // hosting platform's request size limit.
+    let incoming: File[];
+    setPreparingPhotos(true);
+    try {
+      incoming = await Promise.all(selected.map(prepareUploadPhoto));
+    } catch (error) {
+      setErrors((current) => ({
+        ...current,
+        photos:
+          error instanceof PhotoPreparationError
+            ? error.message
+            : "Foto belum dapat disiapkan. Coba foto lain.",
+      }));
+      return;
+    } finally {
+      setPreparingPhotos(false);
+    }
+
+    const currentItems = photoItemsRef.current;
+    const combined = [...currentItems.map((item) => item.file), ...incoming];
     if (combined.length > 3) {
       setErrors((current) => ({
         ...current,
@@ -369,12 +383,12 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
       }
     }
 
-    const hadPhotosBefore = photoItems.length > 0;
+    const hadPhotosBefore = currentItems.length > 0;
     const newItems: PhotoItem[] = incoming.map((file) => ({
       file,
       previewUrl: URL.createObjectURL(file),
     }));
-    const nextItems = [...photoItems, ...newItems];
+    const nextItems = [...currentItems, ...newItems];
     setPhotoItems(nextItems);
     setErrors((current) => {
       const rest = { ...current };
@@ -484,13 +498,6 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
             : null,
       };
 
-      if (aiMetadata.visibleObjects) {
-        payload.visibleObjects = aiMetadata.visibleObjects;
-      }
-      if (aiMetadata.preventionAdvice) {
-        payload.preventionAdvice = aiMetadata.preventionAdvice;
-      }
-
       const response = await fetch("/api/v1/reports", {
         method: "POST",
         headers: {
@@ -538,7 +545,7 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
     <form
       noValidate
       onSubmit={handleSubmit}
-      className="grid gap-5"
+      className="grid grid-cols-1 gap-5"
       aria-label="Formulir laporan lingkungan"
     >
       {/* Ringkasan validasi yang dapat menerima fokus */}
@@ -601,8 +608,9 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
               id="photos-help"
               className="mt-0.5 text-xs text-[var(--muted-foreground)]"
             >
-              Unggah 1–3 foto (JPG, PNG, atau WebP, maks. 5 MiB per foto).
-              Hindari memotret wajah orang atau dokumen pribadi.
+              Unggah 1–3 foto (JPG, PNG, atau WebP). Foto besar dikecilkan
+              otomatis sebelum diunggah. Hindari memotret wajah orang atau
+              dokumen pribadi.
             </p>
           </div>
           <span
@@ -654,12 +662,12 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
                       : "photos-help photos-ai-notice"
                   }
                   aria-invalid={Boolean(errors.photos)}
-                  onChange={onPhotoChange}
+                  onChange={(event) => void onPhotoChange(event)}
                   className="peer sr-only"
                 />
                 <label
                   htmlFor="photos"
-                  className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--primary)] px-4 py-2 text-xs font-semibold text-white shadow-2xs transition hover:bg-[var(--primary-hover)] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--primary)]"
+                  className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--primary)] px-4 py-2 text-xs font-semibold text-white shadow-2xs transition hover:bg-[var(--primary-hover)] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--primary)]"
                 >
                   <ImagePlus aria-hidden="true" className="size-4 shrink-0" />
                   <span>Pilih foto</span>
@@ -670,12 +678,12 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   capture="environment"
-                  onChange={onPhotoChange}
+                  onChange={(event) => void onPhotoChange(event)}
                   className="peer/camera sr-only"
                 />
                 <label
                   htmlFor="camera-photo"
-                  className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] px-4 py-2 text-xs font-semibold text-[var(--foreground)] shadow-2xs transition hover:border-[var(--primary)] hover:text-[var(--primary)] peer-focus-visible/camera:outline-2 peer-focus-visible/camera:outline-offset-2 peer-focus-visible/camera:outline-[var(--primary)]"
+                  className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] px-4 py-2 text-xs font-semibold text-[var(--foreground)] shadow-2xs transition hover:border-[var(--primary)] hover:text-[var(--primary)] peer-focus-visible/camera:outline-2 peer-focus-visible/camera:outline-offset-2 peer-focus-visible/camera:outline-[var(--primary)]"
                 >
                   <Camera
                     aria-hidden="true"
@@ -739,6 +747,19 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
             className="mt-2 text-xs font-semibold text-[var(--danger)]"
           >
             {errors.photos}
+          </p>
+        ) : null}
+
+        {preparingPhotos ? (
+          <p
+            role="status"
+            className="mt-3 inline-flex items-center gap-2 text-xs font-semibold text-[var(--foreground)]"
+          >
+            <Loader2
+              aria-hidden="true"
+              className="size-4 animate-spin text-[var(--primary)]"
+            />
+            Menyiapkan foto...
           </p>
         ) : null}
 
@@ -841,6 +862,7 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
             name="category"
             value={category}
             size="md"
+            ariaLabel="Kategori temuan"
             placeholder="Pilih kategori temuan…"
             aria-invalid={Boolean(errors.category)}
             aria-describedby={
@@ -1065,7 +1087,7 @@ export function ReportForm({ areas }: { areas: AreaSummary[] }) {
                   type="button"
                   onClick={requestLocation}
                   disabled={geoState === "loading"}
-                  className="inline-flex min-h-9 items-center gap-1.5 rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--foreground)] transition hover:border-[var(--primary)] disabled:opacity-60"
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-[var(--radius-control)] border border-[var(--control-border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--foreground)] transition hover:border-[var(--primary)] disabled:opacity-60"
                 >
                   <Navigation
                     aria-hidden="true"
